@@ -28,10 +28,13 @@ PocketWorld/
 │   └── types/
 │       ├── game.ts            # 小游戏卡带统一接口契约 (GameCartridgeProps)
 │       └── interactable.ts    # 房间可交互物品注册与音乐光盘数据结构
+├── agent.md                   # 项目工程准则、多人目录隔离与 AI Agent 开发规范
+├── spec.md                    # 产品交互细节、动画流程与小游戏技术细则规范
 └── README.md
 ```
 
 ## 三、多人协作与接口约定
+> 开发前请务必先阅读 **[`agent.md`](./agent.md)**（工程与防冲突铁律）与 **[`spec.md`](./spec.md)**（产品交互与小游戏细则）。
 
 1. **目录隔离**：
    - 负责**马里奥小游戏**的成员仅在 `src/games/mario/` 下开发；
