@@ -43,4 +43,4 @@ PocketWorld/
 2. **统一卡带接口**：
    两个游戏入口组件均接收 `src/types/game.ts` 中定义的 `GameCartridgeProps`，默认逻辑画布尺寸为 `800 × 600`（外层电脑显示器容器会自动等比缩放并加上复古屏幕滤镜）。
 3. **分支规范**：
-   每人基于 `main` 创建独立功能分支（如 `feat/game-mario`、`feat/game-shooter`、`feat/room-scene`），通过 Pull Request 合并。
+   每人基于最新 `main` 创建独立功能分支（如 `feat/game-mario`、`feat/game-shooter`、`feat/room-scene`），推送后尽早创建 Draft PR，完成验证再提交审查。**队员必须通过 PR 交付，禁止直接推送 `main` 或自行合并；由队长审查并统一合并。** 具体流程见 `agent.md` 第 6 节，提交说明使用仓库 PR 模板。
