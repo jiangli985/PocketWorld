@@ -28,13 +28,13 @@ PocketWorld/
 │   └── types/
 │       ├── game.ts            # 小游戏卡带统一接口契约 (GameCartridgeProps)
 │       └── interactable.ts    # 房间可交互物品注册与音乐光盘数据结构
-├── agent.md                   # 项目工程准则、多人目录隔离与 AI Agent 开发规范
-├── spec.md                    # 产品交互细节、动画流程与小游戏技术细则规范
+├── AGENT.md                   # 项目工程准则、多人目录隔离与 AI Agent 开发规范
+├── SPEC.md                    # 产品交互细节、动画流程与小游戏技术细则规范
 └── README.md
 ```
 
 ## 三、多人协作与接口约定
-> 开发前请务必先阅读 **[`agent.md`](./agent.md)**（工程与防冲突铁律）与 **[`spec.md`](./spec.md)**（产品交互与小游戏细则）。
+> 开发前请务必先阅读 **[`AGENT.md`](./AGENT.md)**（工程与防冲突铁律）与 **[`SPEC.md`](./SPEC.md)**（产品交互与小游戏细则）。
 
 1. **目录隔离**：
    - 负责**马里奥小游戏**的成员仅在 `src/games/mario/` 下开发；
@@ -43,4 +43,6 @@ PocketWorld/
 2. **统一卡带接口**：
    两个游戏入口组件均接收 `src/types/game.ts` 中定义的 `GameCartridgeProps`，默认逻辑画布尺寸为 `800 × 600`（外层电脑显示器容器会自动等比缩放并加上复古屏幕滤镜）。
 3. **分支规范**：
-   每人基于 `main` 创建独立功能分支（如 `feat/game-mario`、`feat/game-shooter`、`feat/room-scene`），通过 Pull Request 合并。
+   每人基于最新 `main` 创建独立功能分支（如 `feat/game-mario`、`feat/game-shooter`、`feat/room-scene`），推送后尽早创建 Draft PR，完成验证再提交审查。**队员必须通过 PR 交付，禁止直接推送 `main` 或自行合并；由队长审查并统一合并。** 具体流程见 `AGENT.md` 第 6 节，提交说明使用仓库 PR 模板。
+4. **进度与玩法设计**：
+   两名队员分别维护自己游戏目录下的 `进度文档.md`，写清已有功能、当前阶段和待办，整理最新状态并删除冗余内容。PR 必须说明本次提交内容并链接进度文档。核心玩法允许完全重设计，技术接口、嵌入方式、暂停/静音/退出与清理机制保持稳定，集成变更由队长协调。
