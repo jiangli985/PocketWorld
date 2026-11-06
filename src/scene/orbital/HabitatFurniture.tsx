@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 import { CLOSED_OBJECT, type WorldModelProps } from '../../types/world';
 import { ObjectHandle } from './ObjectHandle';
 import { SoftBox, Tube } from './Primitives';
@@ -7,6 +9,7 @@ import { FurnitureDesk } from './FurnitureDesk';
 import { FurnitureBookcase } from './FurnitureBooks';
 import { Bedding } from './Bedding';
 import { ReusableAsset } from './ReusableAsset';
+import { CHAIR_POSES, SEAT_DROP, SEAT_SWIVEL } from './chairPose';
 
 function FurnitureBed({ world }: { world: WorldModelProps }) {
   const state = world.objects.bed ?? CLOSED_OBJECT;
@@ -22,26 +25,37 @@ function FurnitureBed({ world }: { world: WorldModelProps }) {
 
 function FurnitureChair({ world, lounge = false }: { world: WorldModelProps; lounge?: boolean }) {
   const state = world.objects.chair ?? CLOSED_OBJECT;
-  return <ObjectHandle id="chair" action={state.active ? 'stand' : 'sit'} hint={state.active ? '起身' : '坐下歇一会'} world={world} position={lounge ? [-1.65, 0, 0.75] : [1.45, 0, -0.85]} rotation={[0, lounge ? 0.42 : 0.15, 0]}>
+  const rig = useRef<THREE.Group>(null);
+  const seat = useRef<THREE.Group>(null);
+  useFrame(() => {
+    const pose = CHAIR_POSES[world.sceneId];
+    rig.current?.position.set(pose.x, 0, pose.z);
+    if (rig.current) rig.current.rotation.y = pose.yaw;
+    if (seat.current) seat.current.position.y = -pose.drop * SEAT_DROP;
+  });
+  return <ObjectHandle id="chair" action={state.active ? 'stand' : 'sit'} hint={state.active ? (lounge ? '起身' : '起身 · WASD 蹬地滑行') : '坐下歇一会'} world={world}><group ref={rig}>
     {lounge ? [-0.39, 0.39].flatMap(x => [-0.36, 0.36].map(z => <SoftBox key={`${x}/${z}`} dims={[0.08, 0.49, 0.08]} position={[x, 0.255, z]} color={C.edge} rotation={[0, 0, -x * 0.12]} />)) : <>
-      <Cylinder radius={0.055} height={0.43} position={[0, 0.34, 0]} color="#9b9e94" metalness={0.7} />
+      <Cylinder radius={0.06} height={0.12} position={[0, 0.15, 0]} color="#9b9e94" metalness={0.7} />
       {[0, 1, 2, 3, 4].map(i => <group key={i} rotation={[0, i * Math.PI * 2 / 5, 0]}>
         <SoftBox dims={[0.075, 0.065, 0.46]} position={[0, 0.13, 0.2]} rotation={[0.08, 0, 0]} color={C.ink} />
         <Cylinder radius={0.065} height={0.085} position={[0, 0.065, 0.43]} rotation={[0, 0, Math.PI / 2]} color={C.dark} />
       </group>)}
     </>}
-    <FurnitureMotion target={state.active ? -0.2 : 0.12} reducedMotion={world.reducedMotion}>
-      <SoftBox dims={lounge ? [1.04, 0.18, 1.0] : [0.77, 0.13, 0.75]} position={[0, 0.54, 0]} color={C.edge} radius={0.07} />
-      <FurnitureCushion dims={lounge ? [0.94, 0.24, 0.9] : [0.74, 0.18, 0.71]} position={[0, 0.65, 0]} color={lounge ? '#bc9770' : C.cloth} />
-      <Tube points={[[-0.29, 0.56, 0.22], [-0.3, 0.82, 0.35], [-0.29, 1.15, 0.35]]} radius={0.026} color={C.ink} />
-      <Tube points={[[0.29, 0.56, 0.22], [0.3, 0.82, 0.35], [0.29, 1.15, 0.35]]} radius={0.026} color={C.ink} />
-      <FurnitureCushion dims={lounge ? [1.02, 0.24, 0.72] : [0.76, 0.19, 0.53]} position={[0, lounge ? 1.03 : 1.07, 0.35]} rotation={[Math.PI / 2 - 0.12, 0, 0]} color={lounge ? '#bc9770' : C.cloth} />
-      {[-1, 1].map(side => <group key={side}>
-        <Tube points={[[side * 0.38, 0.55, -0.22], [side * 0.41, 0.84, -0.2], [side * 0.41, 0.88, 0.24], [side * 0.34, 0.59, 0.29]]} radius={0.025} color={C.ink} />
-        <SoftBox dims={[lounge ? 0.17 : 0.1, 0.07, 0.52]} position={[side * (lounge ? 0.48 : 0.41), 0.89, 0.02]} color={lounge ? '#bc9770' : C.edge} radius={0.035} />
-      </group>)}
-    </FurnitureMotion>
-  </ObjectHandle>;
+    <group ref={seat}>
+      {!lounge && <Cylinder radius={0.042} height={0.3} position={[0, 0.325, 0]} color="#b9bbb2" metalness={0.8} />}
+      <FurnitureMotion target={state.active ? SEAT_SWIVEL : 0.12} reducedMotion={world.reducedMotion}>
+        <SoftBox dims={lounge ? [1.04, 0.18, 1.0] : [0.77, 0.13, 0.75]} position={[0, 0.54, 0]} color={C.edge} radius={0.07} />
+        <FurnitureCushion dims={lounge ? [0.94, 0.24, 0.9] : [0.74, 0.18, 0.71]} position={[0, 0.65, 0]} color={lounge ? '#bc9770' : C.cloth} />
+        <Tube points={[[-0.29, 0.56, 0.22], [-0.3, 0.82, 0.35], [-0.29, 1.15, 0.35]]} radius={0.026} color={C.ink} />
+        <Tube points={[[0.29, 0.56, 0.22], [0.3, 0.82, 0.35], [0.29, 1.15, 0.35]]} radius={0.026} color={C.ink} />
+        <FurnitureCushion dims={lounge ? [1.02, 0.24, 0.72] : [0.76, 0.19, 0.53]} position={[0, lounge ? 1.03 : 1.07, 0.35]} rotation={[Math.PI / 2 - 0.12, 0, 0]} color={lounge ? '#bc9770' : C.cloth} />
+        {[-1, 1].map(side => <group key={side}>
+          <Tube points={[[side * 0.38, 0.55, -0.22], [side * 0.41, 0.84, -0.2], [side * 0.41, 0.88, 0.24], [side * 0.34, 0.59, 0.29]]} radius={0.025} color={C.ink} />
+          <SoftBox dims={[lounge ? 0.17 : 0.1, 0.07, 0.52]} position={[side * (lounge ? 0.48 : 0.41), 0.89, 0.02]} color={lounge ? '#bc9770' : C.edge} radius={0.035} />
+        </group>)}
+      </FurnitureMotion>
+    </group>
+  </group></ObjectHandle>;
 }
 
 function FurnitureLamp({ world }: { world: WorldModelProps }) {
