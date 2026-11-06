@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { MusicDisc } from './types/interactable';
 import type { GameId } from './types/game';
-import type { WorldFeatureAdapters } from './types/world';
+import type { BookContent, WorldFeatureAdapters } from './types/world';
 import { PRESET_MUSIC_DISCS, generateDiscColorsFromName, roomAudio } from './scene/audioEngine';
 import { OrbitalScene } from './scene/orbital/OrbitalScene';
+import { PRESET_BOOKS, loadLocalBooks, storeLocalBooks } from './scene/orbital/library';
 import { useWorldController } from './scene/orbital/useWorldController';
 import './scene/orbital/orbital.css';
 
@@ -11,6 +12,8 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
   const world = useWorldController(adapters);
   const audio = useSyncExternalStore(roomAudio.subscribe, roomAudio.getSnapshot);
   const [discs, setDiscs] = useState<MusicDisc[]>(PRESET_MUSIC_DISCS);
+  const [localBooks, setLocalBooks] = useState(loadLocalBooks);
+  const books = [...PRESET_BOOKS, ...localBooks];
   const [activeGame, setActiveGame] = useState<GameId | null>(null);
   const [draggingFile, setDraggingFile] = useState(false);
   const [announcement, setAnnouncement] = useState('');
@@ -62,6 +65,18 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     ownedUrls.current = [];
   }, []);
 
+  const onAddBook = useCallback((title: string, author: string, text: string): BookContent | null => {
+    const pages = text.trim().split(/\n\s*\n/).map(page => page.trim()).filter(Boolean);
+    if (!title.trim() || !pages.length) { onFeatureError('请填写书名和正文。'); return null; }
+    if (title.trim().length > 80 || author.trim().length > 60 || text.length > 10000) { onFeatureError('书籍内容超过长度限制。'); return null; }
+    if (localBooks.length >= 30) { onFeatureError('书柜最多收录 30 本自己的书。'); return null; }
+    try {
+      const book: BookContent = { id: `visitor-${crypto.randomUUID()}`, title: title.trim(), author: author.trim() || '访客', pages };
+      storeLocalBooks([...localBooks, book]);
+      setLocalBooks(current => [...current, book]);
+      return book;
+    } catch { onFeatureError('书籍未能保存，请检查浏览器存储空间。'); return null; }
+  }, [localBooks, onFeatureError]);
   const onImportMusic = useCallback(() => { void roomAudio.unlock(); fileInput.current?.click(); }, []);
   const importFiles = useCallback((files: FileList | null) => {
     const file = files?.[0];
@@ -93,7 +108,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
     onDragLeave={event => { event.preventDefault(); inputDepth.current = Math.max(0, inputDepth.current - 1); if (!inputDepth.current) setDraggingFile(false); }}
     onDrop={event => { event.preventDefault(); inputDepth.current = 0; setDraggingFile(false); importFiles(event.dataTransfer.files); }}>
-    <OrbitalScene {...world} adapters={adapters} onImportMusic={onImportMusic} discs={discs} activeDisc={audio.disc} isMusicPlaying={audio.isPlaying} isMuted={audio.isMuted}
+    <OrbitalScene {...world} books={books} onAddBook={onAddBook} adapters={adapters} onImportMusic={onImportMusic} discs={discs} activeDisc={audio.disc} isMusicPlaying={audio.isPlaying} isMuted={audio.isMuted}
       onSelectDisc={onSelectDisc} onToggleMusic={onToggleMusic} onToggleMute={onToggleMute} activeGame={activeGame} onGameChange={setActiveGame} onFeatureError={onFeatureError} />
     <header className="orbital-header">
       <div className="orbital-wordmark"><span className="orbital-emblem" aria-hidden="true" /><span>pocketworld<span className="orbital-wordmark-dot">.</span></span></div>

@@ -46,6 +46,16 @@
 .world-page textarea:focus-visible, .world-page input:focus-visible { outline: 1px solid #a99167; outline-offset: 4px; }
 .world-page ::selection { background: #c7d4bf; color: #303c31; }
 .world-book-text { font: 16px/2 'Songti SC', serif; white-space: pre-line; flex: 1; }
+.world-book-nav { display: flex; gap: 16px; justify-content: flex-end; margin-bottom: 12px; }
+.world-book-nav button, .world-book-form button { border: 0; background: transparent; color: #765d42; font: 13px 'Songti SC', serif; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
+.world-book-nav button:focus-visible, .world-book-list button:focus-visible, .world-book-form button:focus-visible { outline: 1px solid #a99167; outline-offset: 3px; }
+.world-book-list { display: grid; gap: 4px; overflow-y: auto; flex: 1; align-content: start; }
+.world-book-list button { display: grid; gap: 4px; padding: 10px 2px; text-align: left; border: 0; border-bottom: 1px solid #d0c3a4; background: transparent; color: inherit; cursor: pointer; font: 15px 'Songti SC', serif; }
+.world-book-list small { font-size: 10px; }
+.world-book-form { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 12px; }
+.world-book-form input { box-sizing: border-box; width: 100%; border: 0; border-bottom: 1px solid #d0c3a4; background: transparent; padding: 6px 0; color: #505247; font: 15px 'Songti SC', serif; }
+.world-book-form textarea { min-height: 90px; }
+.world-book-form button { align-self: flex-end; }
 @media (max-width: 720px) {
   .orbital-header { top: max(23px, env(safe-area-inset-top)); left: 22px; right: 22px; }
   .orbital-wordmark { font-size: 22px; gap: 10px; }

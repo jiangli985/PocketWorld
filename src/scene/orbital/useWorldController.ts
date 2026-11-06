@@ -6,7 +6,7 @@ export function nextObjectState(previous: WorldObjectState, action: WorldAction)
   switch (action.kind) {
     case 'open': return { ...previous, open: !previous.open };
     case 'close': return { ...previous, open: false, active: false };
-    case 'write': case 'plan': case 'read': return { ...previous, open: true, active: true, itemId: action.payload?.itemId ?? action.objectId };
+    case 'write': case 'plan': case 'read': return { ...previous, open: true, active: true, page: action.kind === 'read' && action.payload?.itemId && action.payload.itemId !== previous.itemId ? 0 : previous.page, itemId: action.payload?.itemId ?? action.objectId };
     case 'turn-page': return { ...previous, open: true, active: true, page: Math.max(0, action.payload?.value ?? previous.page + (action.payload?.direction ?? 1)) };
     case 'sleep': case 'sit': return { ...previous, active: !previous.active };
     case 'wake': case 'stand': return { ...previous, active: false };
@@ -61,7 +61,7 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
     const visiblePrevious = displayed.sceneObjects[request.sceneId][request.objectId] ?? previous;
     let action = request;
     if (request.kind === 'sleep' && visiblePrevious.active) action = { ...request, kind: 'wake' };
-    if ((request.kind === 'write' || request.kind === 'plan' || request.kind === 'read') && visiblePrevious.open && displayed.focusedObject === request.objectId) {
+    if ((request.kind === 'write' || request.kind === 'plan' || request.kind === 'read') && visiblePrevious.open && displayed.focusedObject === request.objectId && (request.kind !== 'read' || !request.payload?.itemId || request.payload.itemId === visiblePrevious.itemId)) {
       action = { ...request, kind: 'turn-page', payload: { ...request.payload, direction: request.payload?.direction ?? 1 } };
     }
     const id = ++sequence.current;
