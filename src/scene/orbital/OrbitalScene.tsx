@@ -109,7 +109,7 @@ function WorldContent(props: OrbitalSceneProps) {
   return <>
     <PerspectiveCamera makeDefault fov={34} position={[11, 10.05, 14]} near={0.08} far={2000} />
     <CameraRig {...props} />
-    <Suspense fallback={null}><Cosmos /></Suspense>
+    <Cosmos reducedMotion={props.reducedMotion} />
     <Environment resolution={128} frames={1}>
       <Lightformer form="rect" intensity={2} color="#f5e8d3" position={[0, 5, -2]} rotation={[Math.PI / 2, 0, 0]} scale={[10, 8, 1]} />
       <Lightformer intensity={0.7} color="#a8bed1" position={[5, 1, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 4, 1]} />
