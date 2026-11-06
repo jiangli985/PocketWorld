@@ -3,7 +3,6 @@ import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { WorldActionKind, WorldModelProps } from '../../types/world';
 import { ObjectHandle } from './ObjectHandle';
-import { ResidentModel } from './ResidentModel';
 
 type Point = [number, number];
 type Box = [number, number, number, number];
@@ -354,8 +353,38 @@ export function OrbitalResidents(props: ResidentsProps) {
     <group ref={resident} name="OrbitalResident" position={spawn} onPointerDown={characterDown}
       onPointerOver={e => { if (props.enabled) { e.stopPropagation(); props.onHover('resident', 'WASD 移动 · 空格跳跃 · 上划人物跳跃'); } }}
       onPointerOut={() => { if (props.enabled) props.onHover(null); }}>
-      <ResidentModel rig={{ hips, leftLeg, rightLeg, leftKnee, rightKnee, leftArm, rightArm, head }}
-        sleeping={!!props.objects.bed?.active} reducedMotion={props.reducedMotion} />
+      <group ref={hips} position={[0, HIP, 0]}>
+        <Ball position={[0, 0, 0]} radius={0.17} scale={[1, 0.56, 0.72]} color="#2b3a4f" />
+        {([[leftLeg, leftKnee, -0.095], [rightLeg, rightKnee, 0.095]] as const).map(([leg, knee, x]) => <group key={x} ref={leg} position={[x, -0.02, 0]}>
+          <mesh position={[0, -0.14, 0]} castShadow><capsuleGeometry args={[0.067, 0.15, 6, 16]} /><meshStandardMaterial color="#2b3a4f" /></mesh>
+          <group ref={knee} position={[0, -0.28, 0]}>
+            <mesh position={[0, -0.115, 0]} castShadow><capsuleGeometry args={[0.06, 0.15, 6, 16]} /><meshStandardMaterial color="#33465b" /></mesh>
+            <Ball position={[0, -0.25, 0.035]} radius={0.08} scale={[1, 0.62, 1.55]} color="#f7f1df" />
+            <mesh position={[0, -0.298, 0.035]} scale={[1, 1, 1.5]}><cylinderGeometry args={[0.08, 0.08, 0.024, 20]} /><meshStandardMaterial color="#bd753e" /></mesh>
+          </group>
+        </group>)}
+        <Ball position={[0, 0.245, 0]} radius={0.235} scale={[0.88, 1.18, 0.68]} color="#3b7a8c" />
+        <Ball position={[0, 0.43, -0.09]} radius={0.13} scale={[1.1, 0.7, 0.7]} color="#326978" />
+        <Ball position={[0, 0.13, 0.14]} radius={0.08} scale={[1.7, 0.75, 0.35]} color="#326978" />
+        {[-0.044, 0.044].map(x => <mesh key={x} position={[x, 0.36, 0.14]}><capsuleGeometry args={[0.007, 0.11, 4, 8]} /><meshStandardMaterial color="#f8efd9" /></mesh>)}
+        {([[leftArm, -0.24], [rightArm, 0.24]] as const).map(([ref, x]) => <group ref={ref} key={x} position={[x, 0.43, 0]}>
+          <mesh position={[0, -0.15, 0]} castShadow><capsuleGeometry args={[0.06, 0.22, 6, 16]} /><meshStandardMaterial color="#3b7a8c" /></mesh>
+          <Ball position={[0, -0.33, 0]} radius={0.055} color="#f4c7ab" />
+        </group>)}
+        <group ref={head} position={[0, 0.61, 0]}>
+          <Ball position={[0, 0, 0]} radius={0.175} scale={[1, 0.98, 0.95]} color="#f4c7ab" />
+          <Ball position={[0, 0.05, -0.048]} radius={0.188} color="#3b261e" />
+          {[-1, 1].map(side => <React.Fragment key={side}>
+            <Ball position={[side * 0.174, -0.02, 0]} radius={0.038} scale={[0.6, 1, 0.8]} color="#eab89b" />
+            <Ball position={[side * 0.063, -0.01, 0.153]} radius={0.023} scale={[0.8, props.objects.bed?.active ? 0.22 : 1.1, 0.5]} color="#1e293b" />
+            <Ball position={[side * 0.063 + 0.005, -0.003, 0.166]} radius={0.006} color="#ffffff" />
+            <Ball position={[side * 0.105, -0.05, 0.135]} radius={0.021} scale={[1.1, 0.65, 0.4]} color="#e6a296" />
+          </React.Fragment>)}
+          {[-0.12, -0.06, 0, 0.06, 0.12].map((x, i) => <mesh key={x} position={[x, 0.105 - Math.abs(x) * 0.2, 0.12]} rotation={[0.4, 0, (2 - i) * 0.25]} scale={[0.75, 1.35, 0.55]} castShadow><sphereGeometry args={[0.052, 16, 12]} /><meshStandardMaterial color="#462e24" /></mesh>)}
+          <mesh position={[0, -0.065, 0.16]} rotation={[0, 0, Math.PI]}><torusGeometry args={[0.018, 0.004, 6, 16, Math.PI]} /><meshBasicMaterial color="#9a4a3a" /></mesh>
+          <mesh position={[0.02, 0.225, 0]} rotation={[0, Math.PI / 2, -0.4]}><torusGeometry args={[0.035, 0.009, 8, 16, Math.PI * 1.2]} /><meshStandardMaterial color="#3b261e" /></mesh>
+        </group>
+      </group>
     </group>
     <ObjectHandle id="pet" action="pet" hint="团子 · 轻抚 / 靠近按 E" world={petWorld} position={[CAT[0], 0, CAT[1]]} rotation={[0, 0.5, 0]}>
       <mesh position={[0, 0.04, 0]} castShadow receiveShadow><cylinderGeometry args={[0.37, 0.41, 0.08, 28]} /><meshStandardMaterial color="#d5c3aa" roughness={0.9} /></mesh>
