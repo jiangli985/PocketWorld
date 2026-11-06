@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "downloadedAt": "2026-11-06",
+  "runtimeNetwork": "All assets are self-hosted; no remote calls at runtime.",
+  "totalTextureBytes": 3913162,
+  "estimatedRGBA8WithMipmapsMiB": 58.67,
+  "rendering": "Star map uses a low-exposure unlit material (#2b2d30), no synthetic blinking or nebulae. Earth radius 82 at camera-relative [-645,-285,-560], cloud radius 82.27, atmosphere radius 82.8. Shared world-space SUN_DIRECTION illuminates all three layers.",
+  "assets": [
+    {
+      "file": "nasa-stars-4k.webp",
+      "dimensions": [
+        4096,
+        2048
+      ],
+      "sourcePage": "https://svs.gsfc.nasa.gov/4851/",
+      "download": "https://svs.gsfc.nasa.gov/vis/a000000/a004800/a004851/starmap_2020_4k.exr",
+      "credit": "NASA/Goddard Space Flight Center Scientific Visualization Studio; Ernie Wright, Deep Star Maps 2020",
+      "processing": "Official 4K floating-point EXR decoded with ffmpeg; RGB display gamma pow(linear,1/2.2), clamped to LDR, WebP quality 93 method 6. No synthetic stars added.",
+      "usage": "NASA SVS media usage guidelines apply; credit NASA SVS. See source page for dataset credits.",
+      "bytes": 3349082,
+      "sha256": "2c8d32a2d76b6f84038f60160769e66d6d6408c1f4d04325bc477f44a9eb1f69"
+    },
+    {
+      "file": "earth-day-2k.webp",
+      "dimensions": [
+        2048,
+        1024
+      ],
+      "download": "https://svs.gsfc.nasa.gov/vis/a000000/a002900/a002915/bluemarble-2048.png",
+      "credit": "NASA/Goddard Space Flight Center Scientific Visualization Studio; Eric Sokolowsky. Blue Marble Next Generation data courtesy of Reto Stockli (NASA/GSFC) and NASA's Earth Observatory.",
+      "processing": "Converted RGB to WebP quality 90; sRGB display color.",
+      "bytes": 243806,
+      "sha256": "e4d5a573c9608e124913ed6d5651c247f746cd09bbf42960c382189ffffb46b2",
+      "sourcePage": "https://svs.gsfc.nasa.gov/2915/",
+      "usage": "Official SVS help page states content is public domain unless otherwise noted. Source page and requested credit verified by direct HTTPS on 2026-11-06; static imagery only.",
+      "usagePolicy": "https://svs.gsfc.nasa.gov/help/"
+    },
+    {
+      "file": "earth-clouds-1k.webp",
+      "dimensions": [
+        1024,
+        512
+      ],
+      "download": "https://svs.gsfc.nasa.gov/vis/a000000/a003800/a003837/frames/2048x1024_2x1_30p/Clouds/clouds.0350.tif",
+      "credit": "NASA/Goddard Space Flight Center Scientific Visualization Studio; visualizer Cindy Starr; GEOS-5 atmospheric model, NASA GMAO.",
+      "processing": "Extracted TIFF alpha, Lanczos downsampled to 1024x512; lossless WebP linear density.",
+      "bytes": 307012,
+      "sha256": "0846e75dda526fc9a488f4f4bd285ec56a0fa7b51fa5f685fa9eb680bea881eb",
+      "sourcePage": "https://svs.gsfc.nasa.gov/3837/",
+      "usage": "Official SVS help page states content is public domain unless otherwise noted. Source page and requested credit verified by direct HTTPS on 2026-11-06; static cloud alpha frame only, no audio.",
+      "usagePolicy": "https://svs.gsfc.nasa.gov/help/"
+    },
+    {
+      "file": "earth-ocean-1k.webp",
+      "dimensions": [
+        1024,
+        512
+      ],
+      "download": "https://svs.gsfc.nasa.gov/vis/a000000/a002900/a002915/bluemarble-2048.png",
+      "credit": "Derived in PocketWorld from NASA SVS 2915 Blue Marble.",
+      "processing": "Approximate mask: clamp((B-max(R,G)-7)/15,0,1)*clamp((110-max(R,G,B))/50,0,1), computed at 1024x512; lossless WebP.",
+      "bytes": 13262,
+      "sha256": "83a247e582ad4d5c958cdfae6d5dbb7569f060664d6b78fb8a112af3e615bcd9",
+      "sourcePage": "https://svs.gsfc.nasa.gov/2915/",
+      "usage": "Locally derived from NASA SVS 2915 static imagery. SVS help page and image credit verified by direct HTTPS on 2026-11-06; source attribution retained.",
+      "usagePolicy": "https://svs.gsfc.nasa.gov/help/"
+    }
+  ],
+  "earthProvenanceNote": "Earth surface now comes directly from NASA SVS 2915. Cloud alpha is a single GEOS-5 model visualization frame from SVS 3837, not live weather. Ocean mask is an approximate blue-water classification derived locally from the NASA surface; not scientific bathymetry or ocean observations."
+}

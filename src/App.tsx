@@ -1,416 +1,114 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  CharacterPosture,
-  InteractableId,
-  MusicDisc,
-  RoomLightingState,
-} from './types/interactable';
-import { GameId } from './types/game';
-import { RoomScene, RoomViewAction, RoomViewCommand } from './scene/RoomScene';
-import {
-  PRESET_MUSIC_DISCS,
-  roomAudio,
-} from './scene/audioEngine';
-import { MusicPlayerModal } from './components/music-player/MusicPlayerModal';
-import { PocketOSModal } from './components/computer/PocketOSModal';
-import { RoomDetailModal } from './components/room-panels/RoomDetailModal';
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { MusicDisc } from './types/interactable';
+import type { GameId } from './types/game';
+import type { WorldFeatureAdapters } from './types/world';
+import { PRESET_MUSIC_DISCS, generateDiscColorsFromName, roomAudio } from './scene/audioEngine';
+import { OrbitalScene } from './scene/orbital/OrbitalScene';
+import { useWorldController } from './scene/orbital/useWorldController';
+import './scene/orbital/orbital.css';
 
-function getDevGameParam(): GameId | null {
-  if (typeof window === 'undefined') return null;
-  const params = new URLSearchParams(window.location.search);
-  const dev = params.get('dev');
-  if (dev === 'mario' || dev === 'shooter') {
-    return dev;
-  }
-  return null;
-}
-
-export const App: React.FC = () => {
-  const devGame = getDevGameParam();
-
-  const [lighting, setLighting] = useState<RoomLightingState>({
-    mainLightOn: true,
-    bedsideLampOn: true,
-    stringLightsOn: true,
-    timeOfDay: 'day',
-  });
-
-  const [hoveredId, setHoveredId] = useState<InteractableId | null>(null);
-  const [focusedId, setFocusedId] = useState<InteractableId | null>(
-    devGame ? 'computer' : null
-  );
-  const [modalVisible, setModalVisible] = useState<boolean>(Boolean(devGame));
-  const [activeCartridgeGame, setActiveCartridgeGame] = useState<GameId | null>(
-    devGame
-  );
-
-  // 主角状态
-  const [posture, setPosture] = useState<CharacterPosture>('standing');
-  const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(
-    null
-  );
-  const [nearbyId, setNearbyId] = useState<InteractableId | null>(null);
-  const [characterPos, setCharacterPos] = useState<[number, number, number]>([
-    0.95, 0, 0.45,
-  ]);
-  const [statusBubble, setStatusBubble] = useState<string | null>(null);
-
-  // 音乐与音效状态
-  const [isMuted, setIsMuted] = useState<boolean>(false);
+export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters }) => {
+  const world = useWorldController(adapters);
+  const audio = useSyncExternalStore(roomAudio.subscribe, roomAudio.getSnapshot);
   const [discs, setDiscs] = useState<MusicDisc[]>(PRESET_MUSIC_DISCS);
-  const [activeDisc, setActiveDisc] = useState<MusicDisc>(PRESET_MUSIC_DISCS[0]);
-  const [isMusicPlaying, setIsMusicPlaying] = useState<boolean>(false);
-
-  // 场景微交互反馈状态
-  const [chairAngle, setChairAngle] = useState<number>(0.25);
-  const [pettedAt, setPettedAt] = useState<number>(0);
-  const [plantWateredAt, setPlantWateredAt] = useState<number>(0);
-  const [trashTossedAt, setTrashTossedAt] = useState<number>(0);
-  const [viewCommand, setViewCommand] = useState<RoomViewCommand | null>(null);
-
-  const sendViewCommand = useCallback((action: RoomViewAction) => {
-    setViewCommand((prev) => ({ action, nonce: (prev?.nonce ?? 0) + 1 }));
+  const [activeGame, setActiveGame] = useState<GameId | null>(null);
+  const [draggingFile, setDraggingFile] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
+  const ownedUrls = useRef<string[]>([]);
+  const initialized = useRef(false);
+  const inputDepth = useRef(0);
+  const hintTimer = useRef<number>();
+  const onFeatureError = useCallback((message: string) => {
+    setAnnouncement(message);
+    window.clearTimeout(hintTimer.current);
+    hintTimer.current = window.setTimeout(() => setAnnouncement(''), 5500);
   }, []);
-
-  const showTransientBubble = useCallback((msg: string) => {
-    setStatusBubble(msg);
-    window.setTimeout(() => {
-      setStatusBubble((prev) => (prev === msg ? null : prev));
-    }, 2400);
-  }, []);
-
-  const handleCloseFocus = useCallback(() => {
-    setModalVisible(false);
-    setFocusedId(null);
-    setActiveCartridgeGame(null);
-  }, []);
-
-  // Esc 返回房间（当不在小游戏运行中时）
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Escape' && focusedId && !activeCartridgeGame) {
-        e.preventDefault();
-        handleCloseFocus();
+    if (initialized.current) return;
+    initialized.current = true;
+    const dev = new URLSearchParams(window.location.search).get('dev');
+    if (dev === 'mario' || dev === 'shooter') {
+      setActiveGame(dev);
+      void world.onAction({ sceneId: 'habitat', objectId: 'computer', kind: 'inspect' });
+    }
+  }, [world.onAction]);
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      const editable = event.target instanceof HTMLElement && (['INPUT', 'TEXTAREA'].includes(event.target.tagName) || event.target.isContentEditable);
+      if (event.code === 'Escape') {
+        if (activeGame && world.focusedObject === 'computer') return;
+        event.preventDefault();
+        (document.activeElement as HTMLElement)?.blur?.();
+        world.onReturn();
+      }
+      if (editable || activeGame) return;
+      if (event.code === 'KeyM') { event.preventDefault(); roomAudio.setMuted(!roomAudio.getSnapshot().isMuted); }
+      const shortcuts: Record<string, { objectId: string; kind: 'write' | 'plan' | 'read' | 'sleep' | 'inspect' }> = {
+        KeyJ: { objectId: 'journal', kind: 'write' }, KeyO: { objectId: 'schedule', kind: 'plan' }, KeyR: { objectId: 'book-01', kind: 'read' }, KeyB: { objectId: 'bed', kind: 'sleep' }, KeyC: { objectId: 'computer', kind: 'inspect' }, KeyL: { objectId: 'music-player', kind: 'inspect' },
+      };
+      if (shortcuts[event.code] && !event.repeat && !(event.code === 'KeyB' && world.sceneId !== 'habitat')) {
+        event.preventDefault();
+        void world.onAction({ sceneId: world.sceneId, ...shortcuts[event.code] });
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeCartridgeGame, focusedId, handleCloseFocus]);
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [world.onReturn, world.onAction, world.sceneId, world.focusedObject, activeGame]);
+  useEffect(() => () => {
+    window.clearTimeout(hintTimer.current);
+    roomAudio.stopMusic();
+    ownedUrls.current.forEach(url => URL.revokeObjectURL(url));
+    ownedUrls.current = [];
+  }, []);
 
-  const handleInteract = useCallback(
-    (id: InteractableId) => {
-      if (id === 'light-switch') {
-        roomAudio.playSfx('switch');
-        setLighting((prev) => {
-          const next = !prev.mainLightOn;
-          showTransientBubble(next ? '已开启房间主照明' : '已关闭房间主照明');
-          return { ...prev, mainLightOn: next };
-        });
-        return;
-      }
-
-      if (id === 'bedside-lamp') {
-        roomAudio.playSfx('switch');
-        setLighting((prev) => {
-          const next = !prev.bedsideLampOn;
-          showTransientBubble(next ? '已点亮床头阅读暖灯' : '已关闭床头暖灯');
-          return { ...prev, bedsideLampOn: next };
-        });
-        return;
-      }
-
-      if (id === 'string-lights') {
-        roomAudio.playSfx('switch');
-        setLighting((prev) => {
-          const next = !prev.stringLightsOn;
-          showTransientBubble(next ? '已开启吊柜暖黄串灯' : '已关闭吊柜串灯');
-          return { ...prev, stringLightsOn: next };
-        });
-        return;
-      }
-
-      if (id === 'window') {
-        roomAudio.playSfx('soft');
-        setLighting((prev) => {
-          const nextTime = prev.timeOfDay === 'day' ? 'night' : 'day';
-          showTransientBubble(
-            nextTime === 'day'
-              ? '窗外切换为「午后暖阳」'
-              : '窗外切换为「静谧月夜」'
-          );
-          return { ...prev, timeOfDay: nextTime };
-        });
-        return;
-      }
-
-      if (id === 'bed') {
-        roomAudio.playSfx('soft');
-        setWalkTarget(null);
-        setPosture((prev) => {
-          const next = prev === 'sleeping' ? 'standing' : 'sleeping';
-          showTransientBubble(
-            next === 'sleeping' ? '躺在温暖的木床上小憩...' : '伸了个懒腰起床啦'
-          );
-          return next;
-        });
-        return;
-      }
-
-      if (id === 'chair') {
-        roomAudio.playSfx('soft');
-        setWalkTarget(null);
-        setChairAngle((prev) => prev + Math.PI * 0.65);
-        setPosture((prev) => {
-          const next = prev === 'sitting' ? 'standing' : 'sitting';
-          showTransientBubble(
-            next === 'sitting' ? '坐在电脑转椅上' : '从转椅上起身'
-          );
-          return next;
-        });
-        return;
-      }
-
-      if (id === 'pet') {
-        roomAudio.playSfx('cat');
-        setPettedAt(performance.now());
-        setPosture('petting');
-        showTransientBubble('橘猫「团子」开心地蹭了蹭你的手 ~ 呼噜呼噜');
-        window.setTimeout(() => {
-          setPosture((prev) => (prev === 'petting' ? 'standing' : prev));
-        }, 1400);
-        return;
-      }
-
-      if (id === 'plant') {
-        roomAudio.playSfx('water');
-        setPlantWateredAt(performance.now());
-        showTransientBubble('给琴叶榕花箱浇了水，叶片舒展摇曳');
-        return;
-      }
-
-      if (id === 'trash-bin') {
-        roomAudio.playSfx('paper');
-        setTrashTossedAt(performance.now());
-        showTransientBubble('随手将一张废纸团精准投进纸篓！');
-        return;
-      }
-
-      // 需要相机推进并展开交互界面的物品：computer / music-player / bookcase / wall-art
-      roomAudio.playSfx('soft');
-      setWalkTarget(null);
-      setFocusedId(id);
-      setModalVisible(false);
-      window.setTimeout(() => {
-        setModalVisible(true);
-      }, 620);
-    },
-    [showTransientBubble]
-  );
-
-  const handleToggleMute = () => {
-    setIsMuted((prev) => {
-      const next = !prev;
-      roomAudio.setMuted(next);
-      return next;
-    });
-  };
-
-  const handleSelectDisc = (disc: MusicDisc) => {
-    roomAudio.playSfx('disc');
-    setActiveDisc(disc);
-    setIsMusicPlaying(true);
-    roomAudio.startMusic(disc);
-  };
-
-  const handleToggleMusicPlay = () => {
-    if (isMusicPlaying) {
-      roomAudio.stopMusic();
-      setIsMusicPlaying(false);
-    } else {
-      roomAudio.startMusic(activeDisc);
-      setIsMusicPlaying(true);
-    }
-  };
-
-  const handleAddUserDisc = (newDisc: MusicDisc) => {
-    setDiscs((prev) => [newDisc, ...prev]);
-    setActiveDisc(newDisc);
-    setIsMusicPlaying(true);
-    roomAudio.startMusic(newDisc);
-    showTransientBubble(`已压制并播放新光盘：《${newDisc.title}》`);
-  };
-
-  return (
-    <div
-      className={`pocketworld-root ${
-        lighting.timeOfDay === 'night' || !lighting.mainLightOn
-          ? 'is-night-ambience'
-          : 'is-day-ambience'
-      }`}
-    >
-      {/* 3D 等轴测房间画布 */}
-      <RoomScene
-        lighting={lighting}
-        hoveredId={hoveredId}
-        onHoverChange={setHoveredId}
-        focusedId={focusedId}
-        onInteract={handleInteract}
-        posture={posture}
-        onPostureChange={setPosture}
-        walkTarget={walkTarget}
-        onWalkTargetChange={setWalkTarget}
-        nearbyId={nearbyId}
-        onNearbyChange={setNearbyId}
-        characterPos={characterPos}
-        onCharacterPosChange={setCharacterPos}
-        statusBubble={statusBubble}
-        isMusicPlaying={isMusicPlaying}
-        activeDisc={activeDisc}
-        chairAngle={chairAngle}
-        pettedAt={pettedAt}
-        plantWateredAt={plantWateredAt}
-        trashTossedAt={trashTossedAt}
-        viewCommand={viewCommand}
-      />
-
-      {/* 顶部环境与灯光快捷控制栏 */}
-      <header className="room-hud-topbar">
-        <div className="brand-pill">
-          <h1>PocketWorld</h1>
-          <span className="brand-status-dot" />
-          <span className="brand-subtitle">
-            主角：小宇（{posture === 'sleeping' ? '床上小憩' : posture === 'sitting' ? '桌前入座' : '自由探索'}）
-          </span>
-        </div>
-
-        <nav className="room-quick-controls" aria-label="房间灯光与设备快捷控制">
-          <button
-            type="button"
-            className={`hud-toggle-btn ${lighting.mainLightOn ? 'is-on' : ''}`}
-            onClick={() => handleInteract('light-switch')}
-          >
-            主灯：{lighting.mainLightOn ? '开' : '关'}
-          </button>
-
-          <button
-            type="button"
-            className={`hud-toggle-btn ${lighting.bedsideLampOn ? 'is-on' : ''}`}
-            onClick={() => handleInteract('bedside-lamp')}
-          >
-            床头灯：{lighting.bedsideLampOn ? '开' : '关'}
-          </button>
-
-          <button
-            type="button"
-            className={`hud-toggle-btn ${lighting.stringLightsOn ? 'is-on' : ''}`}
-            onClick={() => handleInteract('string-lights')}
-          >
-            串灯：{lighting.stringLightsOn ? '开' : '关'}
-          </button>
-
-          <button
-            type="button"
-            className={`hud-toggle-btn ${lighting.timeOfDay === 'day' ? 'is-on' : ''}`}
-            onClick={() => handleInteract('window')}
-          >
-            窗景：{lighting.timeOfDay === 'day' ? '午后暖阳' : '静谧月夜'}
-          </button>
-
-          <button
-            type="button"
-            className={`hud-toggle-btn ${isMusicPlaying ? 'is-playing' : ''}`}
-            onClick={() => handleInteract('music-player')}
-          >
-            唱机：{isMusicPlaying ? activeDisc.title.slice(0, 8) : '点此播放'}
-          </button>
-
-          <button
-            type="button"
-            className="hud-toggle-btn is-accent"
-            onClick={() => handleInteract('computer')}
-          >
-            打开电脑
-          </button>
-
-          <button
-            type="button"
-            className="hud-toggle-btn"
-            onClick={handleToggleMute}
-          >
-            {isMuted ? '取消静音' : '静音'}
-          </button>
-        </nav>
-      </header>
-
-      {!focusedId && (
-        <div className="room-view-controls" role="toolbar" aria-label="视角控制">
-          <button type="button" title="向左环绕" aria-label="向左环绕" onClick={() => sendViewCommand('rotate-left')}>
-            ⟲
-          </button>
-          <button type="button" title="放大" aria-label="放大" onClick={() => sendViewCommand('zoom-in')}>
-            +
-          </button>
-          <button type="button" title="复位视角" aria-label="复位视角" onClick={() => sendViewCommand('reset')}>
-            ⌂
-          </button>
-          <button type="button" title="缩小" aria-label="缩小" onClick={() => sendViewCommand('zoom-out')}>
-            −
-          </button>
-          <button type="button" title="向右环绕" aria-label="向右环绕" onClick={() => sendViewCommand('rotate-right')}>
-            ⟳
-          </button>
-        </div>
-      )}
-
-      {/* 底部主角控制与房间交互指引栏 */}
-      {!focusedId && (
-        <footer className="room-hud-bottombar">
-          <div className="controls-guide-bar">
-            <span>
-              <kbd>W</kbd>
-              <kbd>A</kbd>
-              <kbd>S</kbd>
-              <kbd>D</kbd> 或 <kbd>方向键</kbd> 控制主角行走
-            </span>
-            <span>
-              <kbd>Space</kbd> 跳跃
-            </span>
-            <span>
-              靠近家具按 <kbd>E</kbd> 或 <strong>直接点击家具/开关/猫咪</strong> 互动
-            </span>
-            <span>点击地板任意位置可引导主角前往</span>
-            <span>拖动旋转 · 滚轮缩放 · 右键平移</span>
-          </div>
-        </footer>
-      )}
-
-      {/* 推镜到位后的专属交互界面 */}
-      {focusedId === 'music-player' && modalVisible && (
-        <MusicPlayerModal
-          discs={discs}
-          activeDisc={activeDisc}
-          isPlaying={isMusicPlaying}
-          onSelectDisc={handleSelectDisc}
-          onTogglePlay={handleToggleMusicPlay}
-          onAddDisc={handleAddUserDisc}
-          onClose={handleCloseFocus}
-        />
-      )}
-
-      {focusedId === 'computer' && modalVisible && (
-        <PocketOSModal
-          initialGame={devGame}
-          isMuted={isMuted}
-          onToggleMute={handleToggleMute}
-          onActiveGameChange={setActiveCartridgeGame}
-          onClose={handleCloseFocus}
-        />
-      )}
-
-      {(focusedId === 'bookcase' || focusedId === 'wall-art') &&
-        modalVisible && (
-          <RoomDetailModal itemId={focusedId} onClose={handleCloseFocus} />
-        )}
-    </div>
-  );
+  const onImportMusic = useCallback(() => { void roomAudio.unlock(); fileInput.current?.click(); }, []);
+  const importFiles = useCallback((files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('audio/') && !/\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(file.name)) { onFeatureError('请放入一个音频文件。'); return; }
+    if (file.size > 100 * 1024 * 1024) { onFeatureError('这张唱片太大了，请选择 100 MB 以内的音频。'); return; }
+    const title = file.name.replace(/\.[^.]+$/, '');
+    const url = URL.createObjectURL(file);
+    ownedUrls.current.push(url);
+    const disc: MusicDisc = { id: `local-${Date.now()}-${ownedUrls.current.length}`, title, artist: '私人唱片收藏', audioUrl: url, discThemeColor: generateDiscColorsFromName(title), isUserUploaded: true };
+    setDiscs(current => [disc, ...current]);
+    void roomAudio.startMusic(disc);
+    void world.onAction({ sceneId: world.sceneId, objectId: 'music-player', kind: 'inspect' });
+    onFeatureError(`《${title}》已放进唱片架`);
+    if (fileInput.current) fileInput.current.value = '';
+  }, [world.onAction, world.sceneId, onFeatureError]);
+  const onSelectDisc = useCallback((disc: MusicDisc) => { void roomAudio.startMusic(disc); }, []);
+  const onToggleMusic = useCallback(() => {
+    const current = roomAudio.getSnapshot();
+    if (current.isPlaying) roomAudio.pauseMusic();
+    else if (current.status === 'paused') void roomAudio.resumeMusic();
+    else void roomAudio.startMusic(current.disc);
+  }, []);
+  const onToggleMute = useCallback(() => { roomAudio.setMuted(!roomAudio.getSnapshot().isMuted); }, []);
+  const status = announcement || world.error || audio.error || world.hover?.hint || (world.focusedObject ? '操作物品继续探索 · Esc / 双指轻触退回' : '触碰物品，留一会儿');
+  const travelling = world.transition.action?.kind === 'travel' && !['active', 'idle', 'error'].includes(world.transition.phase);
+  return <main className={`orbital-app${draggingFile ? ' is-importing' : ''}${world.focusedObject ? ' is-focused' : ''}`} aria-label="PocketWorld 轨道居住舱"
+    onDragEnter={event => { if (!event.dataTransfer.types.includes('Files')) return; event.preventDefault(); inputDepth.current += 1; setDraggingFile(true); }}
+    onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
+    onDragLeave={event => { event.preventDefault(); inputDepth.current = Math.max(0, inputDepth.current - 1); if (!inputDepth.current) setDraggingFile(false); }}
+    onDrop={event => { event.preventDefault(); inputDepth.current = 0; setDraggingFile(false); importFiles(event.dataTransfer.files); }}>
+    <OrbitalScene {...world} adapters={adapters} onImportMusic={onImportMusic} discs={discs} activeDisc={audio.disc} isMusicPlaying={audio.isPlaying} isMuted={audio.isMuted}
+      onSelectDisc={onSelectDisc} onToggleMusic={onToggleMusic} onToggleMute={onToggleMute} activeGame={activeGame} onGameChange={setActiveGame} onFeatureError={onFeatureError} />
+    <header className="orbital-header">
+      <div className="orbital-wordmark"><span className="orbital-emblem" aria-hidden="true" /><span>pocketworld<span className="orbital-wordmark-dot">.</span></span></div>
+      <p className="orbital-edition">A LITTLE SPACE TO BE YOURSELF</p>
+      <div className="orbital-coordinate"><span>EARTH ORBIT</span><strong>{world.sceneId === 'habitat' ? 'HABITAT / 01' : 'OBSERVATORY / 02'}</strong><i>旋转居住环 · 地球轨道</i></div>
+    </header>
+    <div className="orbital-caption" aria-hidden="true"><h1>{world.sceneId === 'habitat' ? '宇宙很大。\n这里，刚刚好。' : '在星光里，\n慢慢读一页。'}</h1></div>
+    <footer className="orbital-footer">
+      <div className="orbital-location"><span className="orbital-live-dot" /><span>{travelling ? '前往下一间舱室' : world.sceneId === 'habitat' ? '生活舱' : '观景阅览舱'}</span><span className="orbital-location-rule" /><span>ORBITAL HOME</span></div>
+      <p className="orbital-status" role="status" aria-live="polite">{status}</p>
+      <p className="orbital-guide">拖动环绕 · 捏合缩放 · 点地面走动<span>WASD 行走 / Space 跳跃 / E 互动</span></p>
+    </footer>
+    {audio.isPlaying && <aside className="orbital-now-playing"><span className="orbital-record-dot" /><div><small>NOW PLAYING</small><p>{audio.disc.title}</p></div></aside>}
+    {draggingFile && <div className="orbital-drop-message"><span className="orbital-drop-disc" /><p>让这段音乐，留在这里。</p><small>松手制作一张自己的唱片</small></div>}
+    <input ref={fileInput} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac" hidden onChange={event => importFiles(event.target.files)} />
+    <span className="sr-only">键盘：J 日记，O 日程，R 阅读，B 休息，C 电脑，L 音乐，M 静音，Esc 返回。触屏在物品上拖动，双指轻触返回。</span>
+  </main>;
 };
