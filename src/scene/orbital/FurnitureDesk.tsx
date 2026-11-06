@@ -1,0 +1,77 @@
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { CLOSED_OBJECT, type WorldModelProps } from '../../types/world';
+import { ObjectHandle } from './ObjectHandle';
+import { SoftBox, Tube, surface } from './Primitives';
+import { FurnitureCylinder as Cylinder, FurnitureMotion, FURNITURE as C } from './FurnitureParts';
+import { FurnitureBook } from './FurnitureBooks';
+
+function KeyboardKeys() {
+  const keys = useRef<THREE.InstancedMesh>(null);
+  const geometry = useMemo(() => new RoundedBoxGeometry(0.045, 0.016, 0.044, 2, 0.006), []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useLayoutEffect(() => {
+    if (!keys.current) return;
+    const matrix = new THREE.Matrix4();
+    for (let row = 0; row < 3; row++) for (let col = 0; col < 11; col++) {
+      const index = row * 11 + col;
+      keys.current.setMatrixAt(index, matrix.makeTranslation(-0.29 + col * 0.058, 0.035, -0.075 + row * 0.062));
+      keys.current.setColorAt(index, new THREE.Color(col === 10 ? '#c29866' : '#ece5cd'));
+    }
+    keys.current.instanceMatrix.needsUpdate = true;
+    if (keys.current.instanceColor) keys.current.instanceColor.needsUpdate = true;
+    keys.current.computeBoundingSphere();
+  }, []);
+  return <instancedMesh ref={keys} args={[geometry, surface('#ffffff'), 33]} receiveShadow dispose={null} />;
+}
+
+function FurnitureComputer({ world }: { world: WorldModelProps }) {
+  const state = world.objects.computer ?? CLOSED_OBJECT;
+  return <ObjectHandle id="computer" action="inspect" hint="打开电脑 · 游戏与终端" world={world} position={[1.55, 1.12, -2.6]}>
+    <SoftBox dims={[0.55, 0.065, 0.42]} position={[0, 0.0325, 0.01]} color="#c2c0aa" radius={0.045} />
+    <Cylinder radius={0.12} height={0.09} position={[0, 0.1, -0.04]} color="#aeae9b" />
+    <SoftBox dims={[1.15, 0.91, 0.57]} position={[0, 0.55, -0.08]} radius={0.085} color="#ddd9bf" />
+    <SoftBox dims={[1.03, 0.8, 0.06]} position={[0, 0.56, 0.207]} radius={0.045} color="#92998a" />
+    <SoftBox dims={[0.94, 0.71, 0.02]} position={[0, 0.56, 0.235]} radius={0.025} color="#243e3d">
+      <meshStandardMaterial color={state.active ? '#507f73' : '#243e3d'} emissive="#76b5a1" emissiveIntensity={state.active ? 0.25 : 0.08} roughness={0.24} />
+    </SoftBox>
+    <Cylinder radius={0.015} height={0.009} position={[0.46, 0.15, 0.216]} rotation={[Math.PI / 2, 0, 0]} color="#78a884" />
+    {Array.from({ length: 8 }, (_, i) => <SoftBox key={i} dims={[0.003, 0.012, 0.22]} position={[0.576, 0.39 + i * 0.035, -0.11]} color="#a9aa97" radius={0.001} />)}
+    <group position={[0, 0.045, 0.68]} rotation={[0.06, 0, 0]}>
+      <SoftBox dims={[0.72, 0.055, 0.25]} color="#d1cdb5" radius={0.018} />
+      <KeyboardKeys />
+      <SoftBox dims={[0.3, 0.014, 0.035]} position={[0, 0.035, 0.105]} color={C.cream} radius={0.004} />
+    </group>
+    <Tube points={[[0.2, 0.03, 0.59], [0.36, 0.025, 0.47], [0.33, 0.025, 0.25], [0.1, 0.08, -0.24]]} radius={0.008} color={C.ink} />
+  </ObjectHandle>;
+}
+
+export function FurnitureDesk({ world }: { world: WorldModelProps }) {
+  const drawer = world.objects['desk-drawer'] ?? CLOSED_OBJECT;
+  return <group name="Furniture_Workbench">
+    <SoftBox dims={[3.8, 0.12, 1.35]} position={[1.05, 1.06, -2.35]} color={C.wood} radius={0.045} />
+    <SoftBox dims={[3.62, 0.07, 0.055]} position={[1.05, 1.155, -2.98]} color={C.edge} radius={0.012} />
+    {[-0.67, 2.77].flatMap(x => [-2.84, -1.86].map(z => <SoftBox key={`${x}/${z}`} dims={[0.09, 1, 0.09]} position={[x, 0.5, z]} color={C.ink} radius={0.018} />))}
+    <SoftBox dims={[3.45, 0.09, 0.08]} position={[1.05, 0.23, -2.82]} color={C.ink} />
+    {[-0.67, 2.77].map(x => <SoftBox key={x} dims={[0.07, 0.06, 1.04]} position={[x, 0.23, -2.35]} color={C.ink} />)}
+    <SoftBox dims={[1.1, 0.28, 0.055]} position={[0.35, 0.85, -2.77]} color={C.edge} />
+    {[-0.21, 0.91].map(x => <group key={x}>
+      <SoftBox dims={[0.045, 0.29, 0.96]} position={[x, 0.85, -2.27]} color={C.edge} />
+      <SoftBox dims={[0.018, 0.035, 0.84]} position={[x + (x < 0 ? 0.03 : -0.03), 0.78, -2.2]} color="#a5a49b" metalness={0.6} />
+    </group>)}
+    <ObjectHandle id="desk-drawer" action={drawer.open ? 'close' : 'open'} hint={drawer.open ? '推回抽屉' : '拉开工作台抽屉'} world={world} drag="z">
+      <FurnitureMotion mode="position" axis="z" target={drawer.open ? 0.64 : 0} reducedMotion={world.reducedMotion}>
+        <SoftBox dims={[1.08, 0.28, 0.065]} position={[0.35, 0.85, -1.69]} color={C.wood} radius={0.018} />
+        <SoftBox dims={[1.02, 0.035, 0.88]} position={[0.35, 0.725, -2.15]} color="#bc996b" />
+        {[-0.145, 0.845].map(x => <SoftBox key={x} dims={[0.035, 0.21, 0.87]} position={[x, 0.83, -2.15]} color="#bd9668" />)}
+        <SoftBox dims={[1.02, 0.21, 0.035]} position={[0.35, 0.83, -2.575]} color="#bd9668" />
+        <Tube points={[[0.19, 0.87, -1.65], [0.19, 0.87, -1.59], [0.51, 0.87, -1.59], [0.51, 0.87, -1.65]]} radius={0.015} color={C.brass} />
+        <SoftBox dims={[0.31, 0.025, 0.4]} position={[0.19, 0.76, -2.12]} color={C.paper} />
+      </FurnitureMotion>
+    </ObjectHandle>
+    <FurnitureComputer world={world} />
+    <FurnitureBook world={world} id="journal" kind="write" position={[-0.63, 1.121, -1.94]} color="#8e5b46" scale={0.82} rotation={[0, -0.12, 0]} />
+    <FurnitureBook world={world} id="schedule" kind="plan" position={[0.55, 1.121, -1.96]} color="#7b9184" scale={0.76} rotation={[0, 0.08, 0]} />
+  </group>;
+}
