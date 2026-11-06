@@ -69,22 +69,19 @@ function FurniturePlant({ world, observatory }: { world: WorldModelProps; observ
   </ObjectHandle>;
 }
 
-function FurniturePortal({ world }: { world: WorldModelProps }) {
-  const state = world.objects.portal ?? CLOSED_OBJECT;
-  return <group position={[3.55, 0, -1.6]} rotation={[0, -Math.PI / 2, 0]} name="Furniture_TransferHatch">
+function FurnitureHatch() {
+  return <group position={[4.28, 0, -1.6]} rotation={[0, -Math.PI / 2, 0]} name="Furniture_Hatch">
     {[-0.57, 0.57].map(x => <SoftBox key={x} dims={[0.12, 2.35, 0.18]} position={[x, 1.175, 0]} color="#6f8986" radius={0.06} />)}
     <SoftBox dims={[1.22, 0.13, 0.18]} position={[0, 2.32, 0]} color="#6f8986" radius={0.055} />
     <SoftBox dims={[1.2, 0.055, 0.23]} position={[0, 0.0275, 0]} color={C.brass} radius={0.02} />
-    <ObjectHandle id="portal" action="travel" hint={world.sceneId === 'habitat' ? '拉开舱门 · 前往观景舱' : '拉开舱门 · 返回居住舱'} world={world} drag="x" payload={{ destination: world.sceneId === 'habitat' ? 'observatory' : 'habitat' }}>
-      <FurnitureMotion target={state.open ? 1.32 : 0} reducedMotion={world.reducedMotion} position={[-0.5, 1.16, 0]}>
-        <SoftBox dims={[1.01, 2.19, 0.1]} position={[0.5, 0, 0]} color="#abc2b5" radius={0.09} />
-        <SoftBox dims={[0.81, 1.92, 0.025]} position={[0.5, 0, 0.06]} color="#c5d2bd" radius={0.09} />
-        <Cylinder radius={0.255} height={0.045} position={[0.5, 0.47, 0.09]} rotation={[Math.PI / 2, 0, 0]} color={C.brass} metalness={0.5} />
-        <Cylinder radius={0.208} height={0.05} position={[0.5, 0.47, 0.115]} rotation={[Math.PI / 2, 0, 0]} color="#3e686d" />
-        <Tube points={[[0.86, -0.25, 0.08], [0.86, -0.25, 0.17], [0.86, 0.04, 0.17], [0.86, 0.04, 0.08]]} radius={0.025} color={C.brass} />
-        {[-0.8, 0.8].map(y => <Cylinder key={y} radius={0.035} height={0.17} position={[0, y, 0.03]} color={C.brass} metalness={0.6} />)}
-      </FurnitureMotion>
-    </ObjectHandle>
+    <group position={[0, 1.16, 0]}>
+      <SoftBox dims={[1.01, 2.19, 0.1]} color="#abc2b5" radius={0.09} />
+      <SoftBox dims={[0.81, 1.92, 0.025]} position={[0, 0, 0.06]} color="#c5d2bd" radius={0.09} />
+      <Cylinder radius={0.255} height={0.045} position={[0, 0.47, 0.09]} rotation={[Math.PI / 2, 0, 0]} color={C.brass} metalness={0.5} />
+      <Cylinder radius={0.208} height={0.05} position={[0, 0.47, 0.115]} rotation={[Math.PI / 2, 0, 0]} color="#3e686d" />
+      <Tube points={[[0.36, -0.25, 0.08], [0.36, -0.25, 0.17], [0.36, 0.04, 0.17], [0.36, 0.04, 0.08]]} radius={0.025} color={C.brass} />
+      {[-0.8, 0.8].map(y => <Cylinder key={y} radius={0.035} height={0.17} position={[-0.5, y, 0.03]} color={C.brass} metalness={0.6} />)}
+    </group>
   </group>;
 }
 
@@ -105,6 +102,6 @@ export const HabitatFurniture: React.FC<WorldModelProps> = world => {
     </> : <><FurnitureBed world={world} /><FurnitureChair world={world} /></>}
     <FurnitureLamp world={world} />
     <FurniturePlant world={world} observatory={observatory} />
-    <FurniturePortal world={world} />
+    <FurnitureHatch />
   </group>;
 };

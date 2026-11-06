@@ -10,7 +10,6 @@ import { HabitatFurniture } from './HabitatFurniture';
 import { MediaObjects } from './MediaObjects';
 import { FeatureSurfaces } from './FeatureSurfaces';
 import { OrbitalResidents } from './OrbitalResidents';
-import { SoftBox } from './Primitives';
 
 const FOCUS: Record<string, { target: [number, number, number]; offset: [number, number, number] }> = {
   computer: { target: [1.55, 1.68, -2.30], offset: [0, 0.25, 2.35] },
@@ -126,11 +125,6 @@ function WorldContent(props: OrbitalSceneProps) {
         </>}
       </group>;
     })}
-    <group position={[7, -0.1, 0]}>
-      <SoftBox dims={[5.5, 0.18, 1.7]} color="#343e42" radius={0.06} />
-      <SoftBox dims={[5.5, 0.035, 0.035]} color="#d2c3a3" position={[0, 0.1, 0.83]} />
-      <SoftBox dims={[5.5, 0.035, 0.035]} color="#d2c3a3" position={[0, 0.1, -0.83]} />
-    </group>
   </>;
 }
 export function OrbitalScene(props: OrbitalSceneProps) {
