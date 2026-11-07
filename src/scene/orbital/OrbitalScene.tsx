@@ -4,6 +4,7 @@ import { Environment, Lightformer, OrbitControls, PerspectiveCamera } from '@rea
 import type { OrbitControls as Controls } from 'three-stdlib';
 import * as THREE from 'three';
 import { SCENE_ORIGINS, type WorldObjectState, type WorldSceneId, type WorldSceneProps } from '../../types/world';
+import { roomAudio } from '../audioEngine';
 import { Cosmos, SUN_DIRECTION } from './Cosmos';
 import { HabitatShell } from './HabitatShell';
 import { HabitatFurniture } from './HabitatFurniture';
@@ -125,7 +126,7 @@ function WorldContent(props: OrbitalSceneProps) {
       };
       return <group key={id} position={SCENE_ORIGINS[id]} visible={id === props.sceneId || (props.transition.action?.kind === 'travel' && props.transition.phase !== 'active' && props.transition.phase !== 'error')}>
         {id === props.sceneId && <OrbitalLighting objects={world.objects} />}
-        <HabitatShell variant={id} onFloorClick={point => { if ((!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy) setWalkTarget(point); }} />
+        <HabitatShell variant={id} onFloorClick={point => { if ((!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy) { void roomAudio.unlock(); setWalkTarget(point); } }} />
         <Suspense fallback={null}><HabitatFurniture {...world} /><MediaObjects {...world} /></Suspense>
         {id === props.sceneId && <>
           <FeatureSurfaces {...world} />
@@ -178,6 +179,7 @@ export function OrbitalScene(props: OrbitalSceneProps) {
     };
   }, []);
   return <div ref={container} className="orbital-canvas" onContextMenu={e => e.preventDefault()}
+    onPointerDown={() => { void roomAudio.unlock(); }}
     onPointerCancel={() => props.onGesture(false)}
     onWheel={e => { if (props.focusedObject && !props.activeGame && e.deltaY > 45) props.onReturn(); }}
     onDoubleClick={e => { if ((e.target as HTMLElement).tagName === 'CANVAS' && props.focusedObject && !props.activeGame) props.onReturn(); }}>
