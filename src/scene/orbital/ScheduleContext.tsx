@@ -5,7 +5,6 @@ import { flattenSchedule, isScheduleEntry, isScheduleNotebook, migrateSchedule, 
 interface ScheduleContextValue {
   state: ScheduleNotebook;
   ready: boolean;
-  status: string;
   error: string;
   commit: (next: ScheduleNotebook) => boolean;
   retry: () => void;
@@ -20,7 +19,6 @@ export function ScheduleProvider({ adapters, children }: { adapters?: WorldFeatu
   const [state, setState] = useState(migrateSchedule);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
-  const [status, setStatus] = useState('正在翻开日程');
   const [attempt, setAttempt] = useState(0);
   const latest = useRef(state);
   const remoteQueue = useRef(Promise.resolve());
@@ -30,7 +28,6 @@ export function ScheduleProvider({ adapters, children }: { adapters?: WorldFeatu
     if (!remote) return;
     const signal = lifetime.current?.signal;
     if (!signal) return;
-    setStatus('已保存到本机 · 正在同步');
     remoteQueue.current = remoteQueue.current.then(async () => {
       if (signal.aborted || next !== latest.current) return;
       try {
@@ -39,10 +36,10 @@ export function ScheduleProvider({ adapters, children }: { adapters?: WorldFeatu
           const saved = { ...next, syncPending: false };
           localStorage.setItem(SCHEDULE_KEY, JSON.stringify(saved));
           latest.current = saved; setState(saved);
-          setStatus('已保存并同步'); setError('');
+          setError('');
         }
       } catch {
-        if (!signal.aborted) { setStatus('已保存到本机'); setError('远程同步未完成，本机记录仍在。请重试同步。'); }
+        if (!signal.aborted) setError('远程同步未完成，本机记录仍在。请重试同步。');
       }
     });
   }, [remote]);
@@ -80,7 +77,6 @@ export function ScheduleProvider({ adapters, children }: { adapters?: WorldFeatu
         latest.current = next;
         setState(next);
         setReady(true);
-        setStatus('每页两件事，慢慢安排');
         if (offline) setError('远程日程暂时无法读取，已恢复本机记录。');
         else if (next.syncPending) sync(next);
       } catch (failure) {
@@ -96,11 +92,10 @@ export function ScheduleProvider({ adapters, children }: { adapters?: WorldFeatu
     catch { setError('本机保存失败，请保留当前页并检查浏览器存储空间。'); return false; }
     latest.current = next;
     setState(next);
-    setStatus('已保存到本机');
     setError('');
     sync(next);
     return true;
   }, [ready, sync]);
   const retry = () => ready ? sync(latest.current) : setAttempt(value => value + 1);
-  return <ScheduleContext.Provider value={{ state, ready, status, error, commit, retry }}>{children}</ScheduleContext.Provider>;
+  return <ScheduleContext.Provider value={{ state, ready, error, commit, retry }}>{children}</ScheduleContext.Provider>;
 }

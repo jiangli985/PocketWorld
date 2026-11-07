@@ -69,6 +69,18 @@ test('empty and incomplete sheets cannot be posted; one complete task is enough'
   assert.equal(postSchedulePage(state).posted.length, 1);
 });
 
+test('direct time entry accepts unpadded hours and Chinese colons, and rejects invalid times', () => {
+  const state = migrateSchedule([entry('typed-time')]);
+  for (const time of ['9:30', '09:30', '9：30', ' 9:30 ']) {
+    state.current.entries[0].time = time;
+    assert.equal(schedulePageError(state.current), null);
+  }
+  for (const time of ['25:00', '09:70', 'later', '9:3']) {
+    state.current.entries[0].time = time;
+    assert.ok(schedulePageError(state.current));
+  }
+});
+
 test('discard targets one posted page, retains the draft and bounds physical litter', () => {
   let state = migrateSchedule([entry('a')]);
   for (let i = 0; i < 30; i++) {

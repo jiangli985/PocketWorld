@@ -72,13 +72,13 @@ export function FloorPaperBall({ ball }: { ball: PaperBall }) {
     <meshStandardMaterial color="#e7ddc3" roughness={1} side={THREE.DoubleSide} flatShading />
   </mesh>;
 }
-export interface PaperFlight { kind: 'post' | 'discard'; page: SchedulePage }
+export interface PaperFlight { kind: 'post' | 'discard'; page: SchedulePage; from?: [number, number, number] }
 export function FlyingPaper({ flight, reducedMotion, onComplete }: { flight: PaperFlight; reducedMotion: boolean; onComplete: () => void }) {
   const mesh = useRef<THREE.Mesh>(null);
   const elapsed = useRef(0);
   const data = useMemo(() => paperGeometry(), []);
   const texture = useMemo(() => pageTexture(flight.page), [flight.page]);
-  const start = useMemo(() => new THREE.Vector3(...(flight.kind === 'post' ? BOOK_POSITION : GLASS_POSITION)), [flight.kind]);
+  const start = useMemo(() => new THREE.Vector3(...(flight.kind === 'post' ? flight.from ?? BOOK_POSITION : GLASS_POSITION)), [flight]);
   const end = useMemo(() => new THREE.Vector3(...(flight.kind === 'post' ? GLASS_POSITION : paperBallPosition(flight.page.number))), [flight]);
   useEffect(() => () => data.geometry.dispose(), [data]);
   useEffect(() => () => texture.dispose(), [texture]);

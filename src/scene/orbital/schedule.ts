@@ -53,7 +53,7 @@ export function schedulePageError(page: SchedulePage): string | null {
   for (const entry of page.entries) {
     if (!(entry.title.trim() || entry.time.trim() || entry.content?.trim())) continue;
     if (!entry.title.trim()) return '请为写好的任务补上标题。';
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(entry.time)) return '请为写好的任务选择时间。';
+    if (!/^([01]?\d|2[0-3])[:：][0-5]\d$/.test(entry.time.trim())) return '请输入有效时间，例如 09:00。';
   }
   return null;
 }
