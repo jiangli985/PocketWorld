@@ -63,18 +63,21 @@ function mountains(ctx: CanvasRenderingContext2D, scroll: number, trail: Trail) 
     const shift = mod(scroll * (.055 + layer * .035), 850);
     ctx.fillStyle = layer ? trail.mountain : night ? '#344A6B' : '#B6D1DC';
     if (trail.id === 'forest' && !layer) ctx.fillStyle = '#D5B7C4';
+    const base = 370 + layer * 35;
+    ctx.beginPath(); ctx.moveTo(-850 - shift, base);
     for (let repeat = -1; repeat < 2; repeat++) {
       const xx = repeat * 850 - shift;
-      const base = 370 + layer * 35;
-      ctx.beginPath(); ctx.moveTo(xx - 60, base);
-      ctx.bezierCurveTo(xx + 5, 300, xx + 60, 272, xx + 130, 204 + layer * 35);
+      ctx.bezierCurveTo(xx + 45, base, xx + 60, 272, xx + 130, 204 + layer * 35);
       ctx.quadraticCurveTo(xx + 149, 185 + layer * 35, xx + 165, 212 + layer * 35);
       ctx.bezierCurveTo(xx + 225, 286, xx + 260, 279, xx + 315, 334);
       ctx.bezierCurveTo(xx + 375, 260, xx + 434, 223, xx + 490, 165 + layer * 52);
       ctx.quadraticCurveTo(xx + 506, 145 + layer * 52, xx + 527, 173 + layer * 52);
       ctx.bezierCurveTo(xx + 620, 285, xx + 670, 267, xx + 730, 328);
-      ctx.quadraticCurveTo(xx + 800, 285, xx + 870, base);
-      ctx.lineTo(xx + 870, 460); ctx.lineTo(xx - 60, 460); ctx.closePath(); ctx.fill();
+      ctx.bezierCurveTo(xx + 775, 355, xx + 815, base, xx + 850, base);
+    }
+    ctx.lineTo(1700 - shift, H + 1); ctx.lineTo(-850 - shift, H + 1); ctx.closePath(); ctx.fill();
+    for (let repeat = -1; repeat < 2; repeat++) {
+      const xx = repeat * 850 - shift;
       ctx.fillStyle = night ? '#819DAF' : '#EEF6F6';
       ctx.beginPath(); ctx.moveTo(xx + 96, 242 + layer * 35);
       ctx.lineTo(xx + 130, 204 + layer * 35); ctx.quadraticCurveTo(xx + 149, 185 + layer * 35, xx + 165, 212 + layer * 35);
@@ -84,7 +87,6 @@ function mountains(ctx: CanvasRenderingContext2D, scroll: number, trail: Trail) 
       ctx.lineTo(xx + 490, 165 + layer * 52); ctx.quadraticCurveTo(xx + 506, 145 + layer * 52, xx + 527, 173 + layer * 52);
       ctx.lineTo(xx + 566, 220 + layer * 52); ctx.lineTo(xx + 523, 197 + layer * 52);
       ctx.lineTo(xx + 506, 213 + layer * 52); ctx.lineTo(xx + 491, 193 + layer * 52); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = layer ? trail.mountain : night ? '#344A6B' : trail.id === 'forest' ? '#D5B7C4' : '#B6D1DC';
     }
   }
 }
@@ -126,9 +128,16 @@ function sky(ctx: CanvasRenderingContext2D, trail: Trail, scroll: number, time: 
     ctx.restore();
   }
   mountains(ctx, scroll, trail);
-  for (let i = 0; i < 19; i++) {
-    const x = mod(i * 83 - scroll * .29, 1020) - 100;
-    pine(ctx, x, 383 + Math.sin(i * 2.1) * 18, .35 + mod(i * .13, .3), trail.pine, night ? '#94BBC8' : '#DAEAF0');
+  const forestScroll = scroll * .29;
+  const forestY = (x: number) => 382 + Math.sin(x / 180) * 12 + Math.sin(x / 67) * 5;
+  ctx.fillStyle = night ? '#7296AD' : trail.id === 'forest' ? '#E8D8DB' : '#D5E6ED';
+  ctx.beginPath(); ctx.moveTo(-8, H + 1);
+  for (let x = -8; x <= W + 8; x += 8) ctx.lineTo(x, forestY(x + forestScroll));
+  ctx.lineTo(W + 8, H + 1); ctx.closePath(); ctx.fill();
+  const firstTree = Math.floor(forestScroll / 83) - 2;
+  for (let i = firstTree; i < firstTree + 15; i++) {
+    const worldX = i * 83;
+    pine(ctx, worldX - forestScroll, forestY(worldX) + 4, .35 + mod(i * .13, .3), trail.pine, night ? '#94BBC8' : '#DAEAF0');
   }
 }
 
@@ -184,7 +193,7 @@ function snowGround(ctx: CanvasRenderingContext2D, state: SkiState, cameraX: num
     const worldX = Math.floor(cameraX / 37) * 37 + i * 37;
     const x = worldX - cameraX;
     const y = terrainY(worldX, state.trail) - cameraY + 18 + mod(worldX * 1.71, 155);
-    line(ctx, x, y, x + 3 + mod(i * 3, 6), y - 1, '#C1D7DF', 1);
+    line(ctx, x, y, x + 3 + mod(worldX * 3, 6), y - 1, '#C1D7DF', 1);
   }
 }
 
@@ -396,7 +405,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: SkiState, asset
       const worldX = Math.floor((cameraX - 200) / 263) * 263 + i * 263;
       const x = worldX - cameraX;
       const ground = terrainY(worldX, state.trail) - cameraY;
-      if (Math.abs(x - 240) > 110) pine(ctx, x, ground - 12, .65 + mod(worldX * .017, .4), trail.pine, trail.snow);
+      pine(ctx, x, ground + 4, .65 + mod(worldX * .017, .4), trail.pine, trail.snow);
     }
     for (const f of state.features) feature(ctx, f, state, assets, cameraX, cameraY);
     for (let i = 0; i < Math.min(state.chasers.length, 12); i++) {

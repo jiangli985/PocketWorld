@@ -50,6 +50,22 @@ test('mute stops playback immediately; pause suspends context and blocks events;
   sound.dispose(); const count = contexts.length; sound.unlock(); sound.play('laugh'); assert.equal(contexts.length, count);
 });
 
+test('only crashes and catches trigger laughter; flips, landing and coins stay silent', async () => {
+  globalThis.AudioContext = FakeContext;
+  const sound = new SkiSound(); sound.unlock(); await flush();
+  const ctx = contexts.at(-1);
+  for (const event of ['flip', 'land', 'coin']) sound.playEvent(event);
+  assert.equal(ctx.sources.length, 0);
+  sound.playEvent('crash');
+  assert.deepEqual(ctx.sources[0].startArgs, [0, 0, 3]);
+  sound.playEvent('caught');
+  assert.equal(ctx.sources[0].stopped, true);
+  assert.deepEqual(ctx.sources[1].startArgs, [0, 0, 3]);
+  sound.playEvent('mount');
+  assert.deepEqual(ctx.sources[2].startArgs, [0, 0, 1.812]);
+  sound.dispose();
+});
+
 test('unmount during async audio loading cannot open another context or start a cue', async () => {
   globalThis.AudioContext = FakeContext;
   const sound = new SkiSound(); sound.unlock(); const ctx = contexts.at(-1); sound.dispose();

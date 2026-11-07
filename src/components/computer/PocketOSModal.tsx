@@ -123,7 +123,7 @@ export const PocketOSModal: React.FC<PocketOSModalProps> = ({
           {bootingGame && (
             <div className="crt-boot-animation">
               <div className="crt-scanline-bar" />
-              <strong>正在载入虚拟卡带：{bootingGame === 'mario' ? '雪线逃脱' : 'SPACE SHOOTER'}...</strong>
+              <strong>正在载入虚拟卡带：{bootingGame === 'mario' ? '奶娃滑雪大冒险' : 'SPACE SHOOTER'}...</strong>
               <span>800 × 600 CANVAS CARTRIDGE BUS</span>
             </div>
           )}
@@ -153,7 +153,7 @@ export const PocketOSModal: React.FC<PocketOSModalProps> = ({
               <div className="placeholder-box">
                 <h3>
                   {activeGame === 'mario'
-                    ? '雪线逃脱'
+                    ? '奶娃滑雪大冒险'
                     : '雷电战机 (Space Shooter)'}
                 </h3>
                 <p>
@@ -192,7 +192,7 @@ export const PocketOSModal: React.FC<PocketOSModalProps> = ({
                   >
                     <div className="shortcut-emblem">雪</div>
                     <div className="shortcut-meta">
-                      <strong>雪线逃脱</strong>
+                      <strong>奶娃滑雪大冒险</strong>
                       <span>奶娃滑雪 · 豆包追赶 · 牛来护航</span>
                       <small>最高分：{marioHigh}</small>
                     </div>
@@ -217,7 +217,7 @@ export const PocketOSModal: React.FC<PocketOSModalProps> = ({
                 <div className="taskbar-left">
                   <span className="taskbar-start-pill">PocketOS 2.4</span>
                   <span className="taskbar-highscore-summary">
-                    MARIO HI: {marioHigh} · SHOOTER HI: {shooterHigh}
+                    奶娃滑雪大冒险 HI: {marioHigh} · SHOOTER HI: {shooterHigh}
                   </span>
                 </div>
                 <div className="taskbar-right">

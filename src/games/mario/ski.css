@@ -11,7 +11,7 @@
 .ski-settings { position: absolute; right: 28px; top: 22px; display: flex; gap: 16px; }
 .ski-settings button { border: 0; padding: 10px 12px; color: #244e59; background: #f7fcffcf; border-radius: 8px; font-size: 18px; }
 .ski-home { position: absolute; inset: 83px 80px auto; text-align: center; }
-.ski-home h1 { margin: 0; color: #244e59; font-family: 'SkiTitle', 'STKaiti', 'Kaiti SC', serif; font-size: 84px; line-height: 1.2; font-weight: 900; letter-spacing: 7px; text-shadow: 0 4px 0 #f7fcff; }
+.ski-home h1 { margin: 0; color: #244e59; font-family: 'SkiTitle', 'STKaiti', 'Kaiti SC', serif; font-size: 64px; line-height: 1.2; font-weight: 900; letter-spacing: 2px; text-shadow: 0 4px 0 #f7fcff; }
 .ski-tagline { font-size: 24px; margin: 16px 0 0; font-weight: 600; }
 .ski-record { margin: 20px 0 23px; font-size: 18px; color: #44636a; }
 .ski-record strong { font-size: 23px; padding-left: 9px; font-variant-numeric: tabular-nums; }

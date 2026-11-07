@@ -156,8 +156,7 @@ export default function MarioGame({ isActive = true, isMuted = false, onExit, on
           input.current.jumpPressed = false;
           accumulator -= 1 / 120;
           for (const event of run.current.events) {
-            if (event === 'flip' || event === 'crash' || event === 'caught') sound.current?.play('laugh');
-            if (event === 'mount') sound.current?.play('mount');
+            sound.current?.playEvent(event);
           }
           if (run.current.over) {
             publish();
@@ -195,7 +194,7 @@ export default function MarioGame({ isActive = true, isMuted = false, onExit, on
   const returnHome = () => { run.current = createRun('valley'); go('home'); };
   const trail = TRAILS.find(value => value.id === run.current.trail)!;
 
-  return <div ref={container} className={`ski-game${compact ? ' ski-compact' : ''}`} tabIndex={-1} aria-label="雪线逃脱滑雪游戏" onPointerDown={event => event.stopPropagation()} onContextMenu={event => event.preventDefault()}>
+  return <div ref={container} className={`ski-game${compact ? ' ski-compact' : ''}`} tabIndex={-1} aria-label="奶娃滑雪大冒险" onPointerDown={event => event.stopPropagation()} onContextMenu={event => event.preventDefault()}>
     <div className="ski-stage" style={{ transform: `translate(-50%, -50%) scale(${scale})` }}>
       <canvas ref={canvas} width={800} height={600} aria-label="奶娃在雪道滑行，后方豆包群正在追赶" />
       {phase === 'home' && <div className="ski-settings">
@@ -203,7 +202,7 @@ export default function MarioGame({ isActive = true, isMuted = false, onExit, on
         <button type="button" aria-pressed={reduced} onClick={() => setReduced(value => !value)}>{reduced ? '轻柔动态' : '完整动态'}</button>
       </div>}
       {phase === 'home' && <div className="ski-home" ref={menu}>
-        <h1>雪线逃脱</h1>
+        <h1>奶娃滑雪大冒险</h1>
         <p className="ski-tagline">奶娃，快跑。豆包追来啦！</p>
         <p className="ski-record">本地纪录 <strong>{high.toLocaleString()}</strong></p>
         <div className="ski-home-actions"><button className="ski-primary" disabled={loading || !isActive} onClick={() => { sound.current?.unlock(); go('select'); }}>{loading ? '正在准备雪板…' : '开始游戏'}</button>

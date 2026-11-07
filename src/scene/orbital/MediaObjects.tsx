@@ -15,7 +15,7 @@ const PLAYER: Point = [-0.35, 1.2, -2.25];
 const PLATTER: Point = [-0.48, 1.295, -2.25];
 const SLOT: Point = [2.26, 1.27, -2.05];
 const gameModules = import.meta.glob<{ default: React.ComponentType<GameCartridgeProps> }>('../../games/*/index.tsx');
-const gameNames: Record<GameId, string> = { mario: '雪线逃脱', shooter: '弹球失控' };
+const gameNames: Record<GameId, string> = { mario: '奶娃滑雪大冒险', shooter: '弹球失控' };
 const gameColors: Record<GameId, string> = { mario: '#cb795a', shooter: '#759dad' };
 // Six accessible records per shelf; the physical end tabs turn through the collection.
 const discPosition = (index: number): Point => [-0.74 + (index % 6) * 0.2, 1.37, -2.86];
@@ -277,7 +277,7 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
     {sceneVisible && <Html transform position={[1.55, 1.68, -2.35]} distanceFactor={1} style={{ width: 368, height: 276, pointerEvents: computerFocused && activeComponent ? 'auto' : 'none', backfaceVisibility: 'hidden' }}>
       <div aria-label="电脑游戏屏幕" onPointerDown={event => { if (activeComponent) event.stopPropagation(); }} style={{ width: 800, height: 600, transform: 'scale(.46)', transformOrigin: 'top left', overflow: 'hidden', borderRadius: 24, background: '#142d27', color: '#d8e6b9', fontFamily: 'monospace', fontSize: 27, position: 'relative', touchAction: activeComponent ? 'none' : 'auto' }}>
         {computerFocused && props.activeGame && activeComponent ? <ScreenBoundary key={props.activeGame} onError={() => { setLoadError({ game: props.activeGame!, text: '卡带暂时无法运行，请拔出后重试。' }); props.onFeatureError('卡带暂时无法运行，请拔出后重试。'); }}>
-          {props.activeGame === 'mario' ? <CartridgePlayer title="雪线逃脱" muted={props.isMuted} onMute={props.onToggleMute} onExit={eject}>
+          {props.activeGame === 'mario' ? <CartridgePlayer title="奶娃滑雪大冒险" muted={props.isMuted} onMute={props.onToggleMute} onExit={eject}>
             {React.createElement(activeComponent, { width: 800, height: 600, isActive: gameActive, isMuted: props.isMuted, onExit: eject, onScoreChange: updateScore, onGameOver: result => updateScore(result.score, result.highScore) })}
           </CartridgePlayer> : <>
             {React.createElement(activeComponent, { width: 800, height: 600, isActive: gameActive, isMuted: props.isMuted, onExit: eject, onScoreChange: updateScore, onGameOver: result => updateScore(result.score, result.highScore) })}

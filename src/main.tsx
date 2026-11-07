@@ -8,6 +8,6 @@ const directSki = new URLSearchParams(window.location.search).get('game') === 's
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    {directSki ? <React.Suspense fallback={<div role="status">正在打开雪线逃脱…</div>}><SkiStandalone /></React.Suspense> : <App />}
+    {directSki ? <React.Suspense fallback={<div role="status">正在打开奶娃滑雪大冒险…</div>}><SkiStandalone /></React.Suspense> : <App />}
   </React.StrictMode>
 );

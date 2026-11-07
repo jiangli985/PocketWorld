@@ -1,5 +1,6 @@
 import laughUrl from './audio/原版笑声.wav?url';
 import mountUrl from './audio/niulai.wav?url';
+import type { SkiEvent } from './model';
 
 export type SoundName = 'laugh' | 'mount';
 const urls: Record<SoundName, string> = { laugh: laughUrl, mount: mountUrl };
@@ -34,6 +35,11 @@ export class SkiSound {
       }
       if (!this.paused) void this.context.resume().catch(() => {});
     } catch { /* Browsers without Web Audio can still play the game. */ }
+  }
+
+  playEvent(event: SkiEvent) {
+    if (event === 'crash' || event === 'caught') this.play('laugh');
+    if (event === 'mount') this.play('mount');
   }
 
   play(name: SoundName) {
