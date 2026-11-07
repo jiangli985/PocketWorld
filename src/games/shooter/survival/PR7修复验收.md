@@ -1,6 +1,6 @@
 # PR7 修复与本地验收
 
-修复基线：PR7 `e02e746`。修复分支：`codex/pr7-fixes`，已合入 `origin/main` 的 `d3b3b87`。原始修复方案保留在用户提供的文件中；本文记录已实现行为与实际验证，不将方案文字当作通过证明。当前结果为本地交付，尚未推送更新远端 PR7。
+修复基线：PR7 `e02e746`。本地修复分支：`codex/pr7-fixes`，交付沿用 [PR7](https://github.com/xuzihan0823/PocketWorld/pull/7) 的 `feat/game-shooter` 分支，已合入 `origin/main` 的 `d3b3b87`。本文记录已实现行为与实际验证；尚未完成的真机及人工验证见文末，PR 保留草稿供集成审阅。
 
 ## 修复结果
 
