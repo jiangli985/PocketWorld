@@ -10,6 +10,7 @@ export interface SchedulePage {
 export interface PaperBall { id: string; seed: number }
 export interface ScheduleNotebook {
   version: 1;
+  syncPending?: boolean;
   current: SchedulePage;
   posted: SchedulePage[];
   queued: SchedulePage[];
