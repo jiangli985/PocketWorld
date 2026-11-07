@@ -10,6 +10,7 @@ import tuckUrl from './assets/naiwa/ski-safari-rig/actions/05-ski-belly-slide.sv
 import crashUrl from './assets/naiwa/ski-safari-rig/actions/06-ski-crash.svg?url';
 import rideUrl from './assets/naiwa/ski-safari-rig/actions/07-ski-ride-penguin.svg?url';
 import idleUrl from './assets/naiwa/ski-safari-rig/actions/08-orig-idle.svg?url';
+import rigUrl from './assets/naiwa/ski-volume-rig.svg?url';
 import type { Partner } from './model';
 
 export type NaiwaAction = 'glide' | 'boost' | 'jump' | 'flip' | 'tuck' | 'crash' | 'ride' | 'idle';
@@ -24,6 +25,7 @@ export interface SpriteClip {
 }
 export interface SkiAssets {
   naiwa: Partial<Record<NaiwaAction, SpriteClip>>;
+  rig?: Partial<Record<'body' | 'legs' | 'skis', SpriteClip>>;
   doubao: SpriteClip | null;
   niulai: Record<Partner, SpriteClip | null>;
   errors: string[];
@@ -110,6 +112,12 @@ async function loadNaiwa(action: NaiwaAction): Promise<SpriteClip> {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const source = prepareAction(await response.text(), action);
   const frameCount = action === 'idle' ? 16 : 8;
+  const clip = await sampleSvg(source, frameCount, spec.duration, spec.anchor);
+  clipCache.set(action, clip);
+  return clip;
+}
+
+async function sampleSvg(source: Document, frameCount: number, duration: number, anchor: readonly [number, number]): Promise<SpriteClip> {
   const sheet = document.createElement('canvas');
   sheet.width = 280 * frameCount;
   sheet.height = 260;
@@ -118,17 +126,15 @@ async function loadNaiwa(action: NaiwaAction): Promise<SpriteClip> {
   for (let frame = 0; frame < frameCount; frame++) {
     const snapshot = source.cloneNode(true) as Document;
     snapshot.querySelectorAll('animate, animateTransform').forEach(node => {
-      sampleAnimation(node, frame * spec.duration / frameCount);
+      sampleAnimation(node, frame * duration / frameCount);
       node.remove();
     });
     const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(snapshot)], { type: 'image/svg+xml' }));
     try { ctx.drawImage(await decodeImage(url), frame * 280, 0, 280, 260); }
     finally { URL.revokeObjectURL(url); }
   }
-  const clip: SpriteClip = { image: sheet, frameWidth: 280, frameHeight: 260, frameCount,
-    fps: frameCount / spec.duration, row: 0, anchor: spec.anchor };
-  clipCache.set(action, clip);
-  return clip;
+  return { image: sheet, frameWidth: 280, frameHeight: 260, frameCount,
+    fps: frameCount / duration, row: 0, anchor };
 }
 
 async function loadSheet(key: string, url: string, spec: Omit<SpriteClip, 'image'>): Promise<SpriteClip> {
@@ -143,16 +149,40 @@ async function loadSheet(key: string, url: string, spec: Omit<SpriteClip, 'image
   return clip;
 }
 
+async function loadRig(): Promise<NonNullable<SkiAssets['rig']>> {
+  const response = await fetch(rigUrl, { signal: AbortSignal.timeout(12000) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const source = new DOMParser().parseFromString(await response.text(), 'image/svg+xml');
+  if (source.querySelector('parsererror')) throw new Error('SVG 格式错误');
+  const rig: NonNullable<SkiAssets['rig']> = {};
+  for (const layer of ['body', 'legs', 'skis'] as const) {
+    const key = `rig-${layer}`;
+    const cached = clipCache.get(key);
+    if (cached) { rig[layer] = cached; continue; }
+    const frameCount = layer === 'body' ? 16 : 1;
+    const snapshot = source.cloneNode(true) as Document;
+    snapshot.querySelectorAll('[data-layer]').forEach(node => {
+      if (node.getAttribute('data-layer') !== layer) node.remove();
+    });
+    const clip = await sampleSvg(snapshot, frameCount, 3.2, [150, 220]);
+    clipCache.set(key, clip);
+    rig[layer] = clip;
+  }
+  return rig;
+}
+
 async function loadAll(): Promise<SkiAssets> {
   const assets: SkiAssets = { naiwa: {}, doubao: null, niulai: { slide: null, charge: null }, errors: [], fallback: false };
   async function attempt(name: string, load: () => Promise<void>) {
     try { await load(); }
     catch (error) { assets.errors.push(`${name}：${error instanceof Error ? error.message : String(error)}`); }
   }
+  const loadAction = (action: NaiwaAction) => attempt(`奶娃/${action}`, async () => {
+    assets.naiwa[action] = await loadNaiwa(action);
+  });
   await Promise.all([
-    ...Object.keys(actionSpecs).map(key => attempt(`奶娃/${key}`, async () => {
-      assets.naiwa[key as NaiwaAction] = await loadNaiwa(key as NaiwaAction);
-    })),
+    attempt('奶娃/分层骨骼', async () => { assets.rig = await loadRig(); }),
+    ...(['idle', 'crash'] as const).map(loadAction),
     attempt('豆包/向右奔跑', async () => {
       assets.doubao = await loadSheet('doubao', doubaoUrl, { frameWidth: 192, frameHeight: 208,
         frameCount: 8, fps: 12, row: 1, anchor: [100, 202] });
@@ -164,6 +194,8 @@ async function loadAll(): Promise<SkiAssets> {
           frameCount: config.frameCount, fps: config.fps, row: 0, anchor: [config.groundAnchor[0], config.groundAnchor[1]] });
     })),
   ]);
+  if (!assets.rig) await Promise.all((Object.keys(actionSpecs) as NaiwaAction[])
+    .filter(action => action !== 'idle' && action !== 'crash').map(loadAction));
   assets.errors.sort();
   assets.fallback = assets.errors.length > 0;
   return assets;

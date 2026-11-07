@@ -1,6 +1,7 @@
 import { terrainY, terrainAngle } from './engine';
 import { TRAILS, type Feature, type Partner, type RenderOptions, type SkiState, type Trail } from './model';
 import type { NaiwaAction, SkiAssets, SpriteClip } from './assets';
+import { bodyPose, playerPivot, NAIWA_SCALE } from './character';
 export type { RenderOptions } from './model';
 
 const W = 800;
@@ -349,16 +350,30 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: SkiState, assets: SkiA
     }
   }
   ctx.save();
-  const pivot = p.crashTime > 0 || p.tucked || state.over ? 18 : 32;
+  const pivot = playerPivot(p);
   ctx.translate(x - caught * 13, y - pivot + caught * 15);
   ctx.rotate(p.angle + caught * 1.3);
   ctx.scale(1 - caught * .8, 1 - caught * .8);
   ctx.translate(0, pivot);
   ctx.globalAlpha = 1 - clamp((caught - .7) / .3);
   if (p.crashTime > 0 || state.over) ctx.scale(1.2, .58);
-  else if (p.tucked && p.partner) ctx.scale(1.15, .55);
-  else if (p.squash > 0 && !reduced) ctx.scale(1 + Math.min(.13, p.squash * .12), 1 - Math.min(.13, p.squash * .12));
-  drawNaiwa(ctx, assets, action, state.time);
+  const rig = assets?.rig;
+  if (p.crashTime === 0 && !state.over && rig?.body && rig.legs && rig.skis) {
+    const pose = bodyPose(p);
+    if (!p.partner) sprite(ctx, rig.skis, state.time, NAIWA_SCALE);
+    ctx.save();
+    ctx.translate(0, -2);
+    ctx.scale(1, 1 - pose.compression / 22);
+    ctx.translate(0, 2);
+    sprite(ctx, rig.legs, state.time, NAIWA_SCALE);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(0, pose.compression - 30);
+    ctx.rotate(pose.lean);
+    ctx.translate(0, 30);
+    sprite(ctx, rig.body, state.time, NAIWA_SCALE);
+    ctx.restore();
+  } else drawNaiwa(ctx, assets, action, state.time);
   ctx.restore();
 }
 

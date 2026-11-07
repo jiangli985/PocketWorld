@@ -1,5 +1,6 @@
 import { TRAILS } from './model.ts';
 import type { Feature, FeatureKind, SkiInput, SkiPlayer, SkiState, TrailId } from './model.ts';
+import { playerBody, skiContacts, rideHeight, type Circle } from './character.ts';
 
 const TAU = Math.PI * 2;
 const START_X = 200;
@@ -9,7 +10,6 @@ const MAX_FEATURES = 72;
 const MAX_PARTICLES = 80;
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 const wrapped = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
-const rideHeight = (p: SkiPlayer) => p.partner === 'slide' ? 22 : p.partner === 'charge' ? 42 : 0;
 
 export function terrainY(x: number, trail: TrailId): number {
   const amplitude = trail === 'valley' ? 21 : trail === 'forest' ? 32 : 26;
@@ -93,8 +93,8 @@ export function createRun(trail: TrailId): SkiState {
 
 export function frontGap(state: SkiState): number {
   if (!state.chasers.length) return Infinity;
-  const radius = state.player.tucked || state.player.crashTime > 0 ? 16 : 14;
-  return Math.max(0, state.player.x - Math.max(...state.chasers.map(c => c.x)) - radius - 14);
+  const left = Math.min(...playerBody(state.player).map(circle => circle.x - circle.radius));
+  return Math.max(0, left - Math.max(...state.chasers.map(c => c.x)) - 14);
 }
 
 function message(state: SkiState, text: string): void {
@@ -144,16 +144,9 @@ function jump(p: SkiPlayer, velocity = -390): void {
   p.flipping = false;
   p.coyote = 0;
   p.jumpBuffer = 0;
+  p.squash = 0;
 }
 
-type Circle = { x: number; y: number; radius: number };
-function playerBody(p: SkiPlayer, tuck: boolean): Circle[] {
-  if (p.crashTime > 0 || tuck) return [{ x: p.x, y: p.y - 18, radius: 16 }];
-  return [-12, 12].map(offset => ({
-    x: p.x - Math.sin(p.angle) * offset,
-    y: p.y - 32 + Math.cos(p.angle) * offset, radius: 14,
-  }));
-}
 function chaserBody(x: number, trail: TrailId): Circle[] {
   const y = terrainY(x, trail);
   return [{ x, y: y - 32, radius: 14 }, { x, y: y - 52, radius: 12 }];
@@ -195,6 +188,17 @@ function gapAt(state: SkiState, x: number): Feature | undefined {
   return state.features.find(f => f.kind === 'gap' && x > f.x + 5 && x < f.x + f.width - 5);
 }
 
+function groundContact(state: SkiState) {
+  const p = state.player;
+  const support = (circles: Circle[]) => circles.map((circle, index) => {
+    const gap = gapAt(state, circle.x);
+    return { y: terrainY(circle.x, state.trail) + (gap ? 90 : 0) - (circle.y - p.y) - circle.radius, gap, index };
+  }).reduce((best, contact) => contact.y < best.y ? contact : best, { y: Infinity, gap: undefined as Feature | undefined, index: 0 });
+  const body = support(playerBody(p));
+  const skis = support(skiContacts(p));
+  return { ...(body.y < skis.y ? body : skis), bodySupport: body.y < skis.y, bodyFirst: body.y < skis.y - 2 };
+}
+
 function simulate(state: SkiState, input: SkiInput, dt: number, reducedMotion: boolean): void {
   const p = state.player;
   const oldX = p.x;
@@ -202,7 +206,8 @@ function simulate(state: SkiState, input: SkiInput, dt: number, reducedMotion: b
   const oldFeet = p.y + rideHeight(p);
   const wasCrashed = p.crashTime > 0;
   p.tucked = input.tuck && !wasCrashed;
-  const before = playerBody(p, p.tucked);
+  const before = playerBody(p);
+  const beforeSkis = skiContacts(p);
   state.time += dt;
   state.messageTime = Math.max(0, state.messageTime - dt);
   p.squash = Math.max(0, p.squash - dt * 3);
@@ -236,17 +241,17 @@ function simulate(state: SkiState, input: SkiInput, dt: number, reducedMotion: b
   }
   const gap = gapAt(state, p.x);
   const exitedBelowLip = oldGap && !gap && p.y > terrainY(p.x, state.trail) - rideHeight(p) + 18;
-  if (p.grounded && gap && p.y < terrainY(p.x, state.trail) + 89 - rideHeight(p)) {
+  if (p.grounded && gap && groundContact(state).y > p.y + 12) {
     p.grounded = false;
     p.airTime = 0;
     p.vy = 0;
     p.rotation = 0;
     p.flipping = false;
   }
-  const floor = terrainY(p.x, state.trail) + (gap ? 90 : 0) - rideHeight(p);
   if (p.grounded) {
-    p.y = floor;
-    p.angle = terrainAngle(p.x, state.trail);
+    const difference = wrapped(terrainAngle(p.x, state.trail) - p.angle);
+    p.angle += clamp(difference, -10 * dt, 10 * dt);
+    p.y = groundContact(state).y;
     p.vy = 0;
   } else {
     p.airTime += dt;
@@ -267,18 +272,22 @@ function simulate(state: SkiState, input: SkiInput, dt: number, reducedMotion: b
         p.angle += clamp(difference, -7 * dt, 7 * dt);
       }
     }
-    if (p.vy >= 0 && p.y >= floor) {
-      p.y = floor;
+    const contact = groundContact(state);
+    if (p.vy >= 0 && p.y >= contact.y) {
+      const previous = (contact.bodySupport ? before : beforeSkis)[contact.index];
+      const wallGap = previous && !contact.gap && gapAt(state, previous.x);
+      const hitWall = wallGap && previous.y + previous.radius > terrainY(previous.x, state.trail) + 2;
+      p.y = contact.y;
       p.grounded = true;
       p.vy = 0;
       p.coyote = 0.1;
-      const failedGap = gap && !gap.used ? gap : exitedBelowLip && !oldGap.used ? oldGap : undefined;
+      const failedGap = hitWall && !wallGap.used ? wallGap : contact.gap && !contact.gap.used ? contact.gap
+        : exitedBelowLip && !oldGap.used ? oldGap : undefined;
       if (failedGap) {
         failedGap.used = true;
         crash(state, reducedMotion);
       } else if (p.crashTime === 0) {
-        const error = Math.abs(wrapped(p.angle - terrainAngle(p.x, state.trail)));
-        if (error > 0.85) crash(state, reducedMotion);
+        if (contact.bodyFirst) crash(state, reducedMotion);
         else {
           const flips = Math.floor((Math.abs(p.rotation) + 1e-6) / TAU);
           if (flips > 0) {
@@ -293,7 +302,10 @@ function simulate(state: SkiState, input: SkiInput, dt: number, reducedMotion: b
           burst(state, '#E3F4FF', reducedMotion);
         }
       }
-      p.angle = terrainAngle(p.x, state.trail);
+      if (p.crashTime > 0) {
+        p.angle = terrainAngle(p.x, state.trail);
+        p.y = groundContact(state).y;
+      }
       p.rotation = 0;
       p.flipping = false;
       p.airTime = 0;
@@ -301,7 +313,7 @@ function simulate(state: SkiState, input: SkiInput, dt: number, reducedMotion: b
     }
   }
 
-  let after = playerBody(p, p.tucked);
+  let after = playerBody(p);
   for (const f of state.features) {
     if (f.used || f.x > p.x + 80 || f.x + f.width < oldX - 80) continue;
     if (f.kind === 'coin') {
@@ -313,11 +325,10 @@ function simulate(state: SkiState, input: SkiInput, dt: number, reducedMotion: b
       }
     } else if (f.kind === 'slide' || f.kind === 'charge') {
       if (p.crashTime === 0 && rectangleHit(before, after, f.x, f.x + f.width, f.y - 50, f.y)) {
-        const previousHeight = rideHeight(p);
         p.partner = f.kind;
         p.partnerLeft = f.kind === 'slide' ? 1500 : 1900;
         p.shield = f.kind === 'slide';
-        if (p.grounded) p.y += previousHeight - rideHeight(p);
+        if (p.grounded) p.y = groundContact(state).y;
         p.speed = Math.min(470, p.speed + 35);
         f.used = true;
         state.events.push('mount');
@@ -331,12 +342,15 @@ function simulate(state: SkiState, input: SkiInput, dt: number, reducedMotion: b
         burst(state, '#FFFFFF', reducedMotion);
       }
     } else if (f.kind === 'rock' || f.kind === 'branch') {
+      const skis = skiContacts(p);
       const partnerHit = p.partner && f.kind === 'rock' && rectangleHit(
         [{ x: oldX, y: oldFeet - 20, radius: 20 }],
         [{ x: p.x, y: p.y + rideHeight(p) - 20, radius: 20 }],
         f.x + 5, f.x + f.width - 5, f.y - 34, f.y);
-      const hit = partnerHit || rectangleHit(before, after, f.x + 5, f.x + f.width - 5,
-        f.y - (f.kind === 'rock' ? 34 : 72), f.y - (f.kind === 'rock' ? 0 : 46));
+      const top = f.y - (f.kind === 'rock' ? 34 : 72);
+      const bottom = f.y - (f.kind === 'rock' ? 0 : 46);
+      const hit = partnerHit || rectangleHit(before, after, f.x + 5, f.x + f.width - 5, top, bottom)
+        || (beforeSkis.length > 0 && rectangleHit(beforeSkis, skis, f.x + 5, f.x + f.width - 5, top, bottom));
       if (!hit) continue;
       f.used = true;
       if (p.partner === 'charge' && f.kind === 'rock') {
@@ -350,7 +364,7 @@ function simulate(state: SkiState, input: SkiInput, dt: number, reducedMotion: b
       } else crash(state, reducedMotion);
     }
   }
-  after = playerBody(p, p.tucked);
+  after = playerBody(p);
   const gapToFront = frontGap(state);
   const openingGrace = 55 * clamp((28 - state.time) / 22, 0, 1);
   const chaseSpeed = base - 8 + difficulty - openingGrace + clamp((gapToFront - 220) * 0.6, 0, 180);

@@ -3,14 +3,53 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 import { TRAILS } from './model.ts';
+import { createRun } from './engine.ts';
+import { playerBody, skiContacts } from './character.ts';
 
 let source = await readFile(new URL('./renderer.ts', import.meta.url), 'utf8');
-source += '\nexport { mountains };';
+source += '\nexport { mountains, drawPlayer };';
 source = ts.transpile(source, { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext });
-for (const name of ['engine', 'model']) {
+for (const name of ['engine', 'model', 'character']) {
   source = source.replace(`'./${name}'`, JSON.stringify(new URL(`./${name}.ts`, import.meta.url).href));
 }
-const { mountains } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { mountains, drawPlayer } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+
+test('rendered body and ski transforms match collision volumes through landing and tuck poses', () => {
+  for (const angle of [-Math.PI / 2, 0, Math.PI / 2, Math.PI]) {
+    for (const tucked of [false, true]) {
+      const state = createRun('valley');
+      Object.assign(state.player, { angle, tucked, squash: 0.6 });
+      let matrix = [1, 0, 0, 1, 0, 0];
+      const stack = [];
+      const transforms = {};
+      function multiply([a, b, c, d, e, f]) {
+        const [aa, bb, cc, dd, ee, ff] = matrix;
+        matrix = [aa * a + cc * b, bb * a + dd * b, aa * c + cc * d, bb * c + dd * d,
+          aa * e + cc * f + ee, bb * e + dd * f + ff];
+      }
+      const ctx = {
+        save() { stack.push([...matrix]); },
+        restore() { matrix = stack.pop(); },
+        translate(x, y) { multiply([1, 0, 0, 1, x, y]); },
+        rotate(a) { multiply([Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), 0, 0]); },
+        scale(x, y) { multiply([x, 0, 0, y, 0, 0]); },
+        drawImage(image) { transforms[image] = [...matrix]; },
+      };
+      const clip = image => ({ image, anchor: [150, 220], frameWidth: 280, frameHeight: 260, frameCount: 1, fps: 1, row: 0 });
+      const rig = Object.fromEntries(['body', 'legs', 'skis'].map(layer => [layer, clip(layer)]));
+      drawPlayer(ctx, state, { rig }, state.player.x, state.player.y, false);
+      function verify(layer, point, expected) {
+        const [a, b, c, d, e, f] = transforms[layer];
+        assert.ok(Math.abs(a * point.x + c * point.y + e - expected.x) < 1e-9);
+        assert.ok(Math.abs(b * point.x + d * point.y + f - expected.y) < 1e-9);
+      }
+      verify('body', { x: -1, y: -34 }, playerBody(state.player)[0]);
+      verify('body', { x: 9, y: -63 }, playerBody(state.player)[2]);
+      verify('skis', { x: -39, y: -2 }, skiContacts(state.player)[0]);
+      verify('skis', { x: 39, y: -2 }, skiContacts(state.player)[2]);
+    }
+  }
+});
 
 function recordMountains(scroll, trail) {
   const fills = [];

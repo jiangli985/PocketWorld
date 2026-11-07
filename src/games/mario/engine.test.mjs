@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRun, frontGap, stepRun, terrainAngle, terrainY } from './engine.ts';
 import { emptyInput, TRAILS } from './model.ts';
+import { playerBody, skiContacts } from './character.ts';
 
 
 const DT = 1 / 120;
@@ -39,7 +40,8 @@ test('three trails start at x=200 with feet on a continuous, bounded slope', () 
     assert.equal(state.player.angle, terrainAngle(200, id));
     assert.equal(state.distance, 0);
     assert.equal(state.chasers.length, 8);
-    assert.equal(frontGap(state), 280);
+    const left = Math.min(...playerBody(state.player).map(circle => circle.x - circle.radius));
+    assert.equal(frontGap(state), left - state.chasers[0].x - 14);
     assert.ok(!state.features.some(f => f.kind === 'gap' || f.kind === 'branch'));
     for (let x = -500; x < 20000; x += 71) {
       assert.ok(terrainY(x, id) > 375 && terrainY(x, id) < 465);
@@ -127,6 +129,68 @@ test('upside-down landing crashes once, loses unbanked flips and resets combo', 
   assert.equal(state.flips, 0);
   assert.equal(state.combo, 0);
   assert.equal(state.bonus, 0);
+});
+
+test('ski-first landings accept near-vertical boards on every trail and settle continuously', () => {
+  for (const { id } of TRAILS) {
+    for (const degrees of [-90, -80, -65, 65, 80, 90]) {
+      const state = clearRun(id);
+      airborne(state, 1, 120);
+      state.player.angle = terrainAngle(state.player.x, id) + degrees * Math.PI / 180;
+      state.player.rotation = -Math.PI * 2;
+      const events = tick(state);
+      assert.ok(events.includes('land'), `${id}: ${degrees} degrees`);
+      assert.ok(!events.includes('crash'), `${id}: ${degrees} degrees`);
+      assert.equal(state.flips, 1);
+      assert.ok(Math.abs(state.player.angle - terrainAngle(state.player.x, id)) > 0.85);
+      const recovery = tick(state, {}, 30);
+      assert.ok(!recovery.includes('crash'));
+      assert.equal(state.player.grounded, true);
+      assert.ok(Math.abs(state.player.angle - terrainAngle(state.player.x, id)) < 0.02);
+      for (const circle of [...playerBody(state.player), ...skiContacts(state.player)]) {
+        assert.ok(circle.y + circle.radius <= terrainY(circle.x, id) + 0.1);
+      }
+    }
+  }
+});
+
+test('head-first contact crashes while the foot anchor is still above the snow', () => {
+  for (const { id } of TRAILS) {
+    const state = clearRun(id);
+    airborne(state, 4, 120);
+    state.player.angle = terrainAngle(state.player.x, id) + Math.PI;
+    const events = tick(state, { tilt: 1 });
+    assert.ok(events.includes('crash'), id);
+    assert.equal(state.player.crashTime, 1.25);
+    assert.equal(state.flips, 0);
+  }
+});
+
+test('ski-tip contact begins landing before the foot anchor reaches the surface', () => {
+  const state = clearRun();
+  airborne(state, 10, 120);
+  state.player.angle = terrainAngle(state.player.x, state.trail) + Math.PI / 3;
+  assert.ok(tick(state).includes('land'));
+  assert.ok(state.player.y < terrainY(state.player.x, state.trail) - 10);
+  assert.equal(state.player.crashTime, 0);
+});
+
+test('the leading ski can land on the far lip while the body is still over a gap', () => {
+  const state = clearRun();
+  addFeature(state, 'gap', state.player.x - 100, 130);
+  airborne(state, 1, 120);
+  const events = tick(state);
+  assert.ok(events.includes('land'));
+  assert.ok(!events.includes('crash'));
+  assert.equal(state.features[0].used, false);
+});
+
+test('the ski tip hits a rock before the torso reaches it', () => {
+  const state = clearRun();
+  addFeature(state, 'rock', state.player.x + 30);
+  const events = tick(state);
+  assert.ok(events.includes('crash'));
+  assert.equal(state.features[0].used, true);
 });
 
 test('jump buffer and coyote grace both accept near-edge inputs', () => {
