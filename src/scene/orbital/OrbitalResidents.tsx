@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { WorldActionKind, WorldModelProps } from '../../types/world';
 import { ObjectHandle } from './ObjectHandle';
 import { CHAIR_POSES, SEAT_DROP, SEAT_SWIVEL, type ChairPose } from './chairPose';
+import { HIP_HEIGHT as HIP, ResidentModel, type ResidentLeg, type ResidentRig } from './ResidentModel';
 
 type Point = [number, number];
 type Box = [number, number, number, number];
@@ -11,11 +12,9 @@ type Posture = 'standing' | 'chair' | 'bed';
 type ResidentsProps = WorldModelProps & { walkTarget: [number, number, number] | null; onArrive: () => void; enabled: boolean };
 const RADIUS = 0.23;
 const CAT: Point = [-0.95, 1.95];
-const HIP = 0.61;
 const clamp = THREE.MathUtils.clamp;
 const ease = (t: number) => t * t * (3 - 2 * t);
 const angle = (from: number, to: number, t: number) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * t;
-const THIGH = 0.28, SHIN = 0.31;
 // Scoot cycle: feet reach down, push the floor until the legs straighten, then lift and recover.
 const KICK = 0.72, REACH_END = 0.3, PUSH_END = 0.75, SOLE_NEAR = 0.03, SOLE_FAR = 0.2, SOLE_LIFT = 0.06;
 const PUSH = 3.4, ROLL_DRAG = 2.4;
@@ -55,11 +54,12 @@ function rollChair(room: Room, pose: ChairPose, dt: number, driven: boolean, blo
   pose.spin *= Math.exp(-dt * 4);
   if (!driven) { pose.vx *= Math.exp(-dt * ROLL_DRAG); pose.vz *= Math.exp(-dt * ROLL_DRAG); }
 }
-/** Two-bone leg solve in the leg's sagittal plane; returns thigh and knee rotations that put the sole at the target. */
-function legReach(ahead: number, below: number): [number, number] {
-  const reach = clamp(Math.hypot(ahead, below), 0.05, (THIGH + SHIN) * 0.999);
-  const hip = Math.atan2(ahead, below) + Math.acos(clamp((THIGH * THIGH + reach * reach - SHIN * SHIN) / (2 * THIGH * reach), -1, 1));
-  const knee = Math.PI - Math.acos(clamp((THIGH * THIGH + SHIN * SHIN - reach * reach) / (2 * THIGH * SHIN), -1, 1));
+/** Solve the ankle target; the independent foot bone keeps the sole level. */
+function legReach(leg: ResidentLeg, ahead: number, below: number): [number, number] {
+  const { upperLength: thigh, lowerLength: shin } = leg;
+  const reach = clamp(Math.hypot(ahead, below), Math.abs(thigh - shin) + 0.001, (thigh + shin) * 0.999);
+  const hip = Math.atan2(ahead, below) + Math.acos(clamp((thigh * thigh + reach * reach - shin * shin) / (2 * thigh * reach), -1, 1));
+  const knee = Math.PI - Math.acos(clamp((thigh * thigh + shin * shin - reach * reach) / (2 * thigh * shin), -1, 1));
   return [-hip, knee];
 }
 function free(point: Point, boxes: Box[]) {
@@ -123,13 +123,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   const spawn = useMemo(() => { const point = reachable([0.25, 0.5], obstacles(room, CHAIR_POSES[props.sceneId])); return [point[0], 0, point[1]] as [number, number, number]; }, [room]);
   const resident = useRef<THREE.Group>(null);
   const hips = useRef<THREE.Group>(null);
-  const leftLeg = useRef<THREE.Group>(null);
-  const rightLeg = useRef<THREE.Group>(null);
-  const leftKnee = useRef<THREE.Group>(null);
-  const rightKnee = useRef<THREE.Group>(null);
-  const leftArm = useRef<THREE.Group>(null);
-  const rightArm = useRef<THREE.Group>(null);
-  const head = useRef<THREE.Group>(null);
+  const rig = useRef<ResidentRig | null>(null);
   const keys = useRef(new Set<string>());
   const jump = useRef(false);
   const strideAmount = useRef(0);
@@ -311,7 +305,7 @@ export function OrbitalResidents(props: ResidentsProps) {
         s.idle = driving ? 0 : s.idle + dt;
         s.perch = THREE.MathUtils.damp(s.perch, s.idle < 1.2 ? 1 : 0, 7, dt);
         // The resident faces away from travel so both feet can push against the floor in front.
-        if (driving) pose.yaw = angle(pose.yaw, Math.atan2(-dx, -dz) - SEAT_SWIVEL - Math.PI, 1 - Math.exp(-dt * 5));
+        if (driving && !s.planted) pose.yaw = angle(pose.yaw, Math.atan2(-dx, -dz) - SEAT_SWIVEL - Math.PI, 1 - Math.exp(-dt * 5));
         if (!s.kick && driving && s.perch > 0.9) s.kick = 1e-4;
         if (s.kick) { s.kick += dt / KICK; if (s.kick >= 1) s.kick = driving ? Math.max(1e-4, s.kick - 1) : 0; }
         const facing = seatYaw(pose), backX = -Math.sin(facing), backZ = -Math.cos(facing);
@@ -393,22 +387,25 @@ export function OrbitalResidents(props: ResidentsProps) {
     const stride = strideAmount.current;
     pivot.position.y = HIP;
     pivot.rotation.x = -s.lie * Math.PI / 2;
-    if (head.current) head.current.position.z = s.lie * 0.2;
-    if (leftLeg.current && rightLeg.current && leftKnee.current && rightKnee.current) {
-      let thigh = -s.sit * Math.PI / 2, knee = s.sit * Math.PI / 2;
-      if (s.perch > 0.001) {
-        const [reachThigh, reachKnee] = legReach(s.sole, root.position.y + HIP - 0.02 - s.soleLift);
-        thigh = THREE.MathUtils.lerp(thigh, reachThigh, s.perch);
-        knee = THREE.MathUtils.lerp(knee, reachKnee, s.perch);
-      }
-      leftLeg.current.rotation.x = thigh + stride;
-      rightLeg.current.rotation.x = thigh - stride;
-      leftKnee.current.rotation.x = knee + Math.max(0, -stride) * 0.5;
-      rightKnee.current.rotation.x = knee + Math.max(0, stride) * 0.5;
-    }
-    if (leftArm.current && rightArm.current) {
-      leftArm.current.rotation.x = s.sit * -0.6 - stride * 0.7;
-      rightArm.current.rotation.x = s.sit * -0.6 + stride * 0.7;
+    pivot.rotation.z = stride * 0.12;
+    if (rig.current) {
+      const straighten = Math.max(s.sit, s.lie, s.perch);
+      rig.current.skirtFront.rotation.x = -s.sit * Math.PI / 2;
+      rig.current.skirtFront.position.y = HIP + s.sit * 0.05;
+      rig.current.skirtFront.position.z = 0.19 + s.sit * 0.13;
+      rig.current.skirtBack.rotation.x = -s.sit * 0.4;
+      rig.current.legs.forEach((leg, side) => {
+        let thigh = -s.sit * Math.PI / 2, knee = s.sit * Math.PI / 2;
+        if (s.perch > 0.001) {
+          const [reachThigh, reachKnee] = legReach(leg, s.sole - leg.hipForward, root.position.y + HIP - s.soleLift - leg.ankleHeight);
+          thigh = THREE.MathUtils.lerp(thigh, reachThigh, s.perch);
+          knee = THREE.MathUtils.lerp(knee, reachKnee, s.perch);
+        }
+        const swing = side ? -stride : stride;
+        leg.thigh.rotation.x = thigh + swing + leg.straighten[0] * straighten;
+        leg.shin.rotation.x = knee + Math.max(0, -swing) * 0.5 + leg.straighten[1] * straighten;
+        leg.foot.rotation.x = -(leg.thigh.rotation.x + leg.shin.rotation.x);
+      });
     }
     root.userData.posture = s.exiting ? 'standing-up' : s.posture;
     root.userData.grounded = s.lift === 0;
@@ -456,36 +453,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       onPointerOver={e => { if (props.enabled) { e.stopPropagation(); props.onHover('resident', 'WASD 移动 · 空格跳跃 · 上划人物跳跃'); } }}
       onPointerOut={() => { if (props.enabled) props.onHover(null); }}>
       <group ref={hips} position={[0, HIP, 0]}>
-        <Ball position={[0, 0, 0]} radius={0.17} scale={[1, 0.56, 0.72]} color="#2b3a4f" />
-        {([[leftLeg, leftKnee, -0.095], [rightLeg, rightKnee, 0.095]] as const).map(([leg, knee, x]) => <group key={x} ref={leg} position={[x, -0.02, 0]}>
-          <mesh position={[0, -0.14, 0]} castShadow><capsuleGeometry args={[0.067, 0.15, 6, 16]} /><meshStandardMaterial color="#2b3a4f" /></mesh>
-          <group ref={knee} position={[0, -0.28, 0]}>
-            <mesh position={[0, -0.115, 0]} castShadow><capsuleGeometry args={[0.06, 0.15, 6, 16]} /><meshStandardMaterial color="#33465b" /></mesh>
-            <Ball position={[0, -0.25, 0.035]} radius={0.08} scale={[1, 0.62, 1.55]} color="#f7f1df" />
-            <mesh position={[0, -0.298, 0.035]} scale={[1, 1, 1.5]}><cylinderGeometry args={[0.08, 0.08, 0.024, 20]} /><meshStandardMaterial color="#bd753e" /></mesh>
-          </group>
-        </group>)}
-        <Ball position={[0, 0.245, 0]} radius={0.235} scale={[0.88, 1.18, 0.68]} color="#3b7a8c" />
-        <Ball position={[0, 0.43, -0.09]} radius={0.13} scale={[1.1, 0.7, 0.7]} color="#326978" />
-        <Ball position={[0, 0.13, 0.14]} radius={0.08} scale={[1.7, 0.75, 0.35]} color="#326978" />
-        {[-0.044, 0.044].map(x => <mesh key={x} position={[x, 0.36, 0.14]}><capsuleGeometry args={[0.007, 0.11, 4, 8]} /><meshStandardMaterial color="#f8efd9" /></mesh>)}
-        {([[leftArm, -0.24], [rightArm, 0.24]] as const).map(([ref, x]) => <group ref={ref} key={x} position={[x, 0.43, 0]}>
-          <mesh position={[0, -0.15, 0]} castShadow><capsuleGeometry args={[0.06, 0.22, 6, 16]} /><meshStandardMaterial color="#3b7a8c" /></mesh>
-          <Ball position={[0, -0.33, 0]} radius={0.055} color="#f4c7ab" />
-        </group>)}
-        <group ref={head} position={[0, 0.61, 0]}>
-          <Ball position={[0, 0, 0]} radius={0.175} scale={[1, 0.98, 0.95]} color="#f4c7ab" />
-          <Ball position={[0, 0.05, -0.048]} radius={0.188} color="#3b261e" />
-          {[-1, 1].map(side => <React.Fragment key={side}>
-            <Ball position={[side * 0.174, -0.02, 0]} radius={0.038} scale={[0.6, 1, 0.8]} color="#eab89b" />
-            <Ball position={[side * 0.063, -0.01, 0.153]} radius={0.023} scale={[0.8, props.objects.bed?.active ? 0.22 : 1.1, 0.5]} color="#1e293b" />
-            <Ball position={[side * 0.063 + 0.005, -0.003, 0.166]} radius={0.006} color="#ffffff" />
-            <Ball position={[side * 0.105, -0.05, 0.135]} radius={0.021} scale={[1.1, 0.65, 0.4]} color="#e6a296" />
-          </React.Fragment>)}
-          {[-0.12, -0.06, 0, 0.06, 0.12].map((x, i) => <mesh key={x} position={[x, 0.105 - Math.abs(x) * 0.2, 0.12]} rotation={[0.4, 0, (2 - i) * 0.25]} scale={[0.75, 1.35, 0.55]} castShadow><sphereGeometry args={[0.052, 16, 12]} /><meshStandardMaterial color="#462e24" /></mesh>)}
-          <mesh position={[0, -0.065, 0.16]} rotation={[0, 0, Math.PI]}><torusGeometry args={[0.018, 0.004, 6, 16, Math.PI]} /><meshBasicMaterial color="#9a4a3a" /></mesh>
-          <mesh position={[0.02, 0.225, 0]} rotation={[0, Math.PI / 2, -0.4]}><torusGeometry args={[0.035, 0.009, 8, 16, Math.PI * 1.2]} /><meshStandardMaterial color="#3b261e" /></mesh>
-        </group>
+        <ResidentModel rig={rig} position={[0, -HIP, 0]} />
       </group>
     </group>
     <ObjectHandle id="pet" action="pet" hint="团子 · 轻抚 / 靠近按 E" world={petWorld} position={[CAT[0], 0, CAT[1]]} rotation={[0, 0.5, 0]}>
