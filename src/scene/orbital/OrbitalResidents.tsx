@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { WorldActionKind, WorldModelProps } from '../../types/world';
+import { roomAudio } from '../audioEngine';
 import { ObjectHandle } from './ObjectHandle';
 import { CHAIR_POSES, SEAT_DROP, SEAT_SWIVEL, type ChairPose } from './chairPose';
 import { HIP_HEIGHT as HIP, ResidentModel, type ResidentLeg, type ResidentRig } from './ResidentModel';
@@ -129,7 +130,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   const strideAmount = useRef(0);
   const touch = useRef<{ id: number; x: number; y: number; target: EventTarget | null } | null>(null);
   const petGesture = useRef(false);
-  const state = useRef({ posture: 'standing' as Posture, wanted: 'standing' as Posture, path: [] as Point[], external: false, exiting: false, blend: 0, sit: 0, lie: 0, lift: 0, velocity: 0, gait: 0, nearby: '', dismissedBed: false, dismissedChair: false,
+  const state = useRef({ posture: 'standing' as Posture, wanted: 'standing' as Posture, path: [] as Point[], external: false, exiting: false, blend: 0, sit: 0, lie: 0, lift: 0, velocity: 0, gait: 0, stepCount: 0, stepGait: Math.PI * 0.45, stopTime: Infinity, nearby: '', dismissedBed: false, dismissedChair: false,
     perch: 0, idle: Infinity, kick: 0, planted: false, plant: SOLE_NEAR, sole: SOLE_NEAR, soleLift: SOLE_LIFT });
   const exit = useRef({ from: new THREE.Vector3(), yaw: 0, sit: 0, lie: 0, progress: 0 });
   const petBody = useRef<THREE.Group>(null);
@@ -187,6 +188,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (!['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE'].includes(event.code)) return;
       event.preventDefault();
       event.stopPropagation();
+      void roomAudio.unlock();
       if (event.repeat) return;
       if (event.code === 'KeyE') {
         if (state.current.posture !== 'standing' || p.objects.bed?.active || p.objects.chair?.active) stand();
@@ -275,6 +277,8 @@ export function OrbitalResidents(props: ResidentsProps) {
       s.perch = THREE.MathUtils.damp(s.perch, 0, 7, dt);
       if (s.posture === 'standing' && !s.exiting) rollChair(room, pose, dt, false, [root.position.x, root.position.z]);
     }
+    const surfaceAt = (x: number, z: number): 'wood' | 'rug' =>
+      p.sceneId === 'observatory' && x >= -2.95 && x <= -0.05 && z >= -0.3 && z <= 1.9 ? 'rug' : 'wood';
     let walking = false;
     if (s.exiting) {
       // Move off the support before lowering the pelvis; preserve the actual in-flight pose.
@@ -292,6 +296,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (t === 1) {
         root.position.set(entry[0], 0, entry[1]);
         s.posture = 'standing'; s.exiting = false; s.blend = 0; s.sit = 0; s.lie = 0;
+        roomAudio.playFootstep({ surface: surfaceAt(entry[0], entry[1]), intensity: 0.78 });
         if (s.external && p.walkTarget) s.path = route(entry, [p.walkTarget[0], p.walkTarget[2]], obstacles(room, pose));
         else if (wanted !== 'standing') s.path = route(entry, wanted === 'bed' ? [-1.48, 0.95] : seatEntry, obstacles(room, pose));
       }
@@ -311,7 +316,11 @@ export function OrbitalResidents(props: ResidentsProps) {
         const facing = seatYaw(pose), backX = -Math.sin(facing), backZ = -Math.cos(facing);
         const pushing = s.kick >= REACH_END && s.kick < PUSH_END;
         if (pushing) {
-          if (!s.planted) { s.planted = true; s.plant = SOLE_NEAR; }
+          if (!s.planted) {
+            s.planted = true;
+            s.plant = SOLE_NEAR;
+            roomAudio.playFootstep({ variant: 'push', surface: surfaceAt(pose.x, pose.z), intensity: 0.85 });
+          }
           const speed = Math.max(0, pose.vx * backX + pose.vz * backZ) + PUSH * dt;
           pose.vx = backX * speed; pose.vz = backZ * speed;
         } else s.planted = false;
@@ -376,13 +385,46 @@ export function OrbitalResidents(props: ResidentsProps) {
         if (Math.hypot(root.position.x - entry[0], root.position.z - entry[1]) < 0.06) { s.posture = wanted; s.blend = 0; }
         else s.path = route([root.position.x, root.position.z], entry, obstacles(room, pose));
       }
-      if (jump.current && p.enabled) { if (s.lift === 0) s.velocity = 4.0; jump.current = false; }
-      if (s.lift > 0 || s.velocity > 0) { s.velocity -= 10.5 * dt; s.lift = Math.max(0, s.lift + s.velocity * dt); if (!s.lift) s.velocity = 0; }
+      const wasLift = s.lift;
+      if (jump.current && p.enabled) {
+        if (s.lift === 0) {
+          s.velocity = 4.0;
+          roomAudio.playFootstep({ variant: 'push', surface: surfaceAt(root.position.x, root.position.z), intensity: 0.88 });
+        }
+        jump.current = false;
+      }
+      if (s.lift > 0 || s.velocity > 0) {
+        s.velocity -= 10.5 * dt;
+        s.lift = Math.max(0, s.lift + s.velocity * dt);
+        if (!s.lift) {
+          s.velocity = 0;
+          if (wasLift > 0.02) roomAudio.playFootstep({ variant: 'land', surface: surfaceAt(root.position.x, root.position.z), intensity: 1.15 });
+        }
+      }
       root.position.y = s.lift;
       s.sit = 0; s.lie = 0;
     }
     pose.drop = s.perch;
-    s.gait += walking ? dt * 10 : 0;
+    const groundedWalk = walking && s.lift === 0;
+    if (groundedWalk) {
+      s.stopTime = 0;
+      s.gait += dt * 10;
+      const surface = surfaceAt(root.position.x, root.position.z);
+      while (s.gait >= s.stepGait) {
+        roomAudio.playFootstep({ foot: (s.stepCount++ & 1) as 0 | 1, surface });
+        s.stepGait += Math.PI;
+      }
+    } else {
+      if (walking) s.gait += dt * 10;
+      s.stopTime += dt;
+      if (s.stopTime > 0.12) {
+        s.gait = (s.stepCount & 1) * Math.PI;
+        s.stepGait = s.gait + Math.PI * 0.45;
+      } else if (s.gait >= s.stepGait) {
+        s.stepGait = Math.floor(s.gait / Math.PI) * Math.PI + Math.PI * 0.45;
+        if (s.stepGait <= s.gait) s.stepGait += Math.PI;
+      }
+    }
     strideAmount.current = THREE.MathUtils.damp(strideAmount.current, walking && !p.reducedMotion ? Math.sin(s.gait) * 0.44 : 0, 16, dt);
     const stride = strideAmount.current;
     pivot.position.y = HIP;
