@@ -88,6 +88,9 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
   const pageCount = Math.max(1, Math.ceil(props.discs.length / 6));
   const visiblePage = Math.min(rackPage, pageCount - 1);
   const [paused, setPaused] = useState(false);
+  const [presentation, setPresentation] = useState<'auto' | 'expanded' | 'collapsed' | 'embedded'>('auto');
+  const [narrow, setNarrow] = useState(() => window.innerWidth <= 720 || window.innerHeight <= 480);
+  const [windowFocused, setWindowFocused] = useState(true);
   const [hidden, setHidden] = useState(() => typeof document !== 'undefined' && document.hidden);
   const [loaded, setLoaded] = useState<{ game: GameId; Component: React.ComponentType<GameCartridgeProps> } | null>(null);
   const [loadError, setLoadError] = useState<{ game: GameId; text: string } | null>(null);
@@ -95,7 +98,8 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
   const computerFocused = props.focusedObject === 'computer';
   const sceneVisible = props.transition.toScene === props.sceneId && props.transition.phase !== 'leaving' && props.transition.phase !== 'returning' && !(props.transition.phase === 'entering' && props.transition.fromScene !== props.transition.toScene);
   const displayVisible = computerFocused && sceneVisible && ['active', 'error'].includes(props.transition.phase);
-  const gameActive = displayVisible && !paused && !hidden && !transfer?.game && !pickup && !loadError;
+  const expanded = !!props.activeGame && presentation !== 'collapsed' && presentation !== 'embedded' && (presentation === 'expanded' || narrow);
+  const gameActive = displayVisible && presentation !== 'collapsed' && !paused && !hidden && windowFocused && !transfer?.game && !pickup && !loadError;
   const activeComponent = loaded?.game === props.activeGame ? loaded.Component : null;
 
   useEffect(() => {
@@ -103,6 +107,13 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
     document.addEventListener('visibilitychange', change);
     return () => document.removeEventListener('visibilitychange', change);
   }, []);
+  useEffect(() => {
+    const resize = () => setNarrow(window.innerWidth <= 720 || window.innerHeight <= 480);
+    const blur = () => setWindowFocused(false), focus = () => setWindowFocused(true);
+    window.addEventListener('resize', resize); window.addEventListener('blur', blur); window.addEventListener('focus', focus);
+    return () => { window.removeEventListener('resize', resize); window.removeEventListener('blur', blur); window.removeEventListener('focus', focus); };
+  }, []);
+  useEffect(() => { setPresentation('auto'); }, [props.activeGame]);
   useEffect(() => () => {
     if (transferRef.current?.disc) roomAudio.cancelPreparedMusic();
     transferRef.current = null;
@@ -304,7 +315,9 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
       <mesh><planeGeometry args={[0.92, 0.69]} /><meshBasicMaterial color="#182e28" /></mesh>
     </ObjectHandle>
     {/* The DOM display must not paint over a physical cartridge moving in front of the CRT. */}
-    {(sceneVisible || activeComponent) && <ComputerScreen visible={displayVisible && !pickup && !transfer?.game} interactive={displayVisible && !!activeComponent}>
+    {(sceneVisible || activeComponent) && <ComputerScreen visible={displayVisible && !pickup && !transfer?.game} interactive={displayVisible && !!activeComponent && presentation !== 'collapsed'}
+      expanded={expanded} collapsed={presentation === 'collapsed'} controls={!!props.activeGame} allowEmbeddedResume={!narrow}
+      onExpand={() => setPresentation('expanded')} onCollapse={() => setPresentation('collapsed')} onResume={() => setPresentation('embedded')} onEject={eject}>
       <div aria-label="电脑游戏屏幕" onPointerDown={event => { if (activeComponent) event.stopPropagation(); }} style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
 
         {props.activeGame && activeComponent ? <ScreenBoundary key={props.activeGame} onError={() => { setLoadError({ game: props.activeGame!, text: '卡带暂时无法运行，请拔出后重试。' }); props.onFeatureError('卡带暂时无法运行，请拔出后重试。'); }}>

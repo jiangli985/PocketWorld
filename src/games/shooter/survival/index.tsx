@@ -125,8 +125,11 @@ export default function ShooterGame({ width = W, height = H, isActive = true, is
   useEffect(() => {
     if (!isActive) return;
     const handled = new Set(['w', 'a', 's', 'd', 'q', 'e', 'r', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'escape', 'p', 'enter', '1', '2', '3']);
+    const buttonActivation = (e: KeyboardEvent, k: string): boolean => (k === 'enter' || k === ' ') && e.target instanceof HTMLElement && e.target.tagName === 'BUTTON';
     const down = (e: KeyboardEvent): void => {
       const k = e.key.toLowerCase(); if (!handled.has(k) || !props.current.isActive) return;
+      // Let focused buttons activate normally, including the outer display controls.
+      if (buttonActivation(e, k)) return;
       e.preventDefault(); e.stopPropagation();
       if (screenRef.current === 'playing') keys.current.add(k);
       if (e.repeat) return;
@@ -140,7 +143,7 @@ export default function ShooterGame({ width = W, height = H, isActive = true, is
       else if (screenRef.current === 'upgrade' && k === 'r') reroll();
       else if (screenRef.current === 'upgrade' && ['1', '2', '3'].includes(k)) { const u = game.current.choices[Number(k) - 1]; if (u) choose(u.id); }
     };
-    const up = (e: KeyboardEvent): void => { const k = e.key.toLowerCase(); if (handled.has(k)) { e.preventDefault(); e.stopPropagation(); keys.current.delete(k); } };
+    const up = (e: KeyboardEvent): void => { const k = e.key.toLowerCase(); if (handled.has(k)) { keys.current.delete(k); if (buttonActivation(e, k)) return; e.preventDefault(); e.stopPropagation(); } };
     const blur = (): void => { clearInput(); if (screenRef.current === 'playing') view('paused'); };
     const visibility = (): void => { if (document.hidden) blur(); };
     window.addEventListener('keydown', down, true); window.addEventListener('keyup', up, true); window.addEventListener('blur', blur); document.addEventListener('visibilitychange', visibility);
@@ -161,12 +164,12 @@ export default function ShooterGame({ width = W, height = H, isActive = true, is
   const isHome = screen === 'home';
   const activeSkills = UPGRADES.filter(u => hud.upgrades[u.id] > 0);
   const combinations = synergies(hud.enchants);
-  return <div ref={container} className="sprout-cartridge" style={{ aspectRatio: `${width}/${height}` }} onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+  return <div ref={container} className="sprout-cartridge" data-game-screen={screen} style={{ aspectRatio: `${width}/${height}` }} onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
     <canvas ref={canvas} width={Math.round(width*pixelRatio)} height={Math.round(height*pixelRatio)} aria-label="团团魔法录游戏场景，WASD 移动，空格冲刺" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={clearInput} onPointerCancel={clearInput} onLostPointerCapture={clearInput} />
     {(isHome||screen==='paused')&&<button className="sg-quality" onClick={()=>setQuality(q=>q===2?1:2)} disabled={!isActive} aria-label="切换画质" title={quality===2?'640 × 480 场景 · 高密度画布':'320 × 240 场景 · 节能'}>{quality===2?'HD 高清':'经典像素'}</button>}
     {isHome && <div className="sg-home">
       <div className="sg-topline"><span className="sg-brand"><i>✿</i> POCKETWORLD </span><button className="sg-icon-button" onClick={toggleSound} aria-label={quiet || isMuted ? '开启音效' : '关闭音效'} disabled={!isActive || isMuted}>{quiet || isMuted ? '♫ ×' : '♫'}</button></div>
-      <div className="sg-home-copy"><h1>团团<br /><span>魔法录</span><b>✦</b></h1><p>自动攻击，生存 10 分钟。</p><button className="sg-primary sg-start" onClick={() => isActive && view('armory')} disabled={!isActive}>选择职业 <span>↗</span></button></div>
+      <div className="sg-home-copy"><h1>团团<br /><span>魔法录</span><b>✦</b></h1><p>自动攻击，拖动移动 · 生存 10 分钟。</p><button className="sg-primary sg-start" onClick={() => isActive && view('armory')} disabled={!isActive}>选择职业 <span>↗</span></button></div>
       <div className="sg-guide"><div><b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b><span>移动</span></div><div><b><kbd>SPACE</kbd></b><span>冲刺</span></div><div><b><kbd>P</kbd><kbd>Esc</kbd></b><span>暂停</span></div></div>
       <div className="sg-home-footer"><button onClick={() => isActive && view('history')}>冒险手记 ↗</button><span>最高 {bestScore.toLocaleString()}</span><button onClick={() => { if (isActive) { clearInput(); audio.current.dispose(); props.current.onExit(); } }}>退出到桌面 ↗</button></div>
     </div>}

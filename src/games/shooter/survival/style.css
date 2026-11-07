@@ -1,4 +1,4 @@
-.sprout-cartridge{position:relative;width:100%;overflow:hidden;isolation:isolate;container-type:inline-size;background:#dbe4c2;color:#3c5145;font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;user-select:none;touch-action:none;font-size:1.7cqw}
+.sprout-cartridge{position:relative;width:100%;overflow:hidden;isolation:isolate;container-type:inline-size;background:#dbe4c2;color:#3c5145;font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;user-select:none;touch-action:auto;font-size:1.7cqw}
 .sprout-cartridge *{box-sizing:border-box}.sprout-cartridge canvas{display:block;position:absolute;inset:0;width:100%;height:100%}.sprout-cartridge button{font:inherit;cursor:pointer;touch-action:manipulation;color:inherit;border:0}.sprout-cartridge button:disabled{cursor:default;opacity:.55}.sprout-cartridge button:focus-visible{outline:3px solid #b78245;outline-offset:3px}.sprout-cartridge button:hover:not(:disabled){filter:brightness(1.035);transform:translateY(-1px)}.sprout-cartridge button:active:not(:disabled){transform:translateY(2px)}.sprout-cartridge kbd{font:700 1.25cqw system-ui;display:inline-flex;align-items:center;justify-content:center;min-width:2.7cqw;height:2.7cqw;padding:0 .65cqw;border:1px solid #d4d9c6;border-radius:.6cqw;background:#fffdf1;box-shadow:0 2px 0 #d7dcc9;color:#53654f}
 .sprout-cartridge .sg-home{position:absolute;inset:0;background:linear-gradient(90deg,#f8f5e8 0%,#f8f5e8f8 23%,#f8f5e8b5 44%,#f8f5e800 62%)}.sprout-cartridge .sg-topline{display:flex;align-items:center;justify-content:space-between;position:absolute;left:5%;right:4%;top:4%}.sprout-cartridge .sg-brand{font-size:1.4cqw;font-weight:800;letter-spacing:.13em;display:flex;align-items:center;gap:1cqw}.sprout-cartridge .sg-brand i{font-size:3cqw;font-style:normal;color:#7c9c67}.sprout-cartridge .sg-brand em{font-size:1.1cqw;letter-spacing:.05em;font-weight:400;font-style:normal;padding-left:1cqw;border-left:1px solid #ced3bf;color:#8b9580}.sprout-cartridge .sg-icon-button{height:4.8cqw;min-width:4.8cqw;padding:0 .8cqw;border-radius:1.4cqw;background:#fffdf0df;box-shadow:0 3px 0 #819b6325;border:1px solid #f9faed;color:#637859;font-weight:700}
 .sprout-cartridge .sg-home-copy{position:absolute;left:7%;top:18%;width:46%}.sprout-cartridge .sg-eyebrow{display:flex;align-items:center;gap:.8cqw;font-size:1.35cqw;letter-spacing:.12em;color:#7b8b70;font-weight:700}.sprout-cartridge .sg-eyebrow>i{width:.7cqw;height:.7cqw;border-radius:50%;background:#8da678}.sprout-cartridge h1{position:relative;margin:2cqw 0 1.7cqw;font-size:8cqw;font-weight:900;line-height:1.14;letter-spacing:.025em;color:#415d47;text-shadow:0 3px 0 #fff8e8}.sprout-cartridge h1 span{color:#80995f}.sprout-cartridge h1 b{position:absolute;color:#e5bc70;font-size:4cqw;top:3cqw;left:19cqw;transform:rotate(16deg)}.sprout-cartridge .sg-home-copy>p{font-size:1.55cqw;line-height:1.95;color:#7c846c;margin:0 0 1.7cqw}.sprout-cartridge .sg-tags{display:flex;gap:.6cqw;font-size:1.1cqw;margin-bottom:2.8cqw;color:#8e947d}.sprout-cartridge .sg-tags span{border:1px solid #dce0ce;padding:.45cqw .85cqw;border-radius:5cqw;background:#fffdf22b}.sprout-cartridge .sg-primary{background:#d89c71;color:#fffaf0;border-radius:1.5cqw;font-weight:800;font-size:1.9cqw;min-height:6cqw;padding:1.6cqw 3.6cqw;box-shadow:0 4px 0 #bb835d,0 7px 14px #8b704323;border-top:1px solid #e9b58f;transition:transform .15s,filter .15s}.sprout-cartridge .sg-start{display:flex;width:29cqw;justify-content:space-between;align-items:center}.sprout-cartridge .sg-start span{font-size:2.6cqw;font-weight:400}.sprout-cartridge .sg-home-links{display:flex;align-items:center;gap:2.3cqw;margin-top:2cqw;font-size:1.25cqw;color:#88927b}.sprout-cartridge .sg-home-links button{padding:0;background:none;color:#647958}.sprout-cartridge .sg-home-links b{font-weight:700}.sprout-cartridge .sg-character-note{position:absolute;right:13%;top:69%;text-align:center;font-size:1.4cqw;font-weight:700;color:#59704f;transform:rotate(-5deg);padding:1cqw 1.8cqw;border-radius:1cqw;background:#fff9e8b3;border:1px solid #fff8e780}.sprout-cartridge .sg-character-note small{display:block;font-weight:400;font-size:1.1cqw;margin-top:.4cqw}.sprout-cartridge .sg-character-note i{position:absolute;top:-.5cqw;left:42%;height:1.2cqw;width:3.2cqw;background:#eacb97a0}
@@ -142,3 +142,82 @@
 .sprout-cartridge .sg-dash b{font-size:clamp(18px,2.7cqw,23px)}
 .sprout-cartridge .sg-dash span{font-size:clamp(11px,1.7cqw,14px)}
 .sprout-cartridge .sg-bottom{align-items:flex-end}
+
+/* Menus scroll natively; only the canvas joystick consumes a drag gesture. */
+.sprout-cartridge canvas{touch-action:none}
+.sprout-cartridge .sg-home,.sprout-cartridge .sg-modal{touch-action:pan-y;overscroll-behavior:contain}
+.sprout-cartridge .sg-overlay{overflow:hidden;touch-action:pan-y}
+.sprout-cartridge .sg-modal{min-height:0;scrollbar-gutter:stable}
+@container (max-width:520px){
+  .sprout-cartridge .sg-quality{display:none}
+  .sprout-cartridge .sg-home{overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px;background:#221e32d9}
+  .sprout-cartridge .sg-topline,.sprout-cartridge .sg-home-copy,.sprout-cartridge .sg-home-footer{position:static;width:auto;transform:none}
+  .sprout-cartridge .sg-topline{flex-shrink:0;min-height:44px}
+  .sprout-cartridge .sg-brand{font-size:13px}
+  .sprout-cartridge h1{font-size:34px;line-height:1.15;margin:0 0 10px}
+  .sprout-cartridge h1 br{display:none}
+  .sprout-cartridge h1 b{display:none}
+  .sprout-cartridge .sg-home-copy>p{font-size:14px;margin:0 0 12px}
+  .sprout-cartridge .sg-start{width:100%;min-height:48px;font-size:18px;padding:10px 16px}
+  .sprout-cartridge .sg-guide{display:none}
+  .sprout-cartridge .sg-home-footer{display:flex;flex-wrap:wrap;gap:8px;font-size:14px}
+  .sprout-cartridge .sg-home-footer button{min-height:44px;flex:1;font-size:14px}
+  .sprout-cartridge .sg-home-footer>span{flex-basis:100%;order:2;text-align:center}
+  .sprout-cartridge .sg-overlay,.sprout-cartridge .sg-overlay:has(.sg-armory){padding:8px}
+  .sprout-cartridge .sg-modal,.sprout-cartridge .sg-armory,.sprout-cartridge .sg-upgrade{width:100%;max-height:100%;padding:12px;border-width:2px}
+  .sprout-cartridge h2,.sprout-cartridge .sg-armory h2,.sprout-cartridge .sg-upgrade h2{font-size:21px;line-height:1.3;margin:0 0 12px}
+  .sprout-cartridge .sg-modal>p,.sprout-cartridge .sg-armory>p{font-size:14px;line-height:1.6;margin:0 0 12px}
+  .sprout-cartridge .sg-weapon-cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0}
+  .sprout-cartridge .sg-weapon-cards button{min-height:76px;padding:8px 3px}
+  .sprout-cartridge .sg-weapon-cards button.selected{transform:none}
+  .sprout-cartridge .sg-armory .sg-weapon-cards svg{height:36px;width:100%;margin:0}
+  .sprout-cartridge .sg-armory .sg-weapon-cards strong{font-size:14px;margin:4px 0 0}
+  .sprout-cartridge .sg-armory .sg-weapon-description{padding:8px;margin:12px 0}
+  .sprout-cartridge .sg-armory .sg-weapon-description p{font-size:14px}
+  .sprout-cartridge .sg-flow-cards{grid-template-columns:1fr;gap:8px;margin:12px 0}
+  .sprout-cartridge .sg-flow-cards button{grid-template-columns:44px 1fr;padding:10px;min-height:76px}
+  .sprout-cartridge .sg-flow-cards svg{width:40px;height:30px}
+  .sprout-cartridge .sg-flow-cards strong{font-size:17px}
+  .sprout-cartridge .sg-flow-cards p{font-size:14px;line-height:1.5;margin:6px 0 0}
+  .sprout-cartridge .sg-modal>.sg-primary,.sprout-cartridge .sg-armory .sg-primary{width:100%;min-height:48px;padding:10px;font-size:17px}
+  .sprout-cartridge .sg-modal>.sg-text-button,.sprout-cartridge .sg-armory .sg-text-button{min-height:44px;padding:8px;font-size:15px;margin:8px auto 0}
+  .sprout-cartridge .sg-cards{grid-template-columns:1fr;gap:10px;margin:0}
+  .sprout-cartridge .sg-cards>button{min-height:124px;padding:12px}
+  .sprout-cartridge .sg-cards i{font-size:24px;margin:0 0 6px}
+  .sprout-cartridge .sg-cards strong{font-size:18px}
+  .sprout-cartridge .sg-cards p{font-size:14px;line-height:1.5;margin:8px 0}
+  .sprout-cartridge .sg-card-bottom{font-size:13px}
+  .sprout-cartridge .sg-card-bottom kbd{font-size:13px;min-width:24px;height:24px}
+  .sprout-cartridge .sg-modal-icon{font-size:32px;margin-bottom:8px}
+  .sprout-cartridge .sg-history-list>div{font-size:14px;gap:8px;flex-wrap:wrap;padding:12px 0}
+  .sprout-cartridge .sg-result{gap:12px;margin:16px 0}
+  .sprout-cartridge .sg-result b{font-size:20px}
+  .sprout-cartridge .sg-result span{font-size:12px}
+  .sprout-cartridge .sg-icon-button{min-width:44px;height:44px;font-size:19px}
+  .sprout-cartridge .sg-hud{top:8px;left:8px;right:8px;display:grid;grid-template-columns:1fr 64px;gap:8px}
+  .sprout-cartridge .sg-vitals{width:auto;padding:6px}
+  .sprout-cartridge .sg-vitals>div:first-child{font-size:13px;margin-bottom:4px}
+  .sprout-cartridge .sg-vitals small{display:none}
+  .sprout-cartridge .sg-health{height:6px}
+  .sprout-cartridge .sg-clock{position:static;transform:none;padding:4px}
+  .sprout-cartridge .sg-clock strong{font-size:20px}
+  .sprout-cartridge .sg-clock span{font-size:12px}
+  .sprout-cartridge .sg-actions{position:absolute;top:58px;right:0;flex-direction:column;gap:4px}
+  .sprout-cartridge .sg-actions button[aria-label="切换音效"],.sprout-cartridge .sg-kills,.sprout-cartridge .sg-loadout{display:none}
+  .sprout-cartridge .sg-weapon-bar{width:calc(100% - 72px);left:8px;bottom:58px;transform:none;padding:4px}
+  .sprout-cartridge .sg-weapon-bar .sg-variant-bar{gap:4px}
+  .sprout-cartridge .sg-weapon-bar .sg-variant-bar button{min-height:44px;padding:4px 2px}
+  .sprout-cartridge .sg-weapon-bar .sg-variant-bar span{white-space:normal;font-size:13px;line-height:1.3}
+  .sprout-cartridge .sg-weapon-bar .sg-variant-bar svg,.sprout-cartridge .sg-weapon-bar .sg-variant-bar kbd,.sprout-cartridge .sg-enchants,.sprout-cartridge .sg-weapon-bar>.sg-combos{display:none}
+  .sprout-cartridge .sg-weapon-notice{top:66px;gap:8px;padding:8px 12px}
+  .sprout-cartridge .sg-weapon-notice strong{font-size:20px}
+  .sprout-cartridge .sg-weapon-notice svg{width:32px;height:24px}
+  .sprout-cartridge .sg-bottom{bottom:8px;left:8px;right:8px;gap:8px}
+  .sprout-cartridge .sg-level{width:30px;height:30px;font-size:11px}
+  .sprout-cartridge .sg-level b{font-size:15px}
+  .sprout-cartridge .sg-xp>div:first-child{font-size:12px}
+  .sprout-cartridge .sg-xp>div:last-child{height:6px}
+  .sprout-cartridge .sg-dash{width:44px;height:44px;flex-shrink:0}
+  .sprout-cartridge .sg-dash b{font-size:18px}
+  .sprout-cartridge .sg-dash span{font-size:12px}
+}

@@ -13,7 +13,7 @@ export const TRAITS: { id: TraitId; name: string; icon: string; color: string; d
 ];
 export const isTrait = (id: string): id is TraitId => TRAITS.some(t => t.id === id);
 export function traitDescription(id: TraitId, weapon: WeaponId): string {
-  if (id === 'ricochet') return weapon === 'broom' ? '扫击命中后发出寻找其他目标的风刃；后续弹射伤害衰减。' : weapon === 'rocket' ? '汽水火箭爆炸后弹向其他目标再次引爆，爆炸伤害逐次衰减。' : weapon === 'wand' ? '法球的穿透次数增加，并在命中后追向新的目标。' : '子弹命中后自动寻找新目标弹射，伤害逐次衰减。';
+  if (id === 'ricochet') return weapon === 'broom' ? '扫击命中后发出寻找其他目标的风刃；后续弹射伤害衰减。' : weapon === 'rocket' ? '火箭、迫击炮、地雷爆炸后射出追击弹，每级多弹射一次，每次保留 65% 伤害；同一爆炸链不重复命中。' : weapon === 'wand' ? '法球的穿透次数增加，并在命中后追向新的目标。' : '子弹命中后自动寻找新目标弹射，伤害逐次衰减。';
   if (id === 'split' && weapon === 'broom') return '扫击有概率甩出两道迷你风刃，补足远处伤害。风刃不会再触发特性。';
   if (id === 'split' && weapon === 'rocket') return '爆炸命中有概率分裂两枚小汽水罐，造成小范围爆炸，无法再分裂。';
   return TRAITS.find(t => t.id === id)?.description ?? '';

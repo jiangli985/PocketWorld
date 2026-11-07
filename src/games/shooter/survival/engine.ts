@@ -7,6 +7,7 @@ import { TRAITS, emptyEnchantments, isTrait, traitDescription } from './traits';
 import type { Enchantments, TraitId } from './traits';
 import { SPECIALS, emptySpecials, isSpec, CLASS_TRAITS, PROFESSIONS } from './professions';
 import type { SpecId } from './professions';
+import { segmentCircleEntry } from './collision';
 export { SPECIALS, PROFESSIONS } from './professions';
 export const W = 800, H = 600, WORLD = 2000, DURATION = 600;
 export const LIMITS = { enemies: 105, bullets: 100, gems: 180, particles: 160, texts: 24, blasts: 24, arcs: 16, hazards: 12, fields: 12 };
@@ -25,7 +26,7 @@ export const UPGRADES: (Upgrade & { id: SupportId })[] = [
   { id: 'pulse', name: '泡泡冲击', icon: '◌', description: '周期性发出泡泡，击退并伤害周围怪物。', color: '#8eabdc', tag: '范围武器' },
 ];
 export type Enemy = Vec & { id: number; kind: number; hp: number; max: number; radius: number; speed: number; seed: number; flash: number; hit: number; charge: number; burn?: number; burnDps?: number; burnTick?: number; chill?: number; slow?: number; reaction?: number };
-export type Bullet = Vec & { vx: number; vy: number; life: number; damage: number; radius: number; kind: WeaponId; hits: number[]; traits?: Enchantments; secondary?: boolean; bounces?: number; procDone?: boolean; reactionDone?: boolean; specs?: Record<SpecId, number>; variant?: VariantId; delay?: number; target?: Vec; duration?: number };
+export type Bullet = Vec & { vx: number; vy: number; life: number; damage: number; radius: number; kind: WeaponId; hits: number[]; traits?: Enchantments; secondary?: boolean; bounces?: number; procDone?: boolean; reactionDone?: boolean; specs?: Record<SpecId, number>; variant?: VariantId; delay?: number; target?: Vec; duration?: number; explosiveFollowup?: boolean };
 export type Blast = Vec & { radius: number; life: number; max: number; color: string };
 export type Gem = Vec & { value: number; life: number; heart: boolean };
 export type Particle = Vec & { vx: number; vy: number; life: number; max: number; color: string; size: number };
@@ -76,7 +77,10 @@ function explode(r: Run, b: Bullet): void {
   if (r.blasts.length >= LIMITS.blasts) r.blasts.shift();
   r.blasts.push({ x: b.x, y: b.y, radius, life: .5, max: .5, color: '#ff86ab' });
   let killed = false;
-  for (const e of r.enemies) if (e.hp > 0 && dist(b, e) < radius + e.radius) {
+  // A primary explosion chain hits each enemy once; independent secondary blasts
+  // may overlap, but cannot start another chain or generate cluster children.
+  for (const e of r.enemies) if (e.hp > 0 && !b.hits.includes(e.id) && dist(b, e) < radius + e.radius) {
+    b.hits.push(e.id);
     const baseDamage = b.damage;
     if (!b.secondary && dist(b, e) < 45) b.damage *= 1 + (b.specs?.warhead ?? 0) * .25;
     applyImpact(r, e, b); b.damage = baseDamage; killed ||= e.hp <= 0; const d = Math.max(1, dist(e, b));
@@ -169,14 +173,23 @@ function applyImpact(r: Run, e: Enemy, b: Bullet): void {
     for (const side of [-1, 1]) if (r.bullets.length < LIMITS.bullets) r.bullets.push({ x: e.x + Math.cos(a + side * .8) * 18, y: e.y + Math.sin(a + side * .8) * 18, vx: Math.cos(a + side * .8) * 320, vy: Math.sin(a + side * .8) * 320, life: 1, damage: b.damage * .3, radius: 5, kind: b.kind, hits: [e.id], secondary: true });
   }
 }
-function redirect(r: Run, b: Bullet, e: Enemy): boolean {
+function redirect(r: Run, b: Bullet): boolean {
   const rank = b.traits?.ricochet ?? 0;
-  if (b.secondary || b.kind === 'wand' || (b.bounces ?? 0) >= rank || b.hits.length >= 8) return false;
-  const targets = r.enemies.filter(o => o.hp > 0 && !b.hits.includes(o.id) && dist(o, e) < 240).sort((a, c) => dist(a, e) - dist(c, e));
+  if (b.secondary || b.kind === 'wand' || (b.bounces ?? 0) >= Math.min(3, rank) || (b.kind !== 'rocket' && b.hits.length >= 8)) return false;
+  const targets = r.enemies.filter(o => o.hp > 0 && !b.hits.includes(o.id) && dist(o, b) < 240).sort((a, c) => dist(a, b) - dist(c, b) || a.id - c.id);
   const target = targets[0]; if (!target) return false;
   const d = Math.max(.01, dist(target, b)), speed = Math.max(300, Math.hypot(b.vx, b.vy));
   b.vx = (target.x - b.x) / d * speed; b.vy = (target.y - b.y) / d * speed;
   b.damage *= .65; b.bounces = (b.bounces ?? 0) + 1; b.life = Math.max(.8, b.life); return true;
+}
+function detonate(r: Run, b: Bullet): void {
+  explode(r, b);
+  if (redirect(r, b)) {
+    // Reuse this bounded projectile and its snapshots/history. A landed mortar or
+    // triggered mine becomes a flying charge, never a second armed/landing event.
+    b.explosiveFollowup = true; b.delay = 0; b.target = undefined;
+    b.life = .8;
+  } else b.life = 0;
 }
 function spawnEnemy(r: Run, boss = false): void {
   if (r.enemies.length >= LIMITS.enemies) return;
@@ -315,7 +328,7 @@ export function advance(r: Run, delta: number, input: Vec = { x: 0, y: 0 }): voi
         if (specs.gale) for (let i=0;i<specs.gale && r.bullets.length<LIMITS.bullets;i++) { const angle = a + (i-(specs.gale-1)/2)*.2; r.bullets.push({ ...r.player,vx:Math.cos(angle)*380,vy:Math.sin(angle)*380,damage:damage*.5,radius:8,life:1.2,kind:'broom',hits:[],secondary:true }); }
         if (traits.ricochet && swing.procDone && r.bullets.length < LIMITS.bullets) {
           const blade: Bullet = { ...swing, x: target.x, y: target.y, damage: damage * .4, hits: [target.id], procDone: true };
-          if (redirect(r, blade, target)) r.bullets.push(blade);
+          if (redirect(r, blade)) r.bullets.push(blade);
         }
         label(r, target, '走你～', '#ffe772');
       } else {
@@ -384,12 +397,12 @@ export function advance(r: Run, delta: number, input: Vec = { x: 0, y: 0 }): voi
     const key = `${cx},${cy}`; const bucket = cells.get(key) ?? []; bucket.push(e); cells.set(key, bucket);
   }
   for (const b of [...r.bullets]) {
-    let exploded = false;
     const arm = armamentOf(b.variant ?? STARTERS[b.kind]);
+    const mode = b.explosiveFollowup ? 'projectile' : arm.mode;
     if ((b.delay ?? 0) > 0) { b.delay = Math.max(0,b.delay!-dt); if (arm.mode !== 'mine') { b.x=r.player.x;b.y=r.player.y;continue; } }
-    if (arm.mode==='mine') {
+    if (mode==='mine') {
       b.life-=dt;
-      if ((b.delay??0)<=0 && alive.some(e=>e.hp>0&&dist(e,b)<42+e.radius)) { explode(r,b);b.life=0; }
+      if ((b.delay??0)<=0 && alive.some(e=>e.hp>0&&dist(e,b)<42+e.radius)) detonate(r,b);
       continue;
     }
     if (arm.homing === 'seek' && !b.secondary) {
@@ -399,23 +412,31 @@ export function advance(r: Run, delta: number, input: Vec = { x: 0, y: 0 }): voi
     if(arm.homing==='return' && !b.secondary && b.life<(b.duration??arm.life)*.55){const d=Math.max(1,dist(b,r.player)),turn=1-Math.exp(-dt*10);b.vx+=((r.player.x-b.x)/d*arm.speed*1.3-b.vx)*turn;b.vy+=((r.player.y-b.y)/d*arm.speed*1.3-b.vy)*turn;}
     const ox = b.x, oy = b.y;
     b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt;
-    if(arm.mode==='lob'){ if(b.life<=0){if(b.target)Object.assign(b,b.target);explode(r,b);}continue; }
-    for (const e of alive) {
+    if(mode==='lob'){ if(b.life<=0){if(b.target)Object.assign(b,b.target);detonate(r,b);}continue; }
+    const end = { x: b.x, y: b.y }, start = { x: ox, y: oy };
+    // Snapshot geometry before any knockback, damage, explosion or direction change.
+    const contacts = alive.filter(e => e.hp > 0 && !b.hits.includes(e.id)).map(e => ({ e, t: segmentCircleEntry(start, end, e, b.radius + e.radius) }))
+      .filter((contact): contact is { e: Enemy; t: number } => contact.t !== null)
+      .sort((a, c) => a.t - c.t || a.e.id - c.e.id);
+    let stopped = false;
+    for (const { e, t } of contacts) {
       if (e.hp <= 0 || b.hits.includes(e.id)) continue;
-      const dx = b.x - ox, dy = b.y - oy, along = clamp(((e.x - ox) * dx + (e.y - oy) * dy) / Math.max(.01, dx * dx + dy * dy), 0, 1);
-      if (Math.hypot(ox + dx * along - e.x, oy + dy * along - e.y) >= b.radius + e.radius) continue;
+      b.x = ox + (end.x - ox) * t; b.y = oy + (end.y - oy) * t;
+      if (b.kind === 'rocket') { detonate(r, b); stopped = true; break; }
       b.hits.push(e.id);
-      if (b.kind === 'rocket') { explode(r, b); exploded = true; if (!redirect(r, b, e)) b.life = 0; break; }
       applyImpact(r, e, b);
       if(b.kind==='broom'&&!b.secondary&&b.hits.length>=2&&b.specs?.reap&&r.leechCd.broom<=0){r.hp=Math.min(r.maxHp,r.hp+b.specs.reap);r.leechCd.broom=1;}
       if (b.kind === 'wand' && !b.secondary && b.specs?.sigil) b.damage *= 1 + b.specs.sigil * .12;
       const capacity=b.secondary?1:Math.min(8,arm.pierce+(b.kind==='pistol'?(b.specs?.silver??0):0)+(b.kind==='wand'?(b.traits?.ricochet??0)+Number(r.profession==='wand'):0));
-      if(b.hits.length>=capacity){if(!redirect(r,b,e))b.life=0;break;}
+      if(b.hits.length>=capacity){if(!redirect(r,b))b.life=0;stopped=true;break;}
       if(b.kind==='pistol'||arm.id==='prism')b.damage*=.8;
     }
-    if (b.life <= 0 && b.kind === 'rocket' && !exploded) explode(r, b);
+    if (!stopped) {
+      Object.assign(b, end);
+      if (b.life <= 0 && b.kind === 'rocket') detonate(r, b);
+    }
   }
-  r.bullets = r.bullets.filter(b => b.life > 0); r.enemies = alive.filter(e => e.hp > 0 && dist(e, r.player) < 1000);
+  r.bullets = r.bullets.filter(b => b.life > 0); r.enemies = alive.filter(e => e.hp > 0 && (e.kind === 3 || dist(e, r.player) < 1000));
   const magnet = 70 * (1 + r.upgrades.magnet * .4);
   for (const g of r.gems) {
     g.life -= dt; const d = dist(g, r.player);

@@ -133,7 +133,7 @@ test('each locked profession remains bounded through ten minutes with max-rank s
     r.invincible=1;if(i%83===0)switchVariant(r);
     advance(r,1/60,{x:Math.cos(r.time*.14),y:Math.sin(r.time*.14)});r.sounds.length=0;
     for(const [key,limit]of Object.entries(LIMITS))assert.ok(r[key].length<=limit,key);
-    for(const b of r.bullets){assert.ok(Number.isFinite(b.x)&&Number.isFinite(b.y)&&Number.isFinite(b.damage));assert.ok(b.hits.length<=8);}
+    for(const b of r.bullets){assert.ok(Number.isFinite(b.x)&&Number.isFinite(b.y)&&Number.isFinite(b.damage));assert.ok(b.hits.length<=(b.kind==='rocket'?LIMITS.enemies*4:8));assert.equal(new Set(b.hits).size,b.hits.length);}
     assert.ok(Number.isFinite(r.damageDealt));
   }
   assert.equal(r.phase,'victory');assert.ok(r.kills>100,family);assert.equal(r.weapon,family);assert.equal(r.profession,family);

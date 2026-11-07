@@ -1,6 +1,12 @@
 .orbital-app { position: relative; width: 100%; height: 100%; overflow: hidden; background: #050a10; color: #ece6d8; font-family: 'Avenir Next', 'PingFang SC', sans-serif; }
 .orbital-canvas { position: absolute; inset: 0; touch-action: none; }
 .orbital-canvas canvas { display: block; outline: none; }
+.computer-game-layer { position: absolute; inset: 0; pointer-events: none; touch-action: auto; font-family: system-ui, 'Microsoft YaHei', sans-serif; }
+.computer-game-backdrop { position: absolute; inset: 0; background: #13121f; pointer-events: auto; touch-action: auto; }
+.computer-game-available { position: absolute; top: calc(64px + env(safe-area-inset-top, 0px)); bottom: max(8px, env(safe-area-inset-bottom, 0px)); left: max(8px, env(safe-area-inset-left, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); pointer-events: none; }
+.computer-game-controls { position: absolute; z-index: 2; top: max(8px, env(safe-area-inset-top, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); display: flex; gap: 8px; pointer-events: auto; }
+.computer-game-controls button { min-height: 44px; padding: 8px 12px; border: 1px solid #ac94bb; background: #30283e; color: #f3e1b9; font: 700 15px/1.3 system-ui, 'Microsoft YaHei', sans-serif; cursor: pointer; touch-action: manipulation; }
+.computer-game-controls button:focus-visible { outline: 3px solid #e3cc8f; outline-offset: 2px; }
 .orbital-header { position: absolute; top: 34px; left: 42px; right: 42px; display: flex; align-items: center; pointer-events: none; z-index: 4; }
 .orbital-wordmark { display: flex; align-items: center; gap: 13px; font-size: 25px; font-weight: 500; letter-spacing: -1.2px; }
 .orbital-wordmark-dot { color: #c4a879; }

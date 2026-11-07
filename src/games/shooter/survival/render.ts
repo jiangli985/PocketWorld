@@ -104,7 +104,7 @@ export function render(output:Ctx,r:Run,home=false,clock=r.time,surface?:HTMLCan
     for(const b of r.bullets){
       const w=armamentOf(b.variant??STARTERS[b.kind]);if((b.delay??0)>0&&w.mode!=='mine')continue;
       const p=project(b),q=project({x:b.x-b.vx*.035,y:b.y-b.vy*.035}),tint=b.traits?.frost?'#96d0e1':b.traits?.burn?'#e7a476':w.color;
-      if(w.mode==='mine'){
+      if(w.mode==='mine'&&!b.explosiveFollowup){
         c.strokeStyle=(b.delay??0)>0?'#6d7580':'#bacd8d';c.lineWidth=.5;c.beginPath();c.ellipse(p.x,p.y,9,5,0,0,TAU);c.stroke();
         box(c,p.x-5,p.y-5,10,5,INK);box(c,p.x-4,p.y-4,8,3,tint);spark(c,p.x,p.y-4,1,(b.delay??0)>0?'#6d7580':'#faf2b7');continue;
       }

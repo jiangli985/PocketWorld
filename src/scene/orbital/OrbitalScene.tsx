@@ -170,7 +170,7 @@ export function OrbitalScene(props: OrbitalSceneProps) {
       element.removeEventListener('touchcancel', cancel, true);
     };
   }, []);
-  return <div ref={container} className="orbital-canvas" onContextMenu={e => e.preventDefault()}
+  return <div ref={container} className="orbital-canvas" style={{ touchAction: props.focusedObject === 'computer' && props.activeGame ? 'auto' : 'none' }} onContextMenu={e => e.preventDefault()}
     onPointerCancel={() => props.onGesture(false)}
     onWheel={e => { if (props.focusedObject && !props.activeGame && e.deltaY > 45) props.onReturn(); }}
     onDoubleClick={e => { if ((e.target as HTMLElement).tagName === 'CANVAS' && props.focusedObject && !props.activeGame) props.onReturn(); }}>
