@@ -296,10 +296,13 @@ export function advance(r: Run, delta: number, input: Vec = { x: 0, y: 0 }): voi
     const weapon = armamentOf(r.variant);
     const a = Math.atan2(target.y - r.player.y, target.x - r.player.x), count = weapon.count + r.upgrades.spread;
     r.aim = a; r.facing = Math.cos(a) >= 0 ? 1 : -1;
-    if (weapon.mode !== 'melee' || dist(r.player, target) < weapon.reach + r.upgrades.spread * 12 || r.specials.gale > 0) {
+    const shotNumber = r.shotCounts[r.weapon] + 1;
+    const circular = r.specials.whirl > 0 && shotNumber % 3 === 0;
+    const range = weapon.reach + r.upgrades.spread * 12 + (circular ? r.specials.whirl * 12 : 0) + (r.specials.witchstep && r.dash > 0 ? 25 : 0);
+    if (weapon.mode !== 'melee' || dist(r.player, target) < range + target.radius || r.specials.gale > 0) {
       r.recoil = .14;
-      r.shotCounts[r.weapon]++;
-      const shotNumber = r.shotCounts[r.weapon], specs = { ...r.specials };
+      r.shotCounts[r.weapon] = shotNumber;
+      const specs = { ...r.specials };
       let damage = weapon.damage * (1 + r.upgrades.power * .18) / (weapon.mode === 'melee' ? 1 : 1 + r.upgrades.spread * .55);
       if (r.weapon === 'pistol' && shotNumber % 6 === 0 && specs.sixth) { damage *= 1 + specs.sixth * .8; label(r,r.player,'第六发！','#eac383'); }
       if (r.weapon === 'machine') { if (!r.moving) damage *= 1 + specs.stabilizer * .15; if (r.profession === 'machine' && shotNumber % 10 === 0) damage *= 2; }
@@ -308,8 +311,6 @@ export function advance(r: Run, delta: number, input: Vec = { x: 0, y: 0 }): voi
       if (weapon.id === 'frostfan') traits.frost = Math.max(1, traits.frost);
       if (weapon.mode === 'melee') {
         r.sweep = .28;
-        const circular = specs.whirl > 0 && shotNumber % 3 === 0;
-        const range = weapon.reach + r.upgrades.spread * 12 + (circular ? specs.whirl * 12 : 0) + (specs.witchstep && r.dash > 0 ? 25 : 0);
         const swing: Bullet = { ...r.player, vx: Math.cos(a) * 320, vy: Math.sin(a) * 320, damage, radius: 8, life: 1, kind: 'broom', variant: weapon.id, hits: [], traits, specs };
         let struck = 0;
         for (const e of [...alive].sort((u,v)=>dist(u,r.player)-dist(v,r.player))) {
@@ -337,7 +338,8 @@ export function advance(r: Run, delta: number, input: Vec = { x: 0, y: 0 }): voi
         for (let i = 0; i < count + twin + extra && r.bullets.length < LIMITS.bullets; i++) {
           const bonus = i >= count + twin;
           const other = bonus && r.weapon === 'wand' ? alive.find(e => e.id !== target.id) : undefined;
-          const angle = (other ? Math.atan2(other.y - r.player.y, other.x - r.player.x) : a) + (i - (count + twin - 1) / 2) * weapon.spread + (r.weapon === 'machine' ? (r.random() - .5) * (specs.stabilizer && !r.moving ? .025 : .14) : 0);
+          const spreadIndex = bonus && r.weapon === 'wand' ? i - count - twin - (extra - 1) / 2 : i - (count + twin - 1) / 2;
+          const angle = (other ? Math.atan2(other.y - r.player.y, other.x - r.player.x) : a) + spreadIndex * weapon.spread + (r.weapon === 'machine' ? (r.random() - .5) * (specs.stabilizer && !r.moving ? .025 : .14) : 0);
           const flight = weapon.mode === 'lob' ? { vx:(target.x-r.player.x)/weapon.life,vy:(target.y-r.player.y)/weapon.life,target:{x:target.x,y:target.y} } : {vx:Math.cos(angle)*weapon.speed,vy:Math.sin(angle)*weapon.speed};
           r.bullets.push({ ...r.player, ...flight, variant:weapon.id, duration:weapon.life, delay:weapon.id==='burst'?i*.08:weapon.mode==='mine'?.35:0, life:weapon.life, damage:damage*(bonus?.5:1)/(1+twin*.65/weapon.count), radius:r.weapon==='rocket'?9:r.weapon==='wand'?10:5+r.upgrades.power*.4,kind:r.weapon,hits:[],traits,specs,secondary:bonus });
         }

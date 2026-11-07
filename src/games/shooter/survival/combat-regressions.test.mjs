@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRequire } from 'node:module';
-const { createRun, advance, LIMITS } = createRequire(import.meta.url)('./dist/engine.cjs');
+const { createRun, advance, dash, LIMITS } = createRequire(import.meta.url)('./dist/engine.cjs');
 const enemy = (id, x, y = 1000, radius = 10) => ({ id, x, y, radius, kind: 0, hp: 10000, max: 10000, speed: 0, seed: 0, flash: 0, hit: 0, charge: 4 });
 function arena(family = 'machine', variant = 'prism') {
   const r = createRun(() => .5, family, variant);
@@ -121,6 +121,41 @@ test('a contact killed by an earlier chain proc is skipped before piercing resol
   const b=bullet('prism',{traits:{chain:3}});r.bullets=[b];advance(r,.05);
   assert.equal(r.kills,2);assert.deepEqual(b.hits,[1]);
 });
+for (const rank of [1, 3]) {
+  test(`rank ${rank} whirl starts a third melee attack inside its extended reach`, () => {
+    const r = arena('broom', 'lance'); r.shot = 0; r.specials.whirl = rank; r.shotCounts.broom = 2;
+    const target = enemy(1, 1000 + 185 + rank * 12 - 1); r.enemies = [target];
+    advance(r, .001);
+    assert.equal(r.shotCounts.broom, 3); assert.ok(target.hp < target.max);
+    const plain = arena('broom', 'lance'); plain.shot = 0; plain.enemies = [enemy(1, 1000 + 185 + rank * 12 - 1)];
+    advance(plain, .001); assert.equal(plain.shotCounts.broom, 0);
+  });
+}
+
+test('witchstep starts a melee attack in its dash-only extended reach', () => {
+  const r = arena('broom', 'lance'); r.shot = 0; r.specials.witchstep = 1;
+  const target = enemy(1, 1205); r.enemies = [target];
+  assert.ok(dash(r, { x: 0, y: 1 })); advance(r, .001);
+  assert.equal(r.shotCounts.broom, 1); assert.ok(target.hp < target.max); assert.equal(r.witchCharge, 0);
+});
+
+for (const [variant, twin, rank] of [['star', 0, 1], ['star', 2, 1], ['frostfan', 2, 3], ['moon', 1, 2]]) {
+  test(`${variant} familiar rank ${rank} aims its bonus group at the other target with twin ${twin}`, () => {
+    const r = arena('wand', variant); r.shot = 0; r.shotCounts.wand = 2;
+    r.specials.familiar = rank; r.specials.twin = twin;
+    const other = enemy(2, 1000, 1400, 18); r.enemies = [enemy(1, 1100), other];
+    advance(r, .001); r.shot = 10000;
+    const bonus = r.bullets.filter(b => b.secondary); assert.equal(bonus.length, rank);
+    const vx = bonus.reduce((sum, b) => sum + b.vx, 0), vy = bonus.reduce((sum, b) => sum + b.vy, 0);
+    assert.ok(Math.abs(Math.atan2(vy, vx) - Math.PI / 2) < 1e-9);
+    if (variant === 'star') {
+      r.bullets = bonus;
+      for (let i = 0; i < 100; i++) advance(r, .02);
+      assert.ok(other.hp < other.max, 'the non-homing familiar must actually hit its intended target');
+    }
+  });
+}
+
 test('a follow-up whose target dies expires without resurrecting a mine or looping explosions', () => {
   for(const variant of ['launcher','mortar','mine']) {
     const r=arena('rocket',variant), a=enemy(1,1040), target=enemy(2,1230);

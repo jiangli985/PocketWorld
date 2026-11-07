@@ -14,8 +14,8 @@ export class PinballAudio {
     if (this.output && this.context) this.output.gain.setValueAtTime(enabled && !muted ? 0.32 : 0, this.context.currentTime);
     if (!enabled || muted) {
       this.clearVoices();
-      if (this.context?.state === 'running') void this.context.suspend().catch(() => undefined);
-    }
+      if (this.context && this.context.state !== 'closed') void this.context.suspend().catch(() => undefined);
+    } else if (this.context && this.context.state !== 'closed') void this.context.resume().catch(() => undefined);
   }
 
   // Call only in response to a user gesture; autoplay policies are not bypassed.

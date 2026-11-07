@@ -42,11 +42,12 @@ export default function ShooterGame({ width = W, height = H, isActive = true, is
   const pixelRatio=typeof window==='undefined'?1:Math.min(2,window.devicePixelRatio||1);
   const [stick, setStick] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
 
-  const clearInput = useCallback(() => {
-    keys.current.clear(); joystick.current = { x: 0, y: 0 }; setStick(null);
+  const clearPointer = useCallback(() => {
+    joystick.current = { x: 0, y: 0 }; setStick(null);
     const id = pointer.current?.id; pointer.current = null;
     if (id !== undefined && canvas.current?.hasPointerCapture(id)) canvas.current.releasePointerCapture(id);
   }, []);
+  const clearInput = useCallback(() => { keys.current.clear(); clearPointer(); }, [clearPointer]);
   const view = useCallback((s: Screen) => {
     clearInput(); screenRef.current = s; setScreen(s);
     audio.current.configure(s === 'playing' && props.current.isActive, props.current.isMuted || quietRef.current);
@@ -160,12 +161,13 @@ export default function ShooterGame({ width = W, height = H, isActive = true, is
     const p = point(e), dx = p.x - origin.x, dy = p.y - origin.y, d = Math.max(36, Math.hypot(dx, dy));
     joystick.current = { x: dx / d, y: dy / d }; setStick({ x: origin.x, y: origin.y, dx: dx / d * 26, dy: dy / d * 26 });
   };
+  const pointerEnd = (e: PointerInput<HTMLCanvasElement>): void => { if (pointer.current?.id === e.pointerId) clearPointer(); };
   const toggleSound = (): void => { const next = !quiet; quietRef.current = next; setQuiet(next); audio.current.configure(screenRef.current === 'playing' && isActive, isMuted || next); if (!next) audio.current.unlock(); };
   const isHome = screen === 'home';
   const activeSkills = UPGRADES.filter(u => hud.upgrades[u.id] > 0);
   const combinations = synergies(hud.enchants);
   return <div ref={container} className="sprout-cartridge" data-game-screen={screen} style={{ aspectRatio: `${width}/${height}` }} onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-    <canvas ref={canvas} width={Math.round(width*pixelRatio)} height={Math.round(height*pixelRatio)} aria-label="团团魔法录游戏场景，WASD 移动，空格冲刺" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={clearInput} onPointerCancel={clearInput} onLostPointerCapture={clearInput} />
+    <canvas ref={canvas} width={Math.round(width*pixelRatio)} height={Math.round(height*pixelRatio)} aria-label="团团魔法录游戏场景，WASD 移动，空格冲刺" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onLostPointerCapture={pointerEnd} />
     {(isHome||screen==='paused')&&<button className="sg-quality" onClick={()=>setQuality(q=>q===2?1:2)} disabled={!isActive} aria-label="切换画质" title={quality===2?'640 × 480 场景 · 高密度画布':'320 × 240 场景 · 节能'}>{quality===2?'HD 高清':'经典像素'}</button>}
     {isHome && <div className="sg-home">
       <div className="sg-topline"><span className="sg-brand"><i>✿</i> POCKETWORLD </span><button className="sg-icon-button" onClick={toggleSound} aria-label={quiet || isMuted ? '开启音效' : '关闭音效'} disabled={!isActive || isMuted}>{quiet || isMuted ? '♫ ×' : '♫'}</button></div>
