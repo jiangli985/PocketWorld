@@ -256,6 +256,7 @@ export const Protagonist: React.FC<ProtagonistProps> = ({
         const nextX = posRef.current[0] + moveVecX * MOVE_SPEED * dt;
         const nextZ = posRef.current[2] + moveVecZ * MOVE_SPEED * dt;
         const [resolvedX, resolvedZ] = resolveObstacleCollision(nextX, nextZ);
+        isMoving = Math.hypot(resolvedX - posRef.current[0], resolvedZ - posRef.current[2]) > 0.001;
         posRef.current[0] = resolvedX;
         posRef.current[2] = resolvedZ;
 
@@ -264,7 +265,9 @@ export const Protagonist: React.FC<ProtagonistProps> = ({
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
         rotYRef.current += diff * Math.min(1, dt * 12);
+      }
 
+      if (isMoving) {
         walkCycleRef.current += dt * 11.5;
         if (jumpYRef.current <= 0.01) {
           while (walkCycleRef.current >= stepPhaseRef.current) {
@@ -279,7 +282,7 @@ export const Protagonist: React.FC<ProtagonistProps> = ({
 
       // 跳跃重力积分
       if (jumpYRef.current > 0 || jumpVelRef.current > 0) {
-        const wasAboveGround = jumpYRef.current > 0.02;
+        const wasAboveGround = jumpYRef.current > 0;
         jumpYRef.current += jumpVelRef.current * dt;
         jumpVelRef.current -= 12.5 * dt;
         if (jumpYRef.current <= 0) {

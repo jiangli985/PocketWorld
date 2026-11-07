@@ -81,7 +81,7 @@ class RoomAudioEngine {
   private synthTimer: number | null = null;
   private stepIndex = 0;
   private footstepCount = 0;
-  private lastFootstepTime = -Infinity;
+  private lastFootstepTime = { walk: -Infinity, land: -Infinity, push: -Infinity };
   private noiseBuffer: AudioBuffer | null = null;
   private noiseBufferCtx: AudioContext | null = null;
   private htmlAudio: HTMLAudioElement | null = null;
@@ -247,8 +247,11 @@ class RoomAudioEngine {
     const now = ctx.currentTime;
     const variant = options.variant ?? 'walk';
     const minGap = variant === 'land' ? 0.04 : 0.085;
-    if (now - this.lastFootstepTime < minGap) return;
-    this.lastFootstepTime = now;
+    const lastTime = variant === 'walk'
+      ? Math.max(this.lastFootstepTime.walk, this.lastFootstepTime.land, this.lastFootstepTime.push)
+      : this.lastFootstepTime[variant];
+    if (now - lastTime < minGap) return;
+    this.lastFootstepTime[variant] = now;
 
     const surface = options.surface ?? 'wood';
     const baseIntensity = Math.min(Math.max(options.intensity ?? 1, 0.3), 1.6);

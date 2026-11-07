@@ -398,7 +398,7 @@ export function OrbitalResidents(props: ResidentsProps) {
         s.lift = Math.max(0, s.lift + s.velocity * dt);
         if (!s.lift) {
           s.velocity = 0;
-          if (wasLift > 0.02) roomAudio.playFootstep({ variant: 'land', surface: surfaceAt(root.position.x, root.position.z), intensity: 1.15 });
+          if (wasLift > 0) roomAudio.playFootstep({ variant: 'land', surface: surfaceAt(root.position.x, root.position.z), intensity: 1.15 });
         }
       }
       root.position.y = s.lift;
@@ -416,7 +416,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       }
     } else {
       if (walking) s.gait += dt * 10;
-      s.stopTime += dt;
+      s.stopTime = walking ? 0 : s.stopTime + dt;
       if (s.stopTime > 0.12) {
         s.gait = (s.stepCount & 1) * Math.PI;
         s.stepGait = s.gait + Math.PI * 0.45;
