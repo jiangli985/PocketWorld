@@ -66,6 +66,13 @@ export interface RoomAudioSnapshot {
   error: string | null;
 }
 
+export interface FootstepAudioOptions {
+  foot?: 0 | 1;
+  surface?: 'wood' | 'rug';
+  variant?: 'walk' | 'land' | 'push';
+  intensity?: number;
+}
+
 class RoomAudioEngine {
   private ctx: AudioContext | null = null;
   private isMuted = false;
@@ -73,6 +80,10 @@ class RoomAudioEngine {
   private currentDisc: MusicDisc = PRESET_MUSIC_DISCS[0];
   private synthTimer: number | null = null;
   private stepIndex = 0;
+  private footstepCount = 0;
+  private lastFootstepTime = { walk: -Infinity, land: -Infinity, push: -Infinity };
+  private noiseBuffer: AudioBuffer | null = null;
+  private noiseBufferCtx: AudioContext | null = null;
   private htmlAudio: HTMLAudioElement | null = null;
   private preparedMusic: { disc: MusicDisc; audio: HTMLAudioElement } | null = null;
   private requestId = 0;
@@ -151,8 +162,12 @@ class RoomAudioEngine {
   }
 
   public playSfx(
-    type: 'switch' | 'cat' | 'water' | 'paper' | 'soft' | 'disc'
+    type: 'switch' | 'cat' | 'water' | 'paper' | 'soft' | 'disc' | 'footstep'
   ) {
+    if (type === 'footstep') {
+      this.playFootstep();
+      return;
+    }
     if (this.isMuted) return;
     const ctx = this.ensureContext();
     if (!ctx) return;
@@ -162,7 +177,7 @@ class RoomAudioEngine {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(this.musicGain ?? ctx.destination);
     osc.onended = () => { osc.disconnect(); gain.disconnect(); };
 
     if (type === 'switch') {
@@ -215,6 +230,184 @@ class RoomAudioEngine {
       osc.start(now);
       osc.stop(now + 0.09);
     }
+  }
+
+  /**
+   * 合成光脚踩在木地板（或地毯）上的自然脚步音效：
+   * 1. 脚跟肉垫触地引发的温润木板低频短促共鸣（“噗/咚”）；
+   * 2. 约 20ms 后前脚掌皮肤贴合木面的轻柔拍击与摩擦瞬态（“啪嗒”）；
+   * 3. 左右脚自然微差与细微随机扰动，避免机械重复感。
+   */
+  public playFootstep(options: FootstepAudioOptions = {}) {
+    if (this.isMuted) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    if (ctx.state !== 'running') void ctx.resume().catch(() => {});
+
+    const now = ctx.currentTime;
+    const variant = options.variant ?? 'walk';
+    const minGap = variant === 'land' ? 0.04 : 0.085;
+    const lastTime = variant === 'walk'
+      ? Math.max(this.lastFootstepTime.walk, this.lastFootstepTime.land, this.lastFootstepTime.push)
+      : this.lastFootstepTime[variant];
+    if (now - lastTime < minGap) return;
+    this.lastFootstepTime[variant] = now;
+
+    const surface = options.surface ?? 'wood';
+    const baseIntensity = Math.min(Math.max(options.intensity ?? 1, 0.3), 1.6);
+
+    if (variant === 'land') {
+      this.triggerBarefootStep(ctx, now, 0, surface, 'land', baseIntensity * 1.12);
+      this.triggerBarefootStep(ctx, now + 0.024, 1, surface, 'land', baseIntensity * 0.94);
+      return;
+    }
+
+    const foot = options.foot ?? ((this.footstepCount++ & 1) as 0 | 1);
+    this.triggerBarefootStep(ctx, now, foot, surface, variant, baseIntensity);
+  }
+
+  private ensureNoiseBuffer(ctx: AudioContext): AudioBuffer | null {
+    if (this.noiseBuffer && this.noiseBufferCtx === ctx) return this.noiseBuffer;
+    try {
+      const length = Math.max(1, Math.floor(ctx.sampleRate * 0.18));
+      const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      let prev = 0;
+      for (let i = 0; i < length; i++) {
+        const white = Math.random() * 2 - 1;
+        prev = prev * 0.62 + white * 0.38;
+        data[i] = prev;
+      }
+      this.noiseBuffer = buffer;
+      this.noiseBufferCtx = ctx;
+      return buffer;
+    } catch {
+      return null;
+    }
+  }
+
+  private triggerBarefootStep(
+    ctx: AudioContext,
+    startTime: number,
+    foot: 0 | 1,
+    surface: 'wood' | 'rug',
+    variant: 'walk' | 'land' | 'push',
+    intensity: number
+  ) {
+    const out = this.musicGain ?? ctx.destination;
+    const isRug = surface === 'rug';
+    const isPush = variant === 'push';
+    const footBias = foot === 0 ? 0.97 : 1.03;
+    const jitter = 0.97 + Math.random() * 0.06;
+    const pitch = footBias * jitter;
+    const rollDelay = isPush ? 0.012 : 0.019 + Math.random() * 0.006;
+    const patTime = startTime + rollDelay;
+
+    // 1. 脚跟/足底肉垫落地的木地板温润低频共鸣 (Heel pad & oak board resonance)
+    const thudOsc = ctx.createOscillator();
+    const bodyOsc = ctx.createOscillator();
+    const bodyGain = ctx.createGain();
+    const thudGain = ctx.createGain();
+
+    thudOsc.type = 'sine';
+    thudOsc.frequency.setValueAtTime((isRug ? 108 : 142) * pitch, startTime);
+    thudOsc.frequency.exponentialRampToValueAtTime((isRug ? 48 : 58) * pitch, startTime + 0.055);
+    thudOsc.frequency.exponentialRampToValueAtTime((isRug ? 42 : 46) * pitch, startTime + 0.086);
+
+    bodyOsc.type = 'triangle';
+    bodyOsc.frequency.setValueAtTime((isRug ? 165 : 225) * pitch, startTime);
+    bodyOsc.frequency.exponentialRampToValueAtTime((isRug ? 78 : 96) * pitch, startTime + 0.044);
+    bodyGain.gain.setValueAtTime(isRug ? 0.16 : 0.26, startTime);
+
+    const thudPeak = (isRug ? 0.085 : 0.115) * intensity;
+    thudGain.gain.setValueAtTime(0.0001, startTime);
+    thudGain.gain.linearRampToValueAtTime(thudPeak, startTime + 0.005);
+    thudGain.gain.exponentialRampToValueAtTime(0.0008, startTime + 0.088);
+
+    thudOsc.connect(thudGain);
+    bodyOsc.connect(bodyGain);
+    bodyGain.connect(thudGain);
+    thudGain.connect(out);
+
+    bodyOsc.onended = () => {
+      bodyOsc.disconnect();
+      bodyGain.disconnect();
+    };
+    thudOsc.onended = () => {
+      thudOsc.disconnect();
+      thudGain.disconnect();
+    };
+
+    thudOsc.start(startTime);
+    thudOsc.stop(startTime + 0.092);
+    bodyOsc.start(startTime);
+    bodyOsc.stop(startTime + 0.048);
+
+    // 2. 前脚掌裸肤轻拍木地板表面的肉感瞬态音 (Forefoot skin-on-wood pat tone)
+    const patOsc = ctx.createOscillator();
+    const patGain = ctx.createGain();
+    patOsc.type = 'sine';
+    patOsc.frequency.setValueAtTime((isRug ? 210 : 292) * pitch, patTime);
+    patOsc.frequency.exponentialRampToValueAtTime((isRug ? 112 : 146) * pitch, patTime + 0.025);
+
+    const patTonePeak = (isRug ? 0.012 : 0.028) * intensity;
+    patGain.gain.setValueAtTime(0.0001, patTime);
+    patGain.gain.linearRampToValueAtTime(patTonePeak, patTime + 0.003);
+    patGain.gain.exponentialRampToValueAtTime(0.0005, patTime + 0.028);
+
+    patOsc.connect(patGain);
+    patGain.connect(out);
+    patOsc.onended = () => {
+      patOsc.disconnect();
+      patGain.disconnect();
+    };
+    patOsc.start(patTime);
+    patOsc.stop(patTime + 0.031);
+
+    // 3. 脚掌皮肤贴合与微弱摩擦噪声层 (Filtered barefoot skin contact noise)
+    const noiseBuffer = this.ensureNoiseBuffer(ctx);
+    if (!noiseBuffer) return;
+
+    const noise = ctx.createBufferSource();
+    const bandpass = ctx.createBiquadFilter();
+    const lowpass = ctx.createBiquadFilter();
+    const noiseGain = ctx.createGain();
+
+    noise.buffer = noiseBuffer;
+    noise.playbackRate.setValueAtTime((0.92 + Math.random() * 0.18) * footBias, startTime);
+
+    bandpass.type = 'bandpass';
+    bandpass.frequency.setValueAtTime((isRug ? 520 : 960) * pitch, startTime);
+    bandpass.Q.setValueAtTime(isRug ? 1.4 : 1.85, startTime);
+
+    lowpass.type = 'lowpass';
+    lowpass.frequency.setValueAtTime((isRug ? 900 : 1680) * pitch, startTime);
+
+    const heelNoisePeak = (isRug ? 0.016 : 0.024) * intensity;
+    const patNoisePeak = (isRug ? 0.026 : 0.056) * intensity;
+    const tailDuration = isPush ? 0.052 : 0.034;
+
+    noiseGain.gain.setValueAtTime(0.0001, startTime);
+    noiseGain.gain.linearRampToValueAtTime(heelNoisePeak, startTime + 0.004);
+    noiseGain.gain.exponentialRampToValueAtTime(Math.max(0.001, heelNoisePeak * 0.25), patTime);
+    noiseGain.gain.linearRampToValueAtTime(patNoisePeak, patTime + 0.003);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0006, patTime + tailDuration);
+
+    noise.connect(bandpass);
+    bandpass.connect(lowpass);
+    lowpass.connect(noiseGain);
+    noiseGain.connect(out);
+
+    noise.onended = () => {
+      noise.disconnect();
+      bandpass.disconnect();
+      lowpass.disconnect();
+      noiseGain.disconnect();
+    };
+
+    const maxOffset = Math.max(0, noiseBuffer.duration - 0.1);
+    const offset = Math.random() * maxOffset;
+    noise.start(startTime, offset, 0.095);
   }
 
   /** Resolves only when playback really starts; stale and rejected requests resolve false. */
