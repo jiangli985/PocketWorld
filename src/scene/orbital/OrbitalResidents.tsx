@@ -515,7 +515,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     if (p.sceneId === 'habitat') candidates.push({ id: 'bed', point: [-1.48, 0.95], distance: 1.0 });
     if (p.drawerEnabled && s.posture === 'standing' && canReachDrawer(root.position, drawerOpen)) candidates.push({ id: 'desk-drawer', point: [0.35, drawerOpen ? -0.935 : -1.575], distance: 1.2 });
     const nearby = p.enabled && !drawerTask.current ? candidates.filter(item => Math.hypot(root.position.x - item.point[0], root.position.z - item.point[1]) < item.distance).sort((a, b) => Math.hypot(root.position.x - a.point[0], root.position.z - a.point[1]) - Math.hypot(root.position.x - b.point[0], root.position.z - b.point[1]))[0]?.id ?? '' : '';
-    if (nearby !== s.nearby) { s.nearby = nearby; p.onHover(nearby || null, nearby ? `E · ${nearby === 'pet' ? '摸摸团子' : nearby === 'bed' ? '躺下休息' : nearby === 'desk-drawer' ? (drawerOpen ? '推回抽屉' : '后退拉开抽屉') : '坐下'}` : undefined); }
+    if (!drawerTask.current && nearby !== s.nearby) { s.nearby = nearby; p.onHover(nearby || null, nearby ? `E · ${nearby === 'pet' ? '摸摸团子' : nearby === 'bed' ? '躺下休息' : nearby === 'desk-drawer' ? (drawerOpen ? '推回抽屉' : '后退拉开抽屉') : '坐下'}` : undefined); }
 
     const cat = pet.current;
     cat.time += dt;
