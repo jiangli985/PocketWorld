@@ -381,7 +381,7 @@ export function createMonitorScreenTexture(): THREE.CanvasTexture {
   ctx.fillRect(42, 42, 54, 54);
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 14px sans-serif';
-  ctx.fillText('MARIO', 45, 114);
+  ctx.fillText('奶娃滑雪大冒险', 42, 114);
 
   ctx.fillStyle = '#38bdf8';
   ctx.fillRect(42, 134, 54, 54);
