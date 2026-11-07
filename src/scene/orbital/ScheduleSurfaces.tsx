@@ -3,7 +3,7 @@ import { Html } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import type { WorldSceneProps } from '../../types/world';
 import { useSchedule } from './ScheduleContext';
-import { discardSchedulePage, postSchedulePage, schedulePageError, type SchedulePage } from './schedule';
+import { discardSchedulePage, MAX_POSTED_SCHEDULES, postSchedulePage, schedulePageError, SCHEDULE_FULL_MESSAGE, type SchedulePage } from './schedule';
 import { BOOK_POSITION, FloorPaperBall, FlyingPaper, GLASS_POSITION, PostedPaper, type PaperFlight } from './SchedulePaper';
 import './schedule.css';
 
@@ -21,6 +21,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
   const focused = props.visible && (bookView || glassView);
   const selectedIndex = Math.max(0, state.posted.findIndex(page => page.id === selectedId));
   const selected = state.posted[selectedIndex];
+  const glassFull = state.posted.length >= MAX_POSTED_SCHEDULES;
   const settled = ['active', 'error', 'idle'].includes(props.transition.phase);
   const switchView = () => {
     if (busy.current || !settled) return;
@@ -53,6 +54,11 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
   };
   const post = () => {
     if (busy.current || !settled) return;
+    if (glassFull) {
+      setMessage('玻璃贴满了，先移除一张吧。');
+      props.onFeatureError(SCHEDULE_FULL_MESSAGE);
+      return;
+    }
     const invalid = schedulePageError(state.current);
     if (invalid) { setMessage(invalid); return; }
     const page = state.current;
@@ -95,7 +101,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
               <label className="schedule-time"><span>时间</span><input type="time" aria-label={`第${index + 1}项时间`} value={entry.time} onChange={e => update(index, 'time', e.target.value)} onFocus={() => props.onGesture(true)} onBlur={() => props.onGesture(false)} /></label></div>
             <label className="schedule-content"><span>内容</span><textarea aria-label={`第${index + 1}项内容`} maxLength={600} rows={2} placeholder="写下细节，给自己一个小提醒……" value={entry.content ?? ''} onChange={e => update(index, 'content', e.target.value)} onFocus={() => props.onGesture(true)} onBlur={() => props.onGesture(false)} /></label>
           </fieldset>)}</div>
-          {deciding ? <div className="schedule-decision"><p>把这一页贴到玻璃上吗？</p><div><button onClick={() => { setDeciding(false); setMessage('已留在当前页，随时接着写。'); }}>先不贴，留在本页</button><button className="schedule-primary" disabled={blocked} onClick={post}>贴到玻璃上</button></div></div>
+          {deciding ? <div className="schedule-decision"><p>{glassFull ? SCHEDULE_FULL_MESSAGE : '把这一页贴到玻璃上吗？'}</p><div><button onClick={() => { setDeciding(false); setMessage('已留在当前页，随时接着写。'); }}>先不贴，留在本页</button><button className="schedule-primary" disabled={blocked} onClick={post}>贴到玻璃上</button></div></div>
             : <div className="schedule-actions"><span>第 {state.current.number} 页{state.queued.length > 0 ? ` · 还有 ${state.queued.length} 页旧安排` : ''}</span><button className="schedule-primary" disabled={blocked} onClick={() => {
               const invalid = schedulePageError(state.current);
               if (invalid) setMessage(invalid); else { setMessage(''); setDeciding(true); }
@@ -104,7 +110,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
           <div className="schedule-posted-tasks">{selected.entries.map((entry, index) => <section key={entry.id}><div><span>任务 {index + 1}</span><time>{entry.time || '留一点空白'}</time></div><h3>{entry.title || '这一项，留给之后的自己'}</h3><p>{entry.content || '没有补充内容'}</p></section>)}</div>
           <div className="schedule-actions"><nav aria-label="玻璃日程翻页"><button disabled={blocked || selectedIndex === 0} onClick={() => setSelectedId(state.posted[selectedIndex - 1].id)} aria-label="上一张安排">上一张</button><span>{selectedIndex + 1} / {state.posted.length}</span><button disabled={blocked || selectedIndex >= state.posted.length - 1} onClick={() => setSelectedId(state.posted[selectedIndex + 1].id)} aria-label="下一张安排">下一张</button></nav><button className="schedule-discard" disabled={blocked} onClick={discard}>揉掉这张</button></div>
         </> : <div className="schedule-empty"><p>这里还没有贴上安排。</p><p>回到书里写两件想做的事，<br />把它们留在抬眼就能看到的地方。</p><button onClick={switchView}>回到日程书</button></div>}
-        <footer><span role="status" aria-live="polite">{message || status}</span><button disabled={!!flight || !settled} onClick={switchView}>{glassView ? '回到书本' : `看玻璃${state.posted.length ? ` · ${state.posted.length} 张` : ''}`} <kbd>V</kbd></button></footer>
+        <footer><span role="status" aria-live="polite">{message || status}</span><button disabled={!!flight || !settled} onClick={switchView}>{glassView ? '回到书本' : `看玻璃 · ${state.posted.length}/${MAX_POSTED_SCHEDULES}`} <kbd>V</kbd></button></footer>
         {ready && error && <p className="schedule-error" role="alert">{error}{props.adapters?.schedule && <button onClick={retry}>重试同步</button>}</p>}
       </article>
     </Html>}

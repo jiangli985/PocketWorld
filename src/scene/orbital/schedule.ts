@@ -1,6 +1,8 @@
 import type { ScheduleEntry } from '../../types/world';
 
 export const SCHEDULE_KEY = 'pocketworld:schedule:notebook:v1';
+export const MAX_POSTED_SCHEDULES = 5;
+export const SCHEDULE_FULL_MESSAGE = '主角：“玻璃已经贴满 5 张啦，先拿掉一张，再贴新的吧。”';
 export interface SchedulePage {
   id: string;
   number: number;
@@ -56,7 +58,7 @@ export function schedulePageError(page: SchedulePage): string | null {
   return null;
 }
 export function postSchedulePage(state: ScheduleNotebook): ScheduleNotebook {
-  if (schedulePageError(state.current)) return state;
+  if (state.posted.length >= MAX_POSTED_SCHEDULES || schedulePageError(state.current)) return state;
   const nextNumber = Math.max(state.current.number, ...state.posted.map(p => p.number), ...state.queued.map(p => p.number)) + 1;
   return { ...state, current: state.queued[0] ?? createSchedulePage(nextNumber), posted: [...state.posted, state.current], queued: state.queued.slice(1) };
 }

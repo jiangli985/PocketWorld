@@ -9,7 +9,7 @@ const source = fs.readFileSync(new URL('./schedule.ts', import.meta.url), 'utf8'
 const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const context = { exports: {}, crypto: webcrypto };
 vm.runInNewContext(output, context);
-const { migrateSchedule, postSchedulePage, discardSchedulePage, schedulePageError, isScheduleNotebook, flattenSchedule } = context.exports;
+const { migrateSchedule, postSchedulePage, discardSchedulePage, schedulePageError, isScheduleNotebook, flattenSchedule, MAX_POSTED_SCHEDULES } = context.exports;
 const entry = (id, time = '09:00') => ({ id, title: `任务 ${id}`, time, completed: false, content: `正文 ${id}` });
 
 test('legacy three-task schedules retain every task and completion across two sheets', () => {
@@ -24,18 +24,36 @@ test('legacy three-task schedules retain every task and completion across two sh
   assert.equal(legacy.length, 3);
 });
 
-test('posting keeps the written sheet immutable and supports more than three tasks', () => {
+test('five posted sheets fill the glass and rejection preserves the current draft', () => {
   let state = migrateSchedule([entry('a'), entry('b')]);
   const original = JSON.stringify(state.current);
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < MAX_POSTED_SCHEDULES; i++) {
     state.current.entries[0] = entry(`page-${i}`);
     state = postSchedulePage(state);
   }
-  assert.equal(state.posted.length, 8);
-  assert.equal(state.current.number, 9);
+  assert.equal(state.posted.length, 5);
+  assert.equal(state.current.number, 6);
   assert.equal(state.current.entries[0].title, '');
   assert.equal(JSON.parse(original).entries[1].id, state.posted[0].entries[1].id);
-  assert.equal(new Set(state.posted.map(p => p.id)).size, 8);
+  assert.equal(new Set(state.posted.map(p => p.id)).size, 5);
+  state.current.entries[0] = entry('sixth');
+  const before = JSON.stringify(state);
+  assert.equal(postSchedulePage(state), state);
+  assert.equal(JSON.stringify(state), before);
+  state = discardSchedulePage(state, state.posted[2].id);
+  state = postSchedulePage(state);
+  assert.equal(state.posted.length, 5);
+  assert.equal(state.posted[4].entries[0].title, '任务 sixth');
+  assert.equal(state.current.number, 7);
+});
+
+test('older over-capacity saves remain readable and cannot receive more sheets', () => {
+  const state = migrateSchedule([entry('current')]);
+  state.posted = Array.from({ length: 10 }, (_, i) => migrateSchedule([entry(`old-${i}`)]).current);
+  const before = JSON.stringify(state);
+  assert.equal(isScheduleNotebook(JSON.parse(before)), true);
+  assert.equal(postSchedulePage(state), state);
+  assert.equal(JSON.stringify(state), before);
 });
 
 test('empty and incomplete sheets cannot be posted; one complete task is enough', () => {
