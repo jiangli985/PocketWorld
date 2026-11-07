@@ -162,6 +162,25 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
       setPaused(true);
     } else latest.current.onReturn();
   }, []);
+  const leaveComputer = useCallback(() => {
+    if (transferRef.current?.disc) roomAudio.cancelPreparedMusic();
+    transferRef.current = null;
+    setTransfer(null);
+    latest.current.onGameChange(null);
+    latest.current.onReturn();
+  }, []);
+  useEffect(() => {
+    if (!computerFocused || (activeComponent && gameActive)) return;
+    const key = (event: KeyboardEvent) => {
+      if (event.code !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      (document.activeElement as HTMLElement)?.blur?.();
+      leaveComputer();
+    };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
+  }, [computerFocused, activeComponent, gameActive, leaveComputer]);
   const finishTransfer = (value: Transfer) => {
     if (transferRef.current?.key !== value.key) return;
     transferRef.current = null;
@@ -198,13 +217,8 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
       begin({ game, from: cartridgePosition(game), to: SLOT });
     } else if (id === 'game-slot') eject();
     else if (id === 'game-pause') setPaused(value => !value);
-    else if (id === 'computer-exit') {
-      if (transferRef.current?.disc) roomAudio.cancelPreparedMusic();
-      transferRef.current = null;
-      setTransfer(null);
-      props.onGameChange(null);
-      props.onReturn();
-    } else props.onAction(action);
+    else if (id === 'computer-exit') leaveComputer();
+    else props.onAction(action);
   };
   const world = { ...props, onAction: mediaAction };
   const updateScore = (current: number, high: number) => {
