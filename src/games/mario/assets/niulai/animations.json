@@ -1,0 +1,29 @@
+{
+  "frameWidth": 320,
+  "frameHeight": 360,
+  "sourceCommit": "0f1ffcd0c79ea313812bd2bd9591827f95994ada",
+  "actions": {
+    "slide": {
+      "partnerRole": "penguin",
+      "animation": "niulai-slide.svg",
+      "sheet": "niulai-slide-sheet.svg",
+      "frameCount": 8,
+      "fps": 8,
+      "groundAnchor": [
+        160,
+        340
+      ]
+    },
+    "charge": {
+      "partnerRole": "yeti",
+      "animation": "niulai-charge.svg",
+      "sheet": "niulai-charge-sheet.svg",
+      "frameCount": 8,
+      "fps": 12.5,
+      "groundAnchor": [
+        160,
+        340
+      ]
+    }
+  }
+}
