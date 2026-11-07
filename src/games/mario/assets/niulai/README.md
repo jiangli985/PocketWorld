@@ -1,6 +1,6 @@
 # 黄色牛来伙伴素材
 
-按用户确认的黄色牛来形象，将上游站立与眨眼 PNG 描摹为纯路径 SVG，并制作两种伙伴动作。
+依据用户提供的「牛来原皮」参考图重新绘制黄色牛来，保留橙黄色身体、外张耳朵、宽鼻吻、细眉眼和浅色蹄子，并制作两种伙伴动作。
 
 | 动作 | 独立动画 | Canvas 序列图 | 伙伴用途 |
 | --- | --- | --- | --- |
@@ -19,21 +19,22 @@ Canvas 2D 接入时使用两个 sheet 文件和 animations.json。每张序列�
 
 独立动画采用 SMIL 的姿态变化与眨眼时钟，序列图采用睁眼表情和八帧姿态变化，方便游戏独立控制表情节奏。
 
-## 来源与改制
+## 参考与绘制
 
-上游仓库为 whitefirer/dsh-niulai-pet，本次取用提交为 0f1ffcd0c79ea313812bd2bd9591827f95994ada。上游许可证声明保存在本目录 LICENSE.txt。原素材见下方链接。
+本版按用户提供的参考图重新设计贝塞尔轮廓，使用渐变表现额头、鼻吻、肚子和四肢的体积。头部、眼睛、躯干、手臂与腿部分层定义，滑行与冲撞分别组合姿态。
 
-- https://github.com/whitefirer/dsh-niulai-pet/blob/0f1ffcd0c79ea313812bd2bd9591827f95994ada/assets/niulai/skins/default/pet.png
-- https://github.com/whitefirer/dsh-niulai-pet/blob/0f1ffcd0c79ea313812bd2bd9591827f95994ada/assets/niulai/skins/default/pet_blink.png
+冲撞采用站立前倾、交替迈步、手臂摆动与身体起伏。滑行采用身体横卧、抬头、伸臂与蹄部摆动。独立动画另有眨眼。
 
-原图 Git blob SHA-1 分别为 70b0e031dff3149e49dcaa1e2f651e62c718ef01 和 b4975684c04d787b670b0d96b3b290e9a035ba33。
+本版采用适合游戏小尺寸显示的简化矢量风格。参考图中的立体光照、材质与毛发细节经过概括。
 
-使用 VTracer 0.6.15 进行彩色分层贝塞尔描摹，参数为 color_precision 5、layer_difference 24、filter_speckle 5、corner_threshold 60、length_threshold 4、max_iterations 10、splice_threshold 45、path_precision 2。描摹会简化原图毛发和明暗层次。新动画通过分区裁切、头部姿态、蹄部摆动、身体起伏和眨眼组合生成。
+此前参考过 whitefirer/dsh-niulai-pet 的黄色牛来皮肤，随附的上游 MIT 声明保存在 LICENSE.txt。该仓库见下方链接。
 
-SVG 背景透明，图形自包含，内部 use 元素只引用当前文件中的路径定义。四份 SVG 合计约 380 KiB，可供游戏模块按需加载。
+- https://github.com/whitefirer/dsh-niulai-pet
+
+SVG 背景透明，图形自包含，内部 use 元素只引用当前文件中的部件定义。四份 SVG 合计约 57 KiB，可供游戏模块按需加载。
 
 ## 已验证范围
 
-Chrome 中独立 SVG 在不同时间点的截图有变化。两张序列图均可由 Canvas 2D 解码绘制，各自 8 帧均有图像且像素结果互异。已检查 XML 引用完整性、透明背景与文件体积。
+Chrome 中独立 SVG 在不同时间点的截图有变化。两张序列图均可由 Canvas 2D 解码绘制，各自 8 帧均有图像且像素结果互异。已检查 XML 引用完整性、透明背景、角色边界和文件体积。
 
 当前交付阶段为伙伴动画素材准备，游戏中的骑乘、冲撞、静音、暂停及反复进出待实现后联调。
