@@ -33,6 +33,12 @@ function frameShape(width: number, height: number, apertureWidth: number, apertu
   return shape;
 }
 
+function doorwayShape(width: number, height: number, doorWidth: number, doorHeight: number, doorOffset: number, radius: number): THREE.Shape {
+  const shape = roundedPath(width, height, radius, 0, height / 2);
+  shape.holes.push(roundedPath(doorWidth, doorHeight - 0.06, 0.06, doorOffset, 0.06 + (doorHeight - 0.06) / 2));
+  return shape;
+}
+
 function windowRing(width: number, height: number, border: number, radius: number): THREE.Shape {
   const ring = roundedPath(width, height, radius);
   ring.holes.push(roundedPath(width - border * 2, height - border * 2, radius - border));
@@ -43,7 +49,7 @@ const NO_RAYCAST = () => undefined;
 
 const EXTRUDE = { depth: 0.2, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.045, bevelThickness: 0.035, curveSegments: 16 };
 
-/** Architecture only. Front and right remain open for the cutaway camera. */
+/** Architecture only. The front stays open for the cutaway camera; the right wall holds the hatch. */
 export const HabitatShell: React.FC<HabitatShellProps> = ({ variant, onFloorClick }) => {
   const root = useRef<THREE.Group>(null);
   const shapes = useMemo(() => ({
@@ -52,6 +58,7 @@ export const HabitatShell: React.FC<HabitatShellProps> = ({ variant, onFloorClic
     edge: windowRing(8.75, 7.15, 0.12, 0.7),
     back: frameShape(8.7, 3.5, 7.7, 2.3, 0.58),
     side: frameShape(4.5, 3.5, 3.48, 2.3, 0.58),
+    hatchWall: doorwayShape(3.3, 3.5, 1.26, 2.38, 0.33, 0.58),
     backCollar: windowRing(8.02, 2.64, 0.2, 0.55),
     backSeal: windowRing(7.72, 2.34, 0.044, 0.4),
     sideCollar: windowRing(3.8, 2.64, 0.2, 0.55),
@@ -177,6 +184,10 @@ export const HabitatShell: React.FC<HabitatShellProps> = ({ variant, onFloorClic
           <meshStandardMaterial color="#48545b" metalness={0.8} roughness={0.32} />
         </mesh>
       ))}
+      <mesh position={[4.38, 0, -1.93]} rotation={[0, -Math.PI / 2, 0]} castShadow receiveShadow>
+        <extrudeGeometry args={[shapes.hatchWall, EXTRUDE]} />
+        <meshStandardMaterial color={cream} roughness={0.44} />
+      </mesh>
       <SoftBox dims={[8.32, 0.17, 0.13]} position={[0, -0.27, 3.53]} radius={0.045} color={cream} roughness={0.38} metalness={0.12} />
       <SoftBox dims={[0.13, 0.17, 6.48]} position={[4.33, -0.27, 0]} radius={0.045} color={cream} roughness={0.38} metalness={0.12} />
       {[-3.45, -2.3, -1.15, 0, 1.15, 2.3, 3.45].map((x) => (
