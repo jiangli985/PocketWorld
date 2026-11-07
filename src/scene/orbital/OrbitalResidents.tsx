@@ -10,7 +10,14 @@ import { canReachDrawer, drawerObstacle, DRAWER_CLEAR_Z, DRAWER_TRAVEL, type Dra
 type Point = [number, number];
 type Box = [number, number, number, number];
 type Posture = 'standing' | 'chair' | 'bed';
-type ResidentsProps = WorldModelProps & { walkTarget: [number, number, number] | null; onArrive: () => void; enabled: boolean; drawerEnabled: boolean; drawerInteraction: React.MutableRefObject<DrawerInteraction | null>; onDrawerAction: (action: WorldAction) => void };
+type ResidentsProps = WorldModelProps & {
+  walkTarget: [number, number, number] | null;
+  onArrive: () => void;
+  enabled: boolean;
+  drawerEnabled: boolean;
+  drawerInteraction: React.MutableRefObject<DrawerInteraction | null>;
+  onDrawerAction: (action: WorldAction) => void;
+};
 const RADIUS = 0.23;
 const CAT: Point = [-0.95, 1.95];
 const clamp = THREE.MathUtils.clamp;
@@ -29,7 +36,12 @@ function layout(observatory: boolean) {
   const grow = (by: number) => furniture.map(([a, b, c, d]) => [a - by, b + by, c - by, d + by] as Box);
   const chairRadius = observatory ? 0.55 : 0.5;
   // The chair entry is stored in chair-local space so it follows the chair after pushes and scoots.
-  return { seat: observatory ? 0.755 : 0.72, chairRadius, entry: (observatory ? [0.37, -0.83] : [0.76, 0.47]) as Point, boxes: grow(RADIUS), chairBoxes: grow(chairRadius), baseBoxes: grow(RADIUS), baseChairBoxes: grow(chairRadius) };
+  const boxes = grow(RADIUS), chairBoxes = grow(chairRadius);
+  return { seat: observatory ? 0.755 : 0.72, chairRadius, entry: (observatory ? [0.37, -0.83] : [0.76, 0.47]) as Point,
+    boxes, chairBoxes, baseBoxes: boxes, baseChairBoxes: chairBoxes,
+    openBoxes: [...boxes, drawerObstacle(DRAWER_TRAVEL, RADIUS + 0.08)],
+    openChairBoxes: [...chairBoxes, drawerObstacle(DRAWER_TRAVEL, chairRadius + 0.08)] };
+
 }
 type Room = ReturnType<typeof layout>;
 const seatYaw = (pose: ChairPose) => pose.yaw + SEAT_SWIVEL + Math.PI;
@@ -241,7 +253,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       const swipe = held.y - event.clientY > 32 && Math.abs(held.x - event.clientX) < 95;
       releaseTouch();
       // onGesture temporarily disables residents while this component owns the pointer.
-      if (swipe && (!current.current.focusedObject || current.current.focusedObject === 'bed')) {
+      if (swipe && !drawerTask.current && (!current.current.focusedObject || current.current.focusedObject === 'bed')) {
         if (state.current.wanted !== 'standing' || state.current.posture !== 'standing') stand();
         if (state.current.lift === 0) jump.current = true;
       }
@@ -282,8 +294,8 @@ export function OrbitalResidents(props: ResidentsProps) {
     const drawerOpen = !!p.objects['desk-drawer']?.open;
     drawerExtension.current = p.reducedMotion ? (drawerOpen ? DRAWER_TRAVEL : 0) : THREE.MathUtils.damp(drawerExtension.current, drawerOpen ? DRAWER_TRAVEL : 0, 8, dt);
     const blocking = drawerOpen || drawerExtension.current > 0.001;
-    room.boxes = blocking ? [...room.baseBoxes, drawerObstacle(DRAWER_TRAVEL, RADIUS + 0.08)] : room.baseBoxes;
-    room.chairBoxes = blocking ? [...room.baseChairBoxes, drawerObstacle(DRAWER_TRAVEL, room.chairRadius + 0.08)] : room.baseChairBoxes;
+    room.boxes = blocking ? room.openBoxes : room.baseBoxes;
+    room.chairBoxes = blocking ? room.openChairBoxes : room.baseChairBoxes;
     if (drawerTask.current && !p.drawerEnabled) {
       drawerTask.current = null;
       if (p.drawerInteraction.current) p.drawerInteraction.current.busy = false;
@@ -484,7 +496,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   });
 
   const characterDown = (event: ThreeEvent<PointerEvent>) => {
-    if (!props.enabled || event.pointerType !== 'touch' || touch.current) return;
+    if (!props.enabled || drawerTask.current || event.pointerType !== 'touch' || touch.current) return;
     event.stopPropagation();
     touch.current = { id: event.pointerId, x: event.clientX, y: event.clientY, target: event.target };
     try { (event.target as Element).setPointerCapture?.(event.pointerId); } catch { /* Optional on touch-only browsers. */ }
