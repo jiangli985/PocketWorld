@@ -1,30 +1,10 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import React from 'react';
 import { CLOSED_OBJECT, type WorldModelProps } from '../../types/world';
 import { ObjectHandle } from './ObjectHandle';
-import { SoftBox, Tube, surface } from './Primitives';
+import { SoftBox, Tube } from './Primitives';
+import { ReactiveKeyboard } from './ReactiveKeyboard';
 import { FurnitureCylinder as Cylinder, FurnitureMotion, FURNITURE as C } from './FurnitureParts';
 import { FurnitureBook } from './FurnitureBooks';
-
-function KeyboardKeys() {
-  const keys = useRef<THREE.InstancedMesh>(null);
-  const geometry = useMemo(() => new RoundedBoxGeometry(0.045, 0.016, 0.044, 2, 0.006), []);
-  useEffect(() => () => geometry.dispose(), [geometry]);
-  useLayoutEffect(() => {
-    if (!keys.current) return;
-    const matrix = new THREE.Matrix4();
-    for (let row = 0; row < 3; row++) for (let col = 0; col < 11; col++) {
-      const index = row * 11 + col;
-      keys.current.setMatrixAt(index, matrix.makeTranslation(-0.29 + col * 0.058, 0.035, -0.075 + row * 0.062));
-      keys.current.setColorAt(index, new THREE.Color(col === 10 ? '#c29866' : '#ece5cd'));
-    }
-    keys.current.instanceMatrix.needsUpdate = true;
-    if (keys.current.instanceColor) keys.current.instanceColor.needsUpdate = true;
-    keys.current.computeBoundingSphere();
-  }, []);
-  return <instancedMesh ref={keys} args={[geometry, surface('#ffffff'), 33]} receiveShadow dispose={null} />;
-}
 
 function FurnitureComputer({ world }: { world: WorldModelProps }) {
   const state = world.objects.computer ?? CLOSED_OBJECT;
@@ -38,10 +18,9 @@ function FurnitureComputer({ world }: { world: WorldModelProps }) {
     </SoftBox>
     <Cylinder radius={0.015} height={0.009} position={[0.46, 0.15, 0.216]} rotation={[Math.PI / 2, 0, 0]} color="#78a884" />
     {Array.from({ length: 8 }, (_, i) => <SoftBox key={i} dims={[0.003, 0.012, 0.22]} position={[0.576, 0.39 + i * 0.035, -0.11]} color="#a9aa97" radius={0.001} />)}
-    <group position={[0, 0.045, 0.68]} rotation={[0.06, 0, 0]}>
-      <SoftBox dims={[0.72, 0.055, 0.25]} color="#d1cdb5" radius={0.018} />
-      <KeyboardKeys />
-      <SoftBox dims={[0.3, 0.014, 0.035]} position={[0, 0.035, 0.105]} color={C.cream} radius={0.004} />
+    <group position={[0, 0.045, 0.62]} rotation={[0.06, 0, 0]}>
+      <SoftBox dims={[0.77, 0.055, 0.36]} color="#d1cdb5" radius={0.018} />
+      <ReactiveKeyboard reducedMotion={world.reducedMotion} />
     </group>
     <Tube points={[[0.2, 0.03, 0.59], [0.36, 0.025, 0.47], [0.33, 0.025, 0.25], [0.1, 0.08, -0.24]]} radius={0.008} color={C.ink} />
   </ObjectHandle>;

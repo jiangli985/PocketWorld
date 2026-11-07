@@ -8,17 +8,18 @@ import type { WorldAction, WorldSceneProps } from '../../types/world';
 import { roomAudio } from '../audioEngine';
 import { ObjectHandle } from './ObjectHandle';
 import { SoftBox } from './Primitives';
+import { ComputerScreen } from './ComputerScreen';
+import { CartridgePickup } from './CartridgePickup';
+import { CARTRIDGE_SLOT as SLOT, cartridgePosition, cartridgeTransferPoint } from './cartridge-motion';
 
 type Point = [number, number, number];
 const PLAYER: Point = [-0.35, 1.2, -2.25];
 const PLATTER: Point = [-0.48, 1.295, -2.25];
-const SLOT: Point = [2.26, 1.27, -2.05];
 const gameModules = import.meta.glob<{ default: React.ComponentType<GameCartridgeProps> }>('../../games/*/index.tsx');
-const gameNames: Record<GameId, string> = { mario: '蘑菇冒险', shooter: '弹球失控' };
-const gameColors: Record<GameId, string> = { mario: '#cb795a', shooter: '#759dad' };
+const gameNames: Record<GameId, string> = { mario: '蘑菇冒险', shooter: '团团魔法录' };
+const gameColors: Record<GameId, string> = { mario: '#cb795a', shooter: '#8b72b3' };
 // Six accessible records per shelf; the physical end tabs turn through the collection.
 const discPosition = (index: number): Point => [-0.74 + (index % 6) * 0.2, 1.37, -2.86];
-const cartridgePosition = (game: GameId): Point => [game === 'mario' ? 0.67 : 0.94, 1.33, -2.56];
 
 function Label({ children, position, width = 180 }: { children: React.ReactNode; position: Point; width?: number }) {
   return <Html center position={position} distanceFactor={4} style={{ pointerEvents: 'none', width, textAlign: 'center', color: '#f3e6c9', font: '12px monospace', textShadow: '0 1px 3px #242723', userSelect: 'none', overflowWrap: 'anywhere' }}><span>{children}</span></Html>;
@@ -42,7 +43,7 @@ function Cartridge({ game }: { game: GameId }) {
   </group>;
 }
 
-interface Transfer { key: number; from: Point; to: Point; disc?: MusicDisc; game?: GameId; eject?: boolean }
+interface Transfer { key: number; from: Point; to: Point; disc?: MusicDisc; game?: GameId; eject?: boolean; returnOnly?: boolean }
 function TransferObject({ transfer, reduced, onDone }: { transfer: Transfer; reduced: boolean; onDone: () => void }) {
   const group = useRef<THREE.Group>(null);
   const elapsed = useRef(0);
@@ -53,8 +54,11 @@ function TransferObject({ transfer, reduced, onDone }: { transfer: Transfer; red
     elapsed.current += delta;
     const t = Math.min(1, elapsed.current / (reduced ? 0.08 : 0.8));
     const eased = t * t * (3 - 2 * t);
-    group.current.position.set(...transfer.from).lerp(destination.current, eased);
-    group.current.position.y += Math.sin(t * Math.PI) * (reduced ? 0 : 0.42);
+    if (transfer.game) group.current.position.set(...cartridgeTransferPoint(transfer.from, transfer.to, t));
+    else {
+      group.current.position.set(...transfer.from).lerp(destination.current, eased);
+      group.current.position.y += Math.sin(t * Math.PI) * (reduced ? 0 : 0.42);
+    }
     if (transfer.disc) group.current.rotation.x = -Math.PI / 2 * eased;
     if (t === 1) { finished.current = true; onDone(); }
   });
@@ -67,7 +71,7 @@ class ScreenBoundary extends React.Component<{ children: React.ReactNode; onErro
   componentDidCatch() { this.props.onError(); }
   render() { return this.state.failed ? <div style={screenMessage}>卡带暂时无法运行，请拔出后重试。</div> : this.props.children; }
 }
-const screenMessage: React.CSSProperties = { width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, padding: 36, boxSizing: 'border-box', textAlign: 'center', pointerEvents: 'none' };
+const screenMessage: React.CSSProperties = { width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '6%', boxSizing: 'border-box', textAlign: 'center', pointerEvents: 'none' };
 
 /** Mount inside each scene's local-origin group. Playback belongs to the shared audio engine. */
 export const MediaObjects: React.FC<WorldSceneProps> = props => {
@@ -77,6 +81,9 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
   const serial = useRef(0);
   const transferRef = useRef<Transfer | null>(null);
   const [transfer, setTransfer] = useState<Transfer | null>(null);
+  const pickupRef = useRef<GameId | null>(null);
+  const [pickup, setPickup] = useState<GameId | null>(null);
+  const [nearSlot, setNearSlot] = useState(false);
   const [rackPage, setRackPage] = useState(0);
   const pageCount = Math.max(1, Math.ceil(props.discs.length / 6));
   const visiblePage = Math.min(rackPage, pageCount - 1);
@@ -87,7 +94,8 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
   const [score, setScore] = useState({ current: 0, high: 0 });
   const computerFocused = props.focusedObject === 'computer';
   const sceneVisible = props.transition.toScene === props.sceneId && props.transition.phase !== 'leaving' && props.transition.phase !== 'returning' && !(props.transition.phase === 'entering' && props.transition.fromScene !== props.transition.toScene);
-  const gameActive = computerFocused && sceneVisible && !paused && !hidden && !transfer?.game && !loadError;
+  const displayVisible = computerFocused && sceneVisible && ['active', 'error'].includes(props.transition.phase);
+  const gameActive = displayVisible && !paused && !hidden && !transfer?.game && !pickup && !loadError;
   const activeComponent = loaded?.game === props.activeGame ? loaded.Component : null;
 
   useEffect(() => {
@@ -117,11 +125,9 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
   }, [props.focusedObject]);
   useEffect(() => {
     const game = props.activeGame;
-    setPaused(false);
-    setLoaded(null);
-    setLoadError(null);
-    setScore({ current: 0, high: 0 });
-    if (!game || !computerFocused || !sceneVisible) return;
+    if (!game) { setLoaded(null); setLoadError(null); setScore({ current: 0, high: 0 }); setPaused(false); return; }
+    if (loaded?.game === game || !computerFocused || !sceneVisible) return;
+    setPaused(false); setLoadError(null); setLoaded(null); setScore({ current: 0, high: 0 });
     let cancelled = false;
     const fail = () => {
       if (cancelled) return;
@@ -137,7 +143,7 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
       setLoaded({ game, Component: module.default });
     }, fail);
     return () => { cancelled = true; };
-  }, [props.activeGame, computerFocused, sceneVisible]);
+  }, [props.activeGame, computerFocused, sceneVisible, loaded]);
 
   useFrame((_, delta) => {
     if (spin.current && props.isMusicPlaying && !props.reducedMotion) spin.current.rotation.z -= Math.min(delta, 0.1) * 1.2;
@@ -154,7 +160,8 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
     if (world.focusedObject !== id) world.onAction({ sceneId: world.sceneId, objectId: id, kind: 'inspect' });
   };
   const eject = useCallback(() => {
-    const game = transferRef.current?.game ?? latest.current.activeGame;
+    if (transferRef.current || pickupRef.current) return;
+    const game = latest.current.activeGame;
     if (game) {
       const value: Transfer = { key: ++serial.current, game, eject: true, from: SLOT, to: cartridgePosition(game) };
       transferRef.current = value;
@@ -167,7 +174,7 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
     transferRef.current = null;
     setTransfer(null);
     if (value.disc) latest.current.onSelectDisc(value.disc);
-    if (value.game) latest.current.onGameChange(value.eject ? null : value.game);
+    if (value.game && !value.returnOnly) latest.current.onGameChange(value.eject ? null : value.game);
   };
   const mediaAction = (action: WorldAction) => {
     const id = action.objectId;
@@ -192,10 +199,7 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
       // Import is invoked only by the synchronous click below, never a transition callback.
     } else if (id === 'music-mute' || id === 'game-mute') props.onToggleMute();
     else if (id.startsWith('game-cartridge-')) {
-      const game = action.payload?.itemId as GameId;
-      if (game !== 'mario' && game !== 'shooter') return;
       focus('computer');
-      begin({ game, from: cartridgePosition(game), to: SLOT });
     } else if (id === 'game-slot') eject();
     else if (id === 'game-pause') setPaused(value => !value);
     else if (id === 'computer-exit') {
@@ -255,14 +259,26 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
     </group>
     {sceneVisible && props.focusedObject === 'music-player' && <Label position={[-0.35, 1.85, -2.25]} width={250}>{props.activeDisc.title} · {transfer?.disc ? '正在放入唱片' : props.isMusicPlaying ? '播放中' : '唱针已抬起'}<br />拿取唱片换曲 · 空白唱片导入音乐{pageCount > 1 ? ` · 唱片架 ${visiblePage + 1}/${pageCount}` : ''}</Label>}
 
-    {(['mario', 'shooter'] as const).map(game => <ObjectHandle key={game} id={`game-cartridge-${game}`} action="insert" hint={`拿取《${gameNames[game]}》卡带`} world={world} drag="y" payload={{ itemId: game }} position={cartridgePosition(game)}>
+    {(['mario', 'shooter'] as const).map(game => <CartridgePickup key={game} id={`game-cartridge-${game}`} world={world} position={cartridgePosition(game)}
+      enabled={sceneVisible && !props.activeGame && !transfer && ['idle', 'active', 'error'].includes(props.transition.phase)}
+      onGrab={() => {
+        if (pickupRef.current || transferRef.current || latest.current.activeGame) return false;
+        pickupRef.current = game; setPickup(game); setNearSlot(false); return true;
+      }} onNearSlot={setNearSlot} onInspect={() => focus('computer')}
+      onDrop={(from, insert) => {
+        pickupRef.current = null; setPickup(null); setNearSlot(false);
+        if (!sceneVisible) return;
+        if (insert) { focus('computer'); begin({ game, from, to: SLOT }); }
+        else if (from.some((value, axis) => value !== cartridgePosition(game)[axis])) begin({ game, from, to: cartridgePosition(game), returnOnly: true });
+      }}>
       {props.activeGame !== game && transfer?.game !== game && <Cartridge game={game} />}
-    </ObjectHandle>)}
+    </CartridgePickup>)}
     <ObjectHandle id="game-slot" action="eject" hint={props.activeGame || transfer?.game ? '拔出卡带，退出游戏' : '空卡槽 · 离开电脑'} world={world} drag="y" position={SLOT}>
       <SoftBox dims={[0.41, 0.13, 0.17]} position={[0, -0.08, 0]} color="#b6ac94" />
-      <SoftBox dims={[0.25, 0.012, 0.085]} position={[0, -0.008, 0]} color="#303d38" />
+      <SoftBox dims={[0.25, 0.012, 0.085]} position={[0, -0.008, 0]} color={pickup ? nearSlot ? '#a9dba3' : '#d7b46e' : '#303d38'} />
       {props.activeGame && !transfer?.game && <Cartridge game={props.activeGame} />}
     </ObjectHandle>
+    {pickup && <Label position={[SLOT[0], 1.84, SLOT[2]]} width={220}>{nearSlot ? '松手插入卡带' : '拖到此处卡槽 · 松手插入'}</Label>}
     <ObjectHandle id="game-pause" action="toggle" hint={paused ? '扳动拨杆，继续游戏' : '扳动拨杆，暂停游戏'} world={world} position={[2.57, 1.15, -2.05]}>
       <SoftBox dims={[0.1, 0.05, 0.1]} color="#485d54" />
       <SoftBox dims={[0.025, 0.095, 0.025]} position={[0, 0.04, 0]} rotation={[paused ? -0.4 : 0.4, 0, 0]} color="#cfb976" />
@@ -273,18 +289,20 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
     <ObjectHandle id="computer" action="inspect" hint="靠近屏幕，选择一张游戏卡带" world={world} position={[1.55, 1.68, -2.36]}>
       <mesh><planeGeometry args={[0.92, 0.69]} /><meshBasicMaterial color="#182e28" /></mesh>
     </ObjectHandle>
-    {sceneVisible && <Html transform position={[1.55, 1.68, -2.35]} distanceFactor={1} style={{ width: 368, height: 276, pointerEvents: computerFocused && activeComponent ? 'auto' : 'none', backfaceVisibility: 'hidden' }}>
-      <div aria-label="电脑游戏屏幕" onPointerDown={event => { if (activeComponent) event.stopPropagation(); }} style={{ width: 800, height: 600, transform: 'scale(.46)', transformOrigin: 'top left', overflow: 'hidden', borderRadius: 24, background: '#142d27', color: '#d8e6b9', fontFamily: 'monospace', fontSize: 27, position: 'relative', touchAction: activeComponent ? 'none' : 'auto' }}>
-        {computerFocused && props.activeGame && activeComponent ? <ScreenBoundary key={props.activeGame} onError={() => { setLoadError({ game: props.activeGame!, text: '卡带暂时无法运行，请拔出后重试。' }); props.onFeatureError('卡带暂时无法运行，请拔出后重试。'); }}>
+    {/* The DOM display must not paint over a physical cartridge moving in front of the CRT. */}
+    {(sceneVisible || activeComponent) && <ComputerScreen visible={displayVisible && !pickup && !transfer?.game} interactive={displayVisible && !!activeComponent}>
+      <div aria-label="电脑游戏屏幕" onPointerDown={event => { if (activeComponent) event.stopPropagation(); }} style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+
+        {props.activeGame && activeComponent ? <ScreenBoundary key={props.activeGame} onError={() => { setLoadError({ game: props.activeGame!, text: '卡带暂时无法运行，请拔出后重试。' }); props.onFeatureError('卡带暂时无法运行，请拔出后重试。'); }}>
           {React.createElement(activeComponent, { width: 800, height: 600, isActive: gameActive, isMuted: props.isMuted, onExit: eject, onScoreChange: updateScore, onGameOver: result => updateScore(result.score, result.highScore) })}
-          <div style={{ position: 'absolute', top: 10, left: 20, pointerEvents: 'none', fontSize: 18 }}>得分 {score.current} · 最高 {score.high}{paused ? ' · 已暂停' : ''}</div>
+          {props.activeGame !== 'shooter' && <div style={{ position: 'absolute', top: 10, left: 20, pointerEvents: 'none', fontSize: 18 }}>得分 {score.current} · 最高 {score.high}{paused ? ' · 已暂停' : ''}</div>}
         </ScreenBoundary> : <div style={screenMessage}>
-          <strong style={{ fontSize: 42, letterSpacing: 5 }}>POCKET PLAY</strong>
-          <span>{transfer?.game ? transfer.eject ? '正在拔出卡带' : '正在插入卡带' : props.activeGame ? loadError?.game === props.activeGame ? loadError.text : computerFocused ? '正在读取卡带…' : '游戏已暂停，靠近电脑继续' : '拿起一张卡带，开启冒险'}</span>
-          <span style={{ fontSize: 21, opacity: 0.7 }}>拔出卡带退出 · 拨杆暂停 · 音箱旋钮静音</span>
+          <strong style={{ fontSize: 24, letterSpacing: 3 }}>POCKET PLAY</strong>
+          <span>{transfer?.game ? transfer.returnOnly ? '卡带正在归位' : transfer.eject ? '正在拔出卡带' : '正在插入卡带' : props.activeGame ? loadError?.game === props.activeGame ? loadError.text : computerFocused ? '正在读取卡带…' : '游戏已暂停，靠近电脑继续' : '按住卡带，拖到右侧卡槽后松手'}</span>
+          <span style={{ fontSize: 14, color: '#c1cbb2' }}>拔出卡带退出 · 拨杆暂停 · 音箱旋钮静音</span>
         </div>}
       </div>
-    </Html>}
+    </ComputerScreen>}
     {transfer && <TransferObject key={transfer.key} transfer={transfer} reduced={props.reducedMotion} onDone={() => finishTransfer(transfer)} />}
   </group>;
 };

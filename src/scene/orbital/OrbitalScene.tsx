@@ -13,7 +13,7 @@ import { OrbitalResidents } from './OrbitalResidents';
 import { SoftBox } from './Primitives';
 
 const FOCUS: Record<string, { target: [number, number, number]; offset: [number, number, number] }> = {
-  computer: { target: [1.55, 1.68, -2.30], offset: [0, 0.25, 2.35] },
+  computer: { target: [1.45, 1.58, -2.30], offset: [0, 0.30, 3.5] },
   'music-player': { target: [-0.45, 1.2, -2.0], offset: [1.4, 2.5, 3.1] },
   journal: { target: [-0.48, 1.20, -1.94], offset: [0, 1.05, 0.78] },
   schedule: { target: [0.69, 1.20, -1.96], offset: [0, 1.05, 0.78] },
@@ -48,7 +48,7 @@ function CameraRig(props: OrbitalSceneProps) {
   }, [camera, size.width, size.height, homeDistance, homeDirection]);
   useEffect(() => {
     if (!controls.current || props.transition.phase === 'idle') return;
-    const view = `${props.transition.toScene}/${props.focusedObject ?? ''}`;
+    const view = `${props.transition.toScene}/${props.focusedObject ?? ''}/${size.width}/${size.height}`;
     if (view === currentView.current && props.transition.phase !== 'returning' && props.transition.phase !== 'error') return;
     currentView.current = view;
     fromPosition.current.copy(camera.position);
@@ -59,6 +59,8 @@ function CameraRig(props: OrbitalSceneProps) {
       target.current.copy(origin).add(new THREE.Vector3(...pose.target));
       if (props.focusedObject === 'book-01' && props.transition.toScene === 'observatory') target.current.z += 1.25;
       destination.current.copy(target.current).add(new THREE.Vector3(...pose.offset));
+      // Frame the shelf and slot together, including on portrait touchscreens.
+      if (props.focusedObject === 'computer') destination.current.z = target.current.z + Math.max(pose.offset[2], 2.25 / (2 * Math.tan(THREE.MathUtils.degToRad(17)) * (size.width / size.height)) + 0.25);
     } else {
       target.current.copy(origin).add(new THREE.Vector3(0, 1.05, 0));
       destination.current.copy(target.current).addScaledVector(homeDirection, homeDistance);
@@ -69,7 +71,7 @@ function CameraRig(props: OrbitalSceneProps) {
       controls.current.update();
       moving.current = false;
     } else moving.current = true;
-  }, [props.transition.id, props.focusedObject, props.transition.phase === 'error']);
+  }, [props.transition.id, props.focusedObject, props.transition.phase === 'error', size.width, size.height]);
   useFrame(() => {
     if (!controls.current || !moving.current) return;
     const travel = props.transition.action?.kind === 'travel';
@@ -154,7 +156,7 @@ export function OrbitalScene(props: OrbitalSceneProps) {
     };
     const end = (event: TouchEvent) => {
       if (event.touches.length) return;
-      if (gesture.multi && !gesture.moved && current.current.focusedObject && performance.now() - gesture.time < 650) {
+      if (gesture.multi && !gesture.moved && current.current.focusedObject && !current.current.activeGame && performance.now() - gesture.time < 650) {
         if (event.cancelable) event.preventDefault();
         (document.activeElement as HTMLElement)?.blur?.();
         current.current.onReturn();
