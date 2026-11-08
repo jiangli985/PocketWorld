@@ -9,9 +9,11 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'three-vendor': ['three', '@react-three/fiber', '@react-three/drei'],
-          'gsap-vendor': ['gsap'],
+        manualChunks(id) {
+          const path = id.replaceAll('\\', '/');
+          if (path.includes('commonjsHelpers') || path.includes('vite/preload-helper') || /\/node_modules\/(react|react-dom|scheduler)\//.test(path)) return 'react-vendor';
+          if (/\/node_modules\/(three|three-stdlib|@react-three\/fiber|@react-three\/drei)\//.test(path)) return 'three-vendor';
+          if (/\/node_modules\/gsap\//.test(path)) return 'gsap-vendor';
         },
       },
     },
