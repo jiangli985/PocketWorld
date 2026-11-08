@@ -118,6 +118,7 @@ function OrbitalLighting({ objects }: Pick<WorldSceneProps, 'objects'>) {
 function WorldContent(props: OrbitalSceneProps) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
   const drawerInteraction = useRef<DrawerInteraction | null>(null);
+  const interaction = useRef<NonNullable<WorldSceneProps['onApproach']> | null>(null);
   return <ScheduleProvider adapters={props.adapters}>
     <PerspectiveCamera makeDefault fov={34} position={[11, 10.05, 14]} near={0.08} far={2000} />
     <CameraRig {...props} />
@@ -128,6 +129,11 @@ function WorldContent(props: OrbitalSceneProps) {
     </Environment>
     {(['habitat', 'observatory'] as WorldSceneId[]).map(id => {
       const world = { ...props, sceneId: id, objects: props.sceneObjects[id], focusedObject: id === props.sceneId ? props.focusedObject : null,
+        onApproach: (point: [number, number, number], action: Parameters<typeof props.onAction>[0], perform: () => void) => {
+          if (id !== props.sceneId || drawerInteraction.current?.busy) return false;
+          const target: [number, number, number] = action.objectId.startsWith('schedule') ? [0.57, 1.2, -1.96] : point;
+          return interaction.current?.(target, action, perform) ?? false;
+        },
         onAction: (action: Parameters<typeof props.onAction>[0]) => {
           if (id !== props.sceneId || drawerInteraction.current?.busy) return;
           if (action.objectId === 'desk-drawer') drawerInteraction.current?.request(action);
@@ -141,7 +147,7 @@ function WorldContent(props: OrbitalSceneProps) {
         <Suspense fallback={null}><HabitatFurniture {...world} /><MediaObjects {...world} /></Suspense>
         {id === props.sceneId && <>
           <FeatureSurfaces {...world} />
-          <OrbitalResidents {...world} drawerInteraction={drawerInteraction}
+          <OrbitalResidents {...world} drawerInteraction={drawerInteraction} interaction={interaction}
             drawerEnabled={!props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} onDrawerAction={props.onAction} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={(!props.focusedObject || props.focusedObject === 'bed') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
         </>}
       </group>;
