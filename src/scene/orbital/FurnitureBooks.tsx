@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { LibraryBooks } from './library/LibraryBooks';
 import { useSchedule } from './ScheduleContext';
 import { upholstery } from './Materials';
 import { CLOSED_OBJECT, type WorldModelProps } from '../../types/world';
@@ -64,20 +65,15 @@ function ScheduleTurningLeaf({ pageId, reducedMotion }: { pageId: string; reduce
 export function FurnitureBookcase({ world, observatory = false }: { world: WorldModelProps; observatory?: boolean }) {
   const cabinet = world.objects.cabinet ?? CLOSED_OBJECT;
   const item = world.objects['cabinet-item'] ?? CLOSED_OBJECT;
-  return <group position={observatory ? [-3.45, 0, -0.65] : [-3.45, 0, -1.9]} name="Furniture_OpenBookcase">
+  return <><LibraryBooks world={world} /><group position={observatory ? [-3.45, 0, -0.65] : [-3.45, 0, -1.9]} name="Furniture_OpenBookcase">
+    <ObjectHandle id="book-01" action="inspect" hint="查看书柜 · 靠近按 E" world={world}>
     <SoftBox dims={[1.18, 0.08, 0.54]} position={[0, 0.12, 0]} color={C.edge} />
     {[-0.47, 0.47].flatMap(x => [-0.17, 0.17].map(z => <SoftBox key={`${x}/${z}`} dims={[0.09, 0.1, 0.09]} position={[x, 0.05, z]} color={C.edge} radius={0.012} />))}
-    <SoftBox dims={[1.18, 0.08, 0.54]} position={[0, 2.15, 0]} color={C.wood} />
-    {[-0.55, 0.55].map(x => <SoftBox key={x} dims={[0.08, 2, 0.54]} position={[x, 1.12, 0]} color={C.wood} />)}
-    <SoftBox dims={[1.08, 2, 0.035]} position={[0, 1.12, -0.255]} color="#8a654b" />
-    {[0.64, 1.12, 1.61].map(y => <SoftBox key={y} dims={[1.08, 0.055, 0.52]} position={[0, y, 0]} color={C.wood} />)}
-    {world.books.slice(0, 6).map((book, i) => <ObjectHandle key={book.id} id="book-01" action="read" payload={{ itemId: book.id }} hint={`取阅《${book.title}》`} world={world}
-      position={[-0.4 + i * 0.145, 1.15, 0]} rotation={[0, 0, i === 5 ? -0.09 : 0]}>
-      <SoftBox dims={[0.11, 0.33 + (i % 3) * 0.035, 0.32]} position={[0, 0.18, 0]} color={['#6e8780', '#b58b55', '#7a5360'][i % 3]} radius={0.009} />
-      <SoftBox dims={[0.065, 0.012, 0.005]} position={[0, 0.3, 0.163]} color={C.cream} radius={0.002} />
-    </ObjectHandle>)}
-    <FurnitureBook world={world} id="book-01" position={[-0.12, 0.671, 0.04]} color="#6c8382" scale={0.95} />
-    <SoftBox dims={[0.36, 0.13, 0.32]} position={[0.22, 1.705, 0]} color="#ba895d" />
+    <SoftBox dims={[1.18, 0.08, 0.54]} position={[0, 1.55, 0]} color={C.wood} />
+    {[-0.55, 0.55].map(x => <SoftBox key={x} dims={[0.08, 1.42, 0.54]} position={[x, .83, 0]} color={C.wood} />)}
+    <SoftBox dims={[1.08, 1.42, 0.035]} position={[0, .83, -0.255]} color="#8a654b" />
+    {[0.64, .93, 1.22].map(y => <SoftBox key={y} dims={[1.08, 0.055, 0.52]} position={[0, y, 0]} color={C.wood} />)}
+    </ObjectHandle>
     <ObjectHandle id="cabinet" action={cabinet.open ? 'close' : 'open'} hint={cabinet.open ? '关上柜门' : '拉开柜门'} world={world} drag="x">
       <FurnitureMotion target={cabinet.open ? -1.75 : 0} reducedMotion={world.reducedMotion} position={[-0.52, 0.38, 0.286]}>
         <SoftBox dims={[1.04, 0.45, 0.045]} position={[0.52, 0, 0]} color={C.wood} />
@@ -91,5 +87,5 @@ export function FurnitureBookcase({ world, observatory = false }: { world: World
         <SoftBox dims={[0.36, 0.035, 0.36]} position={[-0.2, 0.405, 0]} color="#acb7a3" radius={0.012} />
       </FurnitureMotion>
     </ObjectHandle>
-  </group>;
+  </group></>;
 }

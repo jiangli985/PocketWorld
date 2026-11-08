@@ -1,3 +1,4 @@
+import type { LibraryController } from '../scene/orbital/library/useLibrary';
 import type { MutableRefObject } from 'react';
 import type { MusicDisc } from './interactable';
 
@@ -30,6 +31,7 @@ export interface WorldModelProps {
   sceneId: WorldSceneId;
   objects: Record<string, WorldObjectState>;
   books: BookContent[];
+  library?: LibraryController;
   focusedObject: string | null;
   onAction: (action: WorldAction) => void;
   onHover: (id: string | null, hint?: string) => void;
@@ -40,7 +42,6 @@ export interface WorldSceneProps extends WorldModelProps {
   transition: WorldTransition;
   motion: MutableRefObject<WorldMotion>;
   onReturn: () => void;
-  onAddBook: (title: string, author: string, text: string) => BookContent | null;
   onImportMusic: () => void;
   onSelectDisc: (disc: MusicDisc) => void;
   onToggleMusic: () => void;

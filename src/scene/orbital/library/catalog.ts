@@ -1,6 +1,6 @@
 export type Vec3 = [number, number, number];
-export const BOOK_SIZE = { thickness: 0.105, height: 0.27, depth: 0.24 };
-export const BOOK_SLOTS = [0.6675, 1.1475, 1.6375].flatMap((floor, row) =>
+export const BOOK_SIZE = { thickness: 0.105, height: 0.22, depth: 0.24 };
+export const BOOK_SLOTS = [0.6675, 0.9575, 1.2475].flatMap((floor, row) =>
   Array.from({ length: 6 }, (_, column) => ({ id: `s${row}-${column}`, row, column, position: [-0.405 + column * 0.162, floor + BOOK_SIZE.height / 2, 0.08] as Vec3 })));
 export const CAPACITY = BOOK_SLOTS.length;
 export const INPUT_LIMIT = 128 * 1024;
@@ -50,7 +50,7 @@ export function readLibrary(storage: Pick<Storage, 'getItem'>): LibraryData {
     const legacy = JSON.parse(storage.getItem('pocketworld:library:books') ?? '[]');
     if (!Array.isArray(legacy) || legacy.length > CAPACITY - 3) throw new Error('旧藏书需要整理，原记录已保留。请先导出旧藏书再重试。');
     for (const old of legacy) {
-      if (!old || typeof old.title !== 'string' || !Array.isArray(old.pages) || !old.pages.every((p: unknown) => typeof p === 'string')) throw new Error('旧藏书记录损坏，原记录已保留。');
+      if (!old || typeof old.id !== 'string' || !old.id.startsWith('visitor-') || data.books.some(b => b.id === old.id) || (old.author !== undefined && typeof old.author !== 'string') || typeof old.title !== 'string' || !Array.isArray(old.pages) || !old.pages.every((p: unknown) => typeof p === 'string')) throw new Error('旧藏书记录损坏，原记录已保留。');
       data.books.push(makeUserBook(data, old.title, old.author ?? '', old.pages.join('\n\n'), String(old.id)));
     }
     return data;
@@ -58,7 +58,7 @@ export function readLibrary(storage: Pick<Storage, 'getItem'>): LibraryData {
   let data: LibraryData;
   try { data = JSON.parse(value); } catch { throw new Error('藏书记录无法解析，原记录已保留，请导出站点数据后修复。'); }
   const ids = new Set<string>(), slots = new Set<string>();
-  if (data?.version !== 1 || !Number.isSafeInteger(data.revision) || !Array.isArray(data.books) || data.books.length > CAPACITY) throw new Error('藏书版本或容量异常，未覆盖原记录。');
+  if (data?.version !== 1 || !Number.isSafeInteger(data.revision) || data.revision < 0 || !Array.isArray(data.books) || data.books.length > CAPACITY) throw new Error('藏书版本或容量异常，未覆盖原记录。');
   for (const book of data.books) {
     if (!book || typeof book.id !== 'string' || ids.has(book.id) || !BOOK_SLOTS.some(slot => slot.id === book.slotId) || slots.has(book.slotId)
       || !['builtin', 'user'].includes(book.source) || typeof book.title !== 'string' || !book.title.trim() || book.title.length > 80
