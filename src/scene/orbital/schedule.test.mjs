@@ -104,4 +104,6 @@ test('storage rejects malformed pages and duplicate identities without truncatin
   assert.equal(isScheduleNotebook({ ...state, current: { ...state.current, entries: [] } }), false);
   assert.equal(isScheduleNotebook({ ...state, posted: [state.current] }), false);
   assert.equal(isScheduleNotebook({ ...state, discarded: [{ id: 'bad', seed: NaN }] }), false);
+  assert.equal(isScheduleNotebook({ ...state, syncRemovedIds: ['removed-task'] }), true);
+  assert.equal(isScheduleNotebook({ ...state, syncRemovedIds: [123] }), false);
 });

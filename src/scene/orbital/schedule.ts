@@ -13,6 +13,7 @@ export interface PaperBall { id: string; seed: number }
 export interface ScheduleNotebook {
   version: 1;
   syncPending?: boolean;
+  syncRemovedIds?: string[];
   current: SchedulePage;
   posted: SchedulePage[];
   queued: SchedulePage[];
@@ -40,6 +41,7 @@ export function isScheduleEntry(value: unknown): value is ScheduleEntry {
 export function isScheduleNotebook(value: unknown): value is ScheduleNotebook {
   if (!value || typeof value !== 'object') return false;
   const state = value as ScheduleNotebook;
+  if (state.syncRemovedIds !== undefined && (!Array.isArray(state.syncRemovedIds) || !state.syncRemovedIds.every(id => typeof id === 'string'))) return false;
   const page = (p: SchedulePage) => p && typeof p.id === 'string' && Number.isSafeInteger(p.number) && p.number > 0 && typeof p.date === 'string' && Array.isArray(p.entries) && p.entries.length === 2 && p.entries.every(isScheduleEntry);
   if (state.version !== 1 || !page(state.current) || !Array.isArray(state.posted) || !state.posted.every(page) || !Array.isArray(state.queued) || !state.queued.every(page) || !Array.isArray(state.discarded) || !state.discarded.every(p => p && typeof p.id === 'string' && Number.isFinite(p.seed))) return false;
   const ids = [state.current, ...state.posted, ...state.queued].map(p => p.id);

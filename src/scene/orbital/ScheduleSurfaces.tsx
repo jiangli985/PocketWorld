@@ -51,7 +51,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
   const update = (index: number, field: 'title' | 'time' | 'content', value: string) => {
     const entries = [...state.current.entries] as SchedulePage['entries'];
     entries[index] = { ...entries[index], [field]: value };
-    commit({ ...state, current: { ...state.current, entries } });
+    commit({ ...state, current: { ...state.current, entries } }, { retainDraftOnError: true });
     setMessage('');
   };
   const post = (from: [number, number, number]) => {
@@ -166,7 +166,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
           <div className="schedule-actions"><nav aria-label="玻璃日程翻页"><button disabled={blocked || selectedIndex === 0} onClick={() => setSelectedId(state.posted[selectedIndex - 1].id)} aria-label="上一张安排">上一张</button><span>{selectedIndex + 1} / {state.posted.length}</span><button disabled={blocked || selectedIndex >= state.posted.length - 1} onClick={() => setSelectedId(state.posted[selectedIndex + 1].id)} aria-label="下一张安排">下一张</button></nav><button className="schedule-discard" disabled={blocked} onClick={discard}>揉掉这张</button></div>
         </> : <div className="schedule-empty"><p>这里还没有贴上安排。</p><p>回到书里写两件想做的事，<br />把它们留在抬眼就能看到的地方。</p><p>按 V 回到日程书。</p></div>}
         {message && <footer role="status" aria-live="polite">{message}</footer>}
-        {ready && error && <p className="schedule-error" role="alert">{error}{props.adapters?.schedule && <button onClick={retry}>重试同步</button>}</p>}
+        {ready && error && <p className="schedule-error" role="alert">{error}<button onClick={retry}>{props.adapters?.schedule ? '重试同步' : '重试保存'}</button></p>}
       </article>
     </Html>}
   </>;
