@@ -13,6 +13,7 @@ import { FeatureSurfaces } from './FeatureSurfaces';
 import { ScheduleProvider } from './ScheduleContext';
 import { ScheduleSurfaces } from './ScheduleSurfaces';
 import { OrbitalResidents } from './OrbitalResidents';
+import type { DrawerInteraction } from './drawerInteraction';
 
 const FOCUS: Record<string, { target: [number, number, number]; offset: [number, number, number] }> = {
   computer: { target: [1.45, 1.58, -2.30], offset: [0, 0.30, 3.5] },
@@ -116,6 +117,7 @@ function OrbitalLighting({ objects }: Pick<WorldSceneProps, 'objects'>) {
 }
 function WorldContent(props: OrbitalSceneProps) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
+  const drawerInteraction = useRef<DrawerInteraction | null>(null);
   return <ScheduleProvider adapters={props.adapters}>
     <PerspectiveCamera makeDefault fov={34} position={[11, 10.05, 14]} near={0.08} far={2000} />
     <CameraRig {...props} />
@@ -125,15 +127,22 @@ function WorldContent(props: OrbitalSceneProps) {
       <Lightformer intensity={0.7} color="#a8bed1" position={[5, 1, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 4, 1]} />
     </Environment>
     {(['habitat', 'observatory'] as WorldSceneId[]).map(id => {
-      const world = { ...props, sceneId: id, objects: props.sceneObjects[id], focusedObject: id === props.sceneId ? props.focusedObject : null };
+      const world = { ...props, sceneId: id, objects: props.sceneObjects[id], focusedObject: id === props.sceneId ? props.focusedObject : null,
+        onAction: (action: Parameters<typeof props.onAction>[0]) => {
+          if (id !== props.sceneId || drawerInteraction.current?.busy) return;
+          if (action.objectId === 'desk-drawer') drawerInteraction.current?.request(action);
+          else props.onAction(action);
+        },
+      };
       return <group key={id} position={SCENE_ORIGINS[id]} visible={id === props.sceneId || (props.transition.action?.kind === 'travel' && props.transition.phase !== 'active' && props.transition.phase !== 'error')}>
         {id === props.sceneId && <OrbitalLighting objects={world.objects} />}
-        <HabitatShell variant={id} onFloorClick={point => { if ((!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive) { void roomAudio.unlock(); setWalkTarget(point); } }} />
+        <HabitatShell variant={id} onFloorClick={point => { if ((!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy) { void roomAudio.unlock(); setWalkTarget(point); } }} />
         {id === 'habitat' && <ScheduleSurfaces {...world} visible={props.sceneId === 'habitat'} />}
         <Suspense fallback={null}><HabitatFurniture {...world} /><MediaObjects {...world} /></Suspense>
         {id === props.sceneId && <>
           <FeatureSurfaces {...world} />
-          <OrbitalResidents {...world} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={(!props.focusedObject || props.focusedObject === 'bed') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
+          <OrbitalResidents {...world} drawerInteraction={drawerInteraction}
+            drawerEnabled={!props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} onDrawerAction={props.onAction} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={(!props.focusedObject || props.focusedObject === 'bed') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
         </>}
       </group>;
     })}
