@@ -165,7 +165,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   const strideAmount = useRef(0);
   const touch = useRef<{ id: number; x: number; y: number; target: EventTarget | null } | null>(null);
   const petGesture = useRef(false);
-  const state = useRef({ posture: 'standing' as Posture, wanted: 'standing' as Posture, path: [] as Point[], external: false, exiting: false, blend: 0, sit: 0, lie: 0, lift: 0, velocity: 0, gait: 0, stepCount: 0, stepGait: Math.PI * 0.45, stopTime: Infinity, nearby: '', dismissedBed: false, dismissedChair: false,
+  const state = useRef({ posture: 'standing' as Posture, wanted: 'standing' as Posture, path: [] as Point[], external: false, exiting: false, blend: 0, sit: 0, lie: 0, lift: 0, velocity: 0, gait: 0, stepCount: 0, stepGait: Math.PI * 0.45, stopTime: Infinity, nearby: '', nearbyHint: '', dismissedBed: false, dismissedChair: false,
     perch: 0, idle: Infinity, kick: 0, planted: false, plant: SOLE_NEAR, sole: SOLE_NEAR, soleLift: SOLE_LIFT });
   const exit = useRef({ from: new THREE.Vector3(), yaw: 0, sit: 0, lie: 0, progress: 0 });
   const petBody = useRef<THREE.Group>(null);
@@ -637,7 +637,8 @@ export function OrbitalResidents(props: ResidentsProps) {
     if (p.sceneId === 'habitat') candidates.push({ id: 'bed', point: [-1.48, 0.95], distance: 1.0 });
     if (p.drawerEnabled && s.posture === 'standing' && canReachDrawer(root.position, drawerOpen)) candidates.push({ id: 'desk-drawer', point: [0.35, drawerOpen ? -0.935 : -1.575], distance: 1.2 });
     const nearby = p.enabled && !drawerTask.current ? candidates.filter(item => Math.hypot(root.position.x - item.point[0], root.position.z - item.point[1]) < item.distance).sort((a, b) => Math.hypot(root.position.x - a.point[0], root.position.z - a.point[1]) - Math.hypot(root.position.x - b.point[0], root.position.z - b.point[1]))[0]?.id ?? '' : '';
-    if (!drawerTask.current && nearby !== s.nearby) { s.nearby = nearby; p.onHover(nearby || null, nearby ? `E · ${nearby === 'pet' ? '摸摸团子' : nearby === 'bed' ? '躺下休息' : nearby === 'desk-drawer' ? (drawerOpen ? '推回抽屉' : '后退拉开抽屉') : '坐下'}` : undefined); }
+    const hint = nearby ? `E · ${s.posture !== 'standing' ? '起身' : nearby === 'pet' ? '摸摸团子' : nearby === 'bed' ? '躺下休息' : nearby === 'desk-drawer' ? (drawerOpen ? '推回抽屉' : '后退拉开抽屉') : '坐下'}` : '';
+    if (!drawerTask.current && (nearby !== s.nearby || hint !== s.nearbyHint)) { s.nearby = nearby; s.nearbyHint = hint; p.onHover(nearby || null, hint || undefined); }
 
     const cat = pet.current;
     cat.time += dt;
