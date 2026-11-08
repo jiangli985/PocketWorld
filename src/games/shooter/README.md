@@ -65,7 +65,9 @@ npm run build
 - `../../scene/orbital/media-exit.test.mjs`：13 项电脑退出与展示状态测试，覆盖收起保留、窄屏自动放大、失焦、隐藏和拔卡。
 - `integration.test.mjs`：生产产物依赖图检查，验证主入口、独立调试页和动态卡带插槽。
 - `survival/engine.test.mjs`：33 项模拟测试，含普通十分钟模拟、五职业分别锁定后的满级十分钟压力模拟及专属效果。
-- `survival/combat-regressions.test.mjs` / `collision.test.mjs`：27 项战斗回归与 2 项首次接触几何测试，见 [修复验收](./survival/PR7修复验收.md)。
+- `survival/combat-regressions.test.mjs` / `collision.test.mjs`：34 项战斗回归与 2 项首次接触几何测试，新增近战加成范围出手和星灵契约弹组瞄准检查；已有碰撞修复见 [修复验收](./survival/PR7修复验收.md)。
+- `audio.test.mjs`：3 项音频生命周期测试，覆盖静音恢复、停用/激活和快速状态切换，使用异步 AudioContext 替身。
+- `survival/input.test.mjs`：4 项组件事件回归，覆盖其他手指结束不打断摇杆、松开摇杆保留键盘输入，以及外层停用清理；使用 hooks 与指针捕获替身。
 - `survival/render-qa.mjs`：用同一生产绘制代码离线生成预览，需工具环境提供 @napi-rs/canvas。
 
 `survival/build-preview.mjs` 默认复用项目依赖，也可传入包含 node_modules 的工具目录（需 esbuild、React 18、React DOM 18）。它生成独立离线 HTML 与引擎测试包；输出在忽略的 survival/dist/ 中，保留原 HTML 文件名方便既有链接继续使用。生成物不提交。Node.js 24 环境中可运行：
@@ -73,8 +75,8 @@ npm run build
 ```powershell
 node src/games/shooter/survival/build-preview.mjs
 npm run build
-node --test src/games/shooter/survival/engine.test.mjs src/games/shooter/survival/combat-regressions.test.mjs src/games/shooter/survival/collision.test.mjs src/scene/orbital/screen-layout.test.mjs src/scene/orbital/keyboard-input.test.mjs src/scene/orbital/cartridge-motion.test.mjs src/scene/orbital/media-exit.test.mjs src/games/shooter/integration.test.mjs
-node node_modules/esbuild/bin/esbuild src/games/shooter/engine.ts --bundle --platform=node --format=cjs --outfile=src/games/shooter/survival/dist/pinball-engine.cjs
+node --test src/games/shooter/audio.test.mjs src/games/shooter/survival/input.test.mjs src/games/shooter/survival/engine.test.mjs src/games/shooter/survival/combat-regressions.test.mjs src/games/shooter/survival/collision.test.mjs src/scene/orbital/screen-layout.test.mjs src/scene/orbital/keyboard-input.test.mjs src/scene/orbital/cartridge-motion.test.mjs src/scene/orbital/media-exit.test.mjs src/games/shooter/integration.test.mjs
+node -e 'require("esbuild").buildSync({entryPoints:["src/games/shooter/engine.ts"],bundle:true,platform:"node",format:"cjs",outfile:"src/games/shooter/survival/dist/pinball-engine.cjs"})'
 node src/games/shooter/engine.test.mjs src/games/shooter/survival/dist/pinball-engine.cjs
 ```
 
