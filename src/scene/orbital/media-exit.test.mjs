@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import * as cartridgeMotion from './cartridge-motion.ts';
 
 const source = fs.readFileSync(process.env.MEDIA_EXIT_SOURCE ?? new URL('./MediaObjects.tsx', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source.replace(/const gameModules = .*;/, 'const gameModules = globalThis.gameModules;'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
 }).outputText;
 
-function mount({ game = null, modules = {}, focusedObject = 'computer' } = {}) {
+function mount({ game = null, modules = {}, focusedObject = 'computer', width = 1280, height = 720 } = {}) {
   const slots = [];
   let cursor = 0, dirty = true, tree;
   const effects = [];
@@ -18,6 +19,7 @@ function mount({ game = null, modules = {}, focusedObject = 'computer' } = {}) {
       super.removeEventListener(type, listener, { capture: options === true || !!options?.capture });
     }
   }();
+  Object.assign(target, { innerWidth: width, innerHeight: height });
   const changes = [], returns = [], errors = [];
   let blurred = 0;
   const same = (a, b) => a && b && a.length === b.length && a.every((item, i) => Object.is(item, b[i]));
@@ -66,6 +68,9 @@ function mount({ game = null, modules = {}, focusedObject = 'computer' } = {}) {
       if (name === '../audioEngine') return { roomAudio: { cancelPreparedMusic() {} } };
       if (name === './ObjectHandle') return { ObjectHandle: 'ObjectHandle' };
       if (name === './Primitives') return { SoftBox: 'SoftBox' };
+      if (name === './ComputerScreen') return { ComputerScreen: 'ComputerScreen' };
+      if (name === './CartridgePickup') return { CartridgePickup: 'CartridgePickup' };
+      if (name === './cartridge-motion') return cartridgeMotion;
       throw new Error(`Unexpected dependency: ${name}`);
     },
   };
@@ -93,7 +98,7 @@ function mount({ game = null, modules = {}, focusedObject = 'computer' } = {}) {
   }
   render();
   return {
-    props, target, changes, returns, errors,
+    props, target, document, changes, returns, errors,
     get blurred() { return blurred; },
     find: predicate => nodes().find(predicate),
     render() { dirty = true; return render(); },
@@ -188,7 +193,9 @@ test('a cartridge render failure restores the Escape exit', async () => {
 test('leaving during insertion cancels the transfer and ignores its stale completion', () => {
   const view = mount();
   try {
-    view.find(node => node.props?.id === 'game-cartridge-mario').props.world.onAction({ objectId: 'game-cartridge-mario', payload: { itemId: 'mario' } });
+    const pickup = view.find(node => node.props?.id === 'game-cartridge-mario');
+    assert.ok(pickup.props.onGrab());
+    pickup.props.onDrop([...cartridgeMotion.CARTRIDGE_SLOT], true);
     view.render();
     const transfer = view.find(node => node.type?.name === 'TransferObject');
     assert.ok(transfer);
@@ -211,5 +218,43 @@ test('other keys, other focused objects and disposal do not retain the computer 
     view.dispose();
     assert.equal(view.key().defaultPrevented, false);
     assert.equal(view.returns.length, 0);
+  } finally { view.dispose(); }
+});
+
+test('narrow cartridge uses one stable game through collapse, expand, rotation and visibility changes', async () => {
+  const Game = () => null;
+  const view = mount({ game: 'shooter', width: 390, height: 844, modules: { '../../games/shooter/index.tsx': () => Promise.resolve({ default: Game }) } });
+  try {
+    await view.settle();
+    const host = () => view.find(node => node.type === 'ComputerScreen');
+    const game = () => view.find(node => node.type === Game);
+    assert.equal(host().props.expanded, true); assert.equal(game().props.isActive, true);
+    host().props.onCollapse(); view.render();
+    assert.equal(host().props.expanded, false); assert.equal(game().props.isActive, false);
+    assert.equal(view.changes.length, 0); assert.equal(view.returns.length, 0);
+    host().props.onExpand(); view.render();
+    assert.equal(host().props.expanded, true); assert.equal(game().props.isActive, true);
+    view.target.innerWidth = 844; view.target.innerHeight = 390; view.target.dispatchEvent(new Event('resize')); view.render();
+    assert.equal(host().props.expanded, true); assert.equal(game().props.width, 800); assert.equal(game().props.height, 600);
+    view.target.dispatchEvent(new Event('blur')); view.render(); assert.equal(game().props.isActive, false);
+    view.target.dispatchEvent(new Event('focus')); view.render(); assert.equal(game().props.isActive, true);
+    view.document.hidden = true; view.document.dispatchEvent(new Event('visibilitychange')); view.render(); assert.equal(game().props.isActive, false);
+    view.document.hidden = false; view.document.dispatchEvent(new Event('visibilitychange')); view.render(); assert.equal(game().props.isActive, true);
+    host().props.onEject(); view.render(); assert.equal(game().props.isActive, false);
+    view.find(node => node.type?.name === 'TransferObject').props.onDone();
+    assert.deepEqual(view.changes, [null]);
+  } finally { view.dispose(); }
+});
+
+test('desktop explicitly expands and resumes embedded without replacing the cartridge component', async () => {
+  const Game = () => null;
+  const view = mount({ game: 'shooter', modules: { '../../games/shooter/index.tsx': () => Promise.resolve({ default: Game }) } });
+  try {
+    await view.settle();
+    const host = () => view.find(node => node.type === 'ComputerScreen');
+    assert.equal(host().props.expanded, false);
+    host().props.onExpand(); view.render(); assert.equal(host().props.expanded, true);
+    host().props.onCollapse(); view.render(); assert.equal(view.find(node => node.type === Game).props.isActive, false);
+    host().props.onResume(); view.render(); assert.equal(host().props.expanded, false); assert.equal(view.find(node => node.type === Game).props.isActive, true);
   } finally { view.dispose(); }
 });

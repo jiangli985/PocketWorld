@@ -4,6 +4,7 @@ import { Environment, Lightformer, OrbitControls, PerspectiveCamera } from '@rea
 import type { OrbitControls as Controls } from 'three-stdlib';
 import * as THREE from 'three';
 import { SCENE_ORIGINS, type WorldObjectState, type WorldSceneId, type WorldSceneProps } from '../../types/world';
+import { roomAudio } from '../audioEngine';
 import { Cosmos, SUN_DIRECTION } from './Cosmos';
 import { HabitatShell } from './HabitatShell';
 import { HabitatFurniture } from './HabitatFurniture';
@@ -14,7 +15,7 @@ import { ScheduleSurfaces } from './ScheduleSurfaces';
 import { OrbitalResidents } from './OrbitalResidents';
 
 const FOCUS: Record<string, { target: [number, number, number]; offset: [number, number, number] }> = {
-  computer: { target: [1.55, 1.68, -2.30], offset: [0, 0.25, 2.35] },
+  computer: { target: [1.45, 1.58, -2.30], offset: [0, 0.30, 3.5] },
   'music-player': { target: [-0.45, 1.2, -2.0], offset: [1.4, 2.5, 3.1] },
   journal: { target: [-0.48, 1.20, -1.94], offset: [0, 1.05, 0.78] },
   schedule: { target: [0.57, 1.20, -1.96], offset: [0, 0.88, 0.48] },
@@ -50,8 +51,8 @@ function CameraRig(props: OrbitalSceneProps) {
   }, [camera, size.width, size.height, homeDistance, homeDirection]);
   useEffect(() => {
     if (!controls.current || props.transition.phase === 'idle') return;
-    const view = `${props.transition.toScene}/${props.focusedObject ?? ''}`;
-    if (view === currentView.current && props.transition.phase !== 'returning' && props.transition.phase !== 'error' && !props.focusedObject?.startsWith('schedule')) return;
+    const view = `${props.transition.toScene}/${props.focusedObject ?? ''}/${size.width}/${size.height}`;
+    if (view === currentView.current && props.transition.phase !== 'returning' && props.transition.phase !== 'error') return;
     currentView.current = view;
     fromPosition.current.copy(camera.position);
     fromTarget.current.copy(controls.current.target);
@@ -66,6 +67,8 @@ function CameraRig(props: OrbitalSceneProps) {
         if (narrow && props.focusedObject === 'schedule') target.current.x = origin.x + 0.69;
       }
       destination.current.copy(target.current).add(offset);
+      // Frame the shelf and slot together, including on portrait touchscreens.
+      if (props.focusedObject === 'computer') destination.current.z = target.current.z + Math.max(pose.offset[2], 2.25 / (2 * Math.tan(THREE.MathUtils.degToRad(17)) * (size.width / size.height)) + 0.25);
     } else {
       target.current.copy(origin).add(new THREE.Vector3(0, 1.05, 0));
       destination.current.copy(target.current).addScaledVector(homeDirection, homeDistance);
@@ -125,7 +128,7 @@ function WorldContent(props: OrbitalSceneProps) {
       const world = { ...props, sceneId: id, objects: props.sceneObjects[id], focusedObject: id === props.sceneId ? props.focusedObject : null };
       return <group key={id} position={SCENE_ORIGINS[id]} visible={id === props.sceneId || (props.transition.action?.kind === 'travel' && props.transition.phase !== 'active' && props.transition.phase !== 'error')}>
         {id === props.sceneId && <OrbitalLighting objects={world.objects} />}
-        <HabitatShell variant={id} onFloorClick={point => { if ((!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive) setWalkTarget(point); }} />
+        <HabitatShell variant={id} onFloorClick={point => { if ((!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive) { void roomAudio.unlock(); setWalkTarget(point); } }} />
         {id === 'habitat' && <ScheduleSurfaces {...world} visible={props.sceneId === 'habitat'} />}
         <Suspense fallback={null}><HabitatFurniture {...world} /><MediaObjects {...world} /></Suspense>
         {id === props.sceneId && <>
@@ -157,7 +160,7 @@ export function OrbitalScene(props: OrbitalSceneProps) {
     };
     const end = (event: TouchEvent) => {
       if (event.touches.length) return;
-      if (gesture.multi && !gesture.moved && current.current.focusedObject && performance.now() - gesture.time < 650) {
+      if (gesture.multi && !gesture.moved && current.current.focusedObject && !current.current.activeGame && performance.now() - gesture.time < 650) {
         if (event.cancelable) event.preventDefault();
         (document.activeElement as HTMLElement)?.blur?.();
         current.current.onReturn();
@@ -177,7 +180,8 @@ export function OrbitalScene(props: OrbitalSceneProps) {
       element.removeEventListener('touchcancel', cancel, true);
     };
   }, []);
-  return <div ref={container} className="orbital-canvas" onContextMenu={e => e.preventDefault()}
+  return <div ref={container} className="orbital-canvas" style={{ touchAction: props.focusedObject === 'computer' && props.activeGame ? 'auto' : 'none' }} onContextMenu={e => e.preventDefault()}
+    onPointerDown={() => { void roomAudio.unlock(); }}
     onPointerCancel={() => props.onGesture(false)}
     onWheel={e => { if (props.focusedObject && !props.activeGame && e.deltaY > 45) props.onReturn(); }}
     onDoubleClick={e => { if ((e.target as HTMLElement).tagName === 'CANVAS' && props.focusedObject && !props.activeGame) props.onReturn(); }}>

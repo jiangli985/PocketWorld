@@ -6,6 +6,7 @@ import {
   CharacterPosture,
   InteractableId,
 } from '../../types/interactable';
+import { roomAudio } from '../audioEngine';
 import { INTERACTABLE_ITEMS, ROOM_OBSTACLES } from '../interactables';
 
 interface ProtagonistProps {
@@ -100,6 +101,8 @@ export const Protagonist: React.FC<ProtagonistProps> = ({
   const posRef = useRef<[number, number, number]>([0.95, 0, 0.45]);
   const rotYRef = useRef<number>(-0.65);
   const walkCycleRef = useRef<number>(0);
+  const stepPhaseRef = useRef<number>(Math.PI * 0.45);
+  const stepCountRef = useRef<number>(0);
   const jumpVelRef = useRef<number>(0);
   const jumpYRef = useRef<number>(0);
   const keysRef = useRef<Record<string, boolean>>({});
@@ -130,14 +133,17 @@ export const Protagonist: React.FC<ProtagonistProps> = ({
         code === 'ArrowLeft' ||
         code === 'ArrowRight'
       ) {
+        void roomAudio.unlock();
         keysRef.current[code] = true;
       } else if (code === 'Space' && !e.repeat) {
         e.preventDefault();
+        void roomAudio.unlock();
         if (posture === 'sleeping' || posture === 'sitting') {
           onPostureChange('standing');
         }
         if (jumpYRef.current <= 0.01) {
           jumpVelRef.current = 4.2;
+          roomAudio.playFootstep({ variant: 'push', intensity: 0.88 });
         }
       } else if (code === 'KeyE' && !e.repeat) {
         e.preventDefault();
@@ -250,6 +256,7 @@ export const Protagonist: React.FC<ProtagonistProps> = ({
         const nextX = posRef.current[0] + moveVecX * MOVE_SPEED * dt;
         const nextZ = posRef.current[2] + moveVecZ * MOVE_SPEED * dt;
         const [resolvedX, resolvedZ] = resolveObstacleCollision(nextX, nextZ);
+        isMoving = Math.hypot(resolvedX - posRef.current[0], resolvedZ - posRef.current[2]) > 0.001;
         posRef.current[0] = resolvedX;
         posRef.current[2] = resolvedZ;
 
@@ -258,19 +265,32 @@ export const Protagonist: React.FC<ProtagonistProps> = ({
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
         rotYRef.current += diff * Math.min(1, dt * 12);
+      }
 
+      if (isMoving) {
         walkCycleRef.current += dt * 11.5;
+        if (jumpYRef.current <= 0.01) {
+          while (walkCycleRef.current >= stepPhaseRef.current) {
+            roomAudio.playFootstep({ foot: (stepCountRef.current++ & 1) as 0 | 1 });
+            stepPhaseRef.current += Math.PI;
+          }
+        }
       } else {
         walkCycleRef.current = 0;
+        stepPhaseRef.current = Math.PI * 0.45;
       }
 
       // 跳跃重力积分
       if (jumpYRef.current > 0 || jumpVelRef.current > 0) {
+        const wasAboveGround = jumpYRef.current > 0;
         jumpYRef.current += jumpVelRef.current * dt;
         jumpVelRef.current -= 12.5 * dt;
         if (jumpYRef.current <= 0) {
           jumpYRef.current = 0;
           jumpVelRef.current = 0;
+          if (wasAboveGround) {
+            roomAudio.playFootstep({ variant: 'land', intensity: 1.15 });
+          }
         }
       }
 

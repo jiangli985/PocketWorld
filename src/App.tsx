@@ -52,6 +52,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
       };
       if (shortcuts[event.code] && !event.repeat && !(event.code === 'KeyB' && world.sceneId !== 'habitat')) {
         event.preventDefault();
+        void roomAudio.unlock();
         void world.onAction({ sceneId: world.sceneId, ...shortcuts[event.code] });
       }
     };
