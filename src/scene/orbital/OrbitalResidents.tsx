@@ -302,6 +302,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       const p = current.current;
+      if (event.code === 'Escape' && approach.current) { cancelApproach(); return; }
       const target = event.target as HTMLElement | null;
       if (!p.enabled || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || (target instanceof Element && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]'))) return;
       if (!['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE'].includes(event.code)) return;
@@ -395,7 +396,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     const pending = approach.current;
     if (pending) {
       pending.elapsed += dt;
-      if (pending.elapsed > 15 || (!p.drawerEnabled && p.focusedObject !== 'bed')) cancelApproach();
+      if (pending.elapsed > 15 || (p.focusedObject && p.focusedObject !== 'bed')) cancelApproach();
       else if (pending.chairTarget && !s.exiting) {
         const [x, z] = pending.chairTarget;
         const distance = Math.hypot(x - pose.x, z - pose.z);
@@ -551,14 +552,19 @@ export function OrbitalResidents(props: ResidentsProps) {
       }
       if (!s.path.length && s.external && p.enabled && !s.exiting && s.lift === 0 && !approach.current?.chairTarget) {
         const request = approach.current;
-        const target = request?.action.objectId === 'chair' ? seatEntry : request?.point;
+        const fixed = request?.action.objectId === 'chair' || request?.action.objectId === 'bed';
+        const target = request?.action.objectId === 'chair' ? seatEntry : request?.action.objectId === 'bed' ? [-1.48, 0.95] : request?.point;
         const distance = target ? Math.hypot(root.position.x - target[0], root.position.z - target[1]) : 0;
-        const radius = request?.action.objectId === 'chair' ? 0.06 : 1.15;
+        const radius = fixed ? 0.06 : 1.15;
         cancelApproach();
         if (request && distance <= radius) request.perform();
       }
       if (!s.path.length && autonomous && s.lift <= 0) {
-        if (Math.hypot(root.position.x - entry[0], root.position.z - entry[1]) < 0.06) { s.posture = wanted; s.blend = 0; }
+        if (Math.hypot(root.position.x - entry[0], root.position.z - entry[1]) < 0.06) {
+          const yaw = wanted === 'chair' ? seatYaw(pose) : root.rotation.y;
+          root.rotation.y = angle(root.rotation.y, yaw, 1 - Math.exp(-dt * 12));
+          if (Math.abs(Math.atan2(Math.sin(yaw - root.rotation.y), Math.cos(yaw - root.rotation.y))) < 0.06) { s.posture = wanted; s.blend = 0; }
+        }
         else s.path = route([root.position.x, root.position.z], entry, obstacles(room, pose));
       }
       const wasLift = s.lift;

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { MusicDisc } from './types/interactable';
 import type { GameId } from './types/game';
-import type { BookContent, WorldFeatureAdapters } from './types/world';
+import type { BookContent, WorldAction, WorldFeatureAdapters } from './types/world';
 import { PRESET_MUSIC_DISCS, generateDiscColorsFromName, roomAudio } from './scene/audioEngine';
 import { OrbitalScene } from './scene/orbital/OrbitalScene';
 import { PRESET_BOOKS, loadLocalBooks, storeLocalBooks } from './scene/orbital/library';
@@ -17,6 +17,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
   const [activeGame, setActiveGame] = useState<GameId | null>(null);
   const [draggingFile, setDraggingFile] = useState(false);
   const [announcement, setAnnouncement] = useState('');
+  const [shortcut, setShortcut] = useState<WorldAction | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const ownedUrls = useRef<string[]>([]);
   const initialized = useRef(false);
@@ -53,7 +54,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
       if (shortcuts[event.code] && !event.repeat && !(event.code === 'KeyB' && world.sceneId !== 'habitat')) {
         event.preventDefault();
         void roomAudio.unlock();
-        void world.onAction({ sceneId: world.sceneId, ...shortcuts[event.code] });
+        setShortcut({ sceneId: world.sceneId, ...shortcuts[event.code] });
       }
     };
     window.addEventListener('keydown', key);
@@ -111,7 +112,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
     onDragLeave={event => { event.preventDefault(); inputDepth.current = Math.max(0, inputDepth.current - 1); if (!inputDepth.current) setDraggingFile(false); }}
     onDrop={event => { event.preventDefault(); inputDepth.current = 0; setDraggingFile(false); importFiles(event.dataTransfer.files); }}>
-    <OrbitalScene {...world} books={books} onAddBook={onAddBook} adapters={adapters} onImportMusic={onImportMusic} discs={discs} activeDisc={audio.disc} isMusicPlaying={audio.isPlaying} isMuted={audio.isMuted}
+    <OrbitalScene {...world} shortcut={shortcut} onShortcutHandled={() => setShortcut(null)} books={books} onAddBook={onAddBook} adapters={adapters} onImportMusic={onImportMusic} discs={discs} activeDisc={audio.disc} isMusicPlaying={audio.isPlaying} isMuted={audio.isMuted}
       onSelectDisc={onSelectDisc} onToggleMusic={onToggleMusic} onToggleMute={onToggleMute} activeGame={activeGame} onGameChange={setActiveGame} onFeatureError={onFeatureError} />
     <header className="orbital-header">
       <div className="orbital-wordmark"><span className="orbital-emblem" aria-hidden="true" /><span>pocketworld<span className="orbital-wordmark-dot">.</span></span></div>

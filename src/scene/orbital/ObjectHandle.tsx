@@ -13,7 +13,7 @@ interface ObjectHandleProps extends Omit<ThreeElements['group'], 'id' | 'onPoint
 }
 /** A real object's input ownership, not an invisible menu hotspot. */
 export function ObjectHandle({ id, action, hint, world, drag, payload, children, ...props }: ObjectHandleProps) {
-  const held = useRef<{ x: number; y: number; pointerId: number; target: EventTarget | null } | null>(null);
+  const held = useRef<{ x: number; y: number; pointerId: number; target: EventTarget | null; point: [number, number, number] } | null>(null);
   const movable = useRef<THREE.Group>(null);
   const callbacks = useRef(world);
   callbacks.current = world;
@@ -34,7 +34,9 @@ export function ObjectHandle({ id, action, hint, world, drag, payload, children,
   const down = (event: ThreeEvent<PointerEvent>) => {
     if (event.button !== 0 || held.current) return;
     event.stopPropagation();
-    held.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId, target: event.target };
+    const origin = SCENE_ORIGINS[world.sceneId];
+    const point: [number, number, number] = [event.point.x - origin[0], event.point.y - origin[1], event.point.z - origin[2]];
+    held.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId, target: event.target, point };
     (event.target as Element).setPointerCapture?.(event.pointerId);
     world.onGesture(true);
     world.onHover(id, hint);
@@ -44,11 +46,10 @@ export function ObjectHandle({ id, action, hint, world, drag, payload, children,
     event.stopPropagation();
     const distance = Math.hypot(event.clientX - held.current.x, event.clientY - held.current.y);
     const direction = event.clientX >= held.current.x ? 1 : -1;
+    const point = held.current.point;
     release();
     if (distance < 9 || drag) {
       const request: WorldAction = { sceneId: world.sceneId, objectId: id, kind: action, payload: { ...payload, ...(distance > 9 ? { direction } : {}) } };
-      const origin = SCENE_ORIGINS[world.sceneId];
-      const point: [number, number, number] = [event.point.x - origin[0], event.point.y - origin[1], event.point.z - origin[2]];
       const perform = () => callbacks.current.onAction(request);
       if (world.onApproach) world.onApproach(point, request, perform); else perform();
     }

@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import type { OrbitControls as Controls } from 'three-stdlib';
 import * as THREE from 'three';
-import { SCENE_ORIGINS, type WorldObjectState, type WorldSceneId, type WorldSceneProps } from '../../types/world';
+import { SCENE_ORIGINS, type WorldAction, type WorldObjectState, type WorldSceneId, type WorldSceneProps } from '../../types/world';
 import { roomAudio } from '../audioEngine';
 import { Cosmos, SUN_DIRECTION } from './Cosmos';
 import { HabitatShell } from './HabitatShell';
@@ -27,6 +27,8 @@ const FOCUS: Record<string, { target: [number, number, number]; offset: [number,
 interface OrbitalSceneProps extends WorldSceneProps {
   sceneObjects: Record<WorldSceneId, Record<string, WorldObjectState>>;
   gestureActive: boolean;
+  shortcut: WorldAction | null;
+  onShortcutHandled: () => void;
 }
 function CameraRig(props: OrbitalSceneProps) {
   const { camera, size } = useThree();
@@ -119,6 +121,19 @@ function WorldContent(props: OrbitalSceneProps) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
   const drawerInteraction = useRef<DrawerInteraction | null>(null);
   const interaction = useRef<NonNullable<WorldSceneProps['onApproach']> | null>(null);
+  useEffect(() => { setWalkTarget(null); }, [props.sceneId]);
+  useEffect(() => {
+    const action = props.shortcut;
+    if (!action) return;
+    const points: Record<string, [number, number, number]> = {
+      computer: [1.55, 1.2, -1.96], 'music-player': [-0.45, 1.2, -1.96],
+      journal: [-0.48, 1.2, -1.94], schedule: [0.57, 1.2, -1.96],
+      'book-01': [-3.35, 0.9, props.sceneId === 'habitat' ? -1.75 : -0.5], bed: [-2.6, 0.7, 1],
+    };
+    const point = points[action.objectId];
+    if (point) interaction.current?.(point, action, () => props.onAction(action));
+    props.onShortcutHandled();
+  }, [props.shortcut]);
   return <ScheduleProvider adapters={props.adapters}>
     <PerspectiveCamera makeDefault fov={34} position={[11, 10.05, 14]} near={0.08} far={2000} />
     <CameraRig {...props} />
@@ -131,7 +146,10 @@ function WorldContent(props: OrbitalSceneProps) {
       const world = { ...props, sceneId: id, objects: props.sceneObjects[id], focusedObject: id === props.sceneId ? props.focusedObject : null,
         onApproach: (point: [number, number, number], action: Parameters<typeof props.onAction>[0], perform: () => void) => {
           if (id !== props.sceneId || drawerInteraction.current?.busy) return false;
-          const target: [number, number, number] = action.objectId.startsWith('schedule') ? [0.57, 1.2, -1.96] : point;
+          let target = point;
+          if (action.objectId.startsWith('schedule')) target = [0.57, 1.2, -1.96];
+          if (action.objectId.startsWith('music-')) target = [-0.45, 1.2, -1.96];
+          if (action.objectId === 'computer' || action.objectId === 'music-mute' || action.objectId === 'computer-exit' || action.objectId.startsWith('game-')) target = [1.55, 1.2, -1.96];
           return interaction.current?.(target, action, perform) ?? false;
         },
         onAction: (action: Parameters<typeof props.onAction>[0]) => {
