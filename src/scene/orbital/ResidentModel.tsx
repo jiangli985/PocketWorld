@@ -29,7 +29,7 @@ const JOINTS: { hip: Vec; knee: Vec; ankle: Vec }[] = [
 const smooth = THREE.MathUtils.smoothstep;
 const tilt = (from: Vec, to: Vec) => Math.atan2(to[2] - from[2], from[1] - to[1]);
 
-export function rigResident(source: THREE.Mesh) {
+function rigResident(source: THREE.Mesh) {
   const geometry = source.geometry.clone();
   const position = geometry.getAttribute('position');
   const indices = new Uint16Array(position.count * 4), weights = new Float32Array(position.count * 4);

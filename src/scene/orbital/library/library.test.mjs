@@ -54,8 +54,8 @@ function controller() {
   const exports = {};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('./useLibrary.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports, ...m.globals, require: name => name === 'react' ? react : m, window: { addEventListener() {}, removeEventListener() {}, setTimeout: fn => fn(), clearTimeout() {} } });
   const c = exports.useLibrary({ sceneId: 'habitat', reducedMotion: false, onAction: a => actions.push(a), onReturn: () => actions.push('return'), error: s => errors.push(s) }); effects.forEach(fn => fn());
-  const advance = () => { for (let i = 0; i < 250; i++) { if (['reading', 'catalog', 'align', 'recenter', 'leaving', 'idle'].includes(c.flow.current.phase)) break; c.tick(.04); } };
-  const enter = () => { c.dispatch({ sceneId: 'habitat', objectId: 'book-01', kind: 'read' }); c.arrived(); advance(); c.arrived(); };
+  const advance = () => { for (let i = 0; i < 250; i++) { if (['approach', 'reading', 'catalog', 'align', 'recenter', 'leaving', 'idle'].includes(c.flow.current.phase)) break; c.tick(.04); } };
+  const enter = () => { c.dispatch({ sceneId: 'habitat', objectId: 'book-01', kind: 'read' }); advance(); c.arrived(); advance(); c.arrived(); };
   const open = id => { c.choose(id); c.arrived(); c.setPages([{ start: 0, end: 10, text: '首页' }, { start: 10, end: 20, text: '末页' }]); advance(); };
   return { c, m, errors, actions, advance, enter, open };
 }

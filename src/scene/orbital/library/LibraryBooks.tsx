@@ -7,7 +7,7 @@ import { SoftBox } from '../Primitives';
 import { bookPose, toySupport, leafProgress } from './bookMotion';
 import { type LibraryBook } from './catalog';
 function BookEntity({ world, book }: { world: WorldModelProps; book: LibraryBook }) {
-  const group = useRef<THREE.Group>(null), cover = useRef<THREE.Group>(null), page = useRef<THREE.Group>(null);
+  const group = useRef<THREE.Group>(null), cover = useRef<THREE.Group>(null), page = useRef<THREE.Group>(null), leftPages = useRef<THREE.Group>(null);
   const sheet = useMemo(() => new THREE.PlaneGeometry(.235, .215, 18, 1).rotateX(-Math.PI / 2).translate(.1175, 0, 0), []);
   const base = useMemo(() => Float32Array.from(sheet.getAttribute('position').array), [sheet]);
   React.useEffect(() => () => sheet.dispose(), [sheet]);
@@ -15,7 +15,8 @@ function BookEntity({ world, book }: { world: WorldModelProps; book: LibraryBook
     if (!group.current || !world.library) return;
     const s = world.library.flow.current, pose = bookPose(world.sceneId, book, s);
     group.current.position.copy(pose.position); group.current.quaternion.copy(pose.quaternion);
-    if (cover.current) cover.current.rotation.z = Math.PI * .98 * pose.open;
+    if (cover.current) { cover.current.rotation.z = Math.PI * pose.open; cover.current.position.y = .058 * (1 - pose.open); }
+    if (leftPages.current) leftPages.current.scale.x = Math.sin(pose.open * Math.PI / 2) ** 2;
     if (page.current) {
       const turning = pose.phase === 'turn'; page.current.visible = turning;
       const t = s.direction > 0 ? leafProgress(s) : 1 - leafProgress(s);
@@ -31,6 +32,7 @@ function BookEntity({ world, book }: { world: WorldModelProps; book: LibraryBook
       <SoftBox dims={[.226, .041, .209]} position={[.12, .027, 0]} color="#eee3c8" radius={.002} />
       <SoftBox dims={[.011, .065, .22]} position={[0, .026, 0]} color={book.color} radius={.003} />
       <SoftBox dims={[.005, .035, .09]} position={[-.006, .026, 0]} color="#c7af7d" radius={.001} />
+      <group ref={leftPages} scale={[0, 1, 1]}><SoftBox dims={[.226, .041, .209]} position={[-.12, .027, 0]} color="#eee3c8" radius={.002} /></group>
       <group ref={cover} position={[0, .058, 0]}>
         <SoftBox dims={[.24, .012, .22]} position={[.12, 0, 0]} color={book.color} radius={.003} />
         <SoftBox dims={[.12, .002, .09]} position={[.12, .007, 0]} color="#c7af7d" radius={.001} />

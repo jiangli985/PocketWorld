@@ -29,7 +29,7 @@
 .library-surface form header { margin-bottom:0; }
 .library-surface label { display:flex; flex-direction:column; gap:6px; font:13px/1.4 'PingFang SC',sans-serif; }
 .library-surface input[type=text],.library-surface textarea { width:100%; border:1px solid #b5a788; background:#faf3e2; padding:10px; color:#454a40; font:15px/1.7 'PingFang SC',sans-serif; border-radius:0; caret-color:#566e5e; }
-.library-surface textarea { min-height:110px; resize:vertical; }
+.library-surface textarea { height:118px; min-height:118px; line-height:24px; resize:vertical; }
 .library-surface textarea::placeholder { color:#6d624e; }
 .library-file input { font-size:12px; max-width:100%; }
 .library-preview { margin:0; font:12px/1.7 'PingFang SC',sans-serif; color:#6d624e; overflow-wrap:anywhere; }
@@ -50,7 +50,7 @@
  .library-reading footer { margin-top:8px; }
  .library-reading .library-help { margin:6px 0 0; font-size:10px; }
  .library-adding { top:80px; bottom:12px; max-height:none; }
- .library-surface textarea { min-height:90px; }
+ .library-surface textarea { min-height:118px; }
  .library-surface form { min-height:100%; }
  .orbital-app:has(.library-surface) .orbital-footer { display:none; }
 }
@@ -63,5 +63,5 @@
  .library-reading { height:auto; max-height:none; }
  .library-surface h2 { font-size:19px; }
  .library-surface header { margin-bottom:10px; }
- .library-surface textarea { min-height:80px; }
+ .library-surface textarea { min-height:118px; }
 }
