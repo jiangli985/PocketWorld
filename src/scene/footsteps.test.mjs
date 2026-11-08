@@ -438,3 +438,44 @@ test('object dragging keeps the original hit point and defers the actual action'
     assert.equal(actions.length, 1);
   } finally { cleanup.forEach(cleanup => cleanup?.()); }
 });
+
+for (let side = 0; side < 8; side++) {
+  test(`E around chair side ${side} walks to its front before sitting`, () => {
+    const performed = [], hints = [];
+    const view = mount('orbital', { onHover: (id, hint) => hints.push({ id, hint }) });
+    view.props.onAction = action => {
+      performed.push(action);
+      if (action.objectId === 'chair' && action.kind === 'sit') {
+        const facing = view.chair.yaw - 0.2 + Math.PI;
+        const dx = view.root.position.x - view.chair.x, dz = view.root.position.z - view.chair.z;
+        assert.ok(dx * Math.sin(facing) + dz * Math.cos(facing) > 0.7);
+        assert.ok(Math.abs(dx * Math.cos(facing) - dz * Math.sin(facing)) < 0.06);
+        view.props.objects.chair = { active: true };
+      }
+    };
+    try {
+      Object.assign(view.chair, { x: 0.4, z: 0.3, yaw: 0.15, vx: 0, vz: 0, spin: 0 });
+      const angle = side * Math.PI / 4;
+      view.root.position.set(view.chair.x + Math.sin(angle) * 1.05, 0, view.chair.z + Math.cos(angle) * 1.05);
+      view.frame(1 / 60);
+      view.key('KeyE');
+      assert.equal(performed.length, 0);
+      for (let i = 0; i < 600; i++) view.frame(1 / 60);
+      assert.equal(performed.filter(action => action.objectId === 'chair' && action.kind === 'sit').length, 1);
+      assert.equal(view.root.userData.posture, 'chair');
+      assert.ok(hints.some(item => item.hint === 'E · 起身'));
+    } finally { view.dispose(); }
+  });
+}
+
+test('E at the drawer handle still selects the drawer beside the chair', () => {
+  const performed = [];
+  const view = mount('orbital', { onAction: action => performed.push(action) });
+  try {
+    view.root.position.set(0.35, 0, -1.32);
+    view.frame(1 / 60);
+    view.key('KeyE');
+    assert.equal(performed.length, 1);
+    assert.equal(performed[0].objectId, 'desk-drawer');
+  } finally { view.dispose(); }
+});
