@@ -89,7 +89,7 @@ function mount(kind, overrides = {}) {
   effects.forEach(effect => cleanups.push(effect()));
   const root = groups.find(item => ['OrbitalResident', 'Protagonist_Character'].includes(item.name))?.group;
   return {
-    root, pivot: groups[1]?.group, sounds, actions, props,
+    root, pivot: groups[1]?.group, sounds, actions, props, chair: dependencies['./chairPose'].CHAIR_POSES.habitat,
     key(code, type = 'keydown') {
       const event = new Event(type, { cancelable: true });
       Object.assign(event, { code, repeat: false });
@@ -239,5 +239,41 @@ test('drawer: walking is blocked while open and resumes after it retracts', () =
     view.props.objects['desk-drawer'].open = false;
     for (let i = 0; i < 120; i++) view.frame(1 / 60);
     assert.ok(view.root.position.z < -1.3);
+  } finally { view.dispose(); }
+});
+
+test('drawer: a parked chair blocks opening and remains free to roll away', () => {
+  const opened = [];
+  const hints = [];
+  const view = mount('orbital', { onDrawerAction: action => opened.push(action), onHover: (_, hint) => hints.push(hint) });
+  try {
+    Object.assign(view.chair, { x: 0.8, z: -1.16 });
+    view.root.position.set(-0.35, 0, -1.32);
+    const action = { sceneId: 'habitat', objectId: 'desk-drawer', kind: 'open' };
+    view.props.drawerInteraction.current.request(action);
+    assert.equal(view.props.drawerInteraction.current.busy, false);
+    assert.equal(opened.length, 0);
+    assert.ok(hints.some(hint => hint?.includes('椅子挡住')));
+    view.chair.vz = 1;
+    view.frame(1 / 60);
+    assert.ok(view.chair.z > -1.16);
+    Object.assign(view.chair, { x: 1.45, z: -0.85, vx: 0, vz: 0 });
+    view.props.drawerInteraction.current.request(action);
+    for (let i = 0; i < 180; i++) view.frame(1 / 60);
+    assert.equal(opened.length, 1);
+  } finally { view.dispose(); }
+});
+
+test('drawer: a chair rolling into the opening during retreat cancels the action', () => {
+  const opened = [];
+  const view = mount('orbital', { onDrawerAction: action => opened.push(action) });
+  try {
+    view.root.position.set(-0.35, 0, -1.32);
+    view.props.drawerInteraction.current.request({ sceneId: 'habitat', objectId: 'desk-drawer', kind: 'open' });
+    assert.equal(view.props.drawerInteraction.current.busy, true);
+    Object.assign(view.chair, { x: 0.8, z: -1.16 });
+    for (let i = 0; i < 180; i++) view.frame(1 / 60);
+    assert.equal(opened.length, 0);
+    assert.equal(view.props.drawerInteraction.current.busy, false);
   } finally { view.dispose(); }
 });

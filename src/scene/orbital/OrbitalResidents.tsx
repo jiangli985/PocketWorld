@@ -41,7 +41,7 @@ function layout(observatory: boolean) {
   return { seat: observatory ? 0.755 : 0.72, chairRadius, entry: (observatory ? [0.37, -0.83] : [0.76, 0.47]) as Point,
     boxes, chairBoxes, baseBoxes: boxes, baseChairBoxes: chairBoxes,
     openBoxes: [...boxes, drawerObstacle(DRAWER_TRAVEL, RADIUS + 0.08)],
-    openChairBoxes: [...chairBoxes, drawerObstacle(DRAWER_TRAVEL, chairRadius + 0.08)] };
+    openChairBoxes: [...chairBoxes, drawerObstacle(DRAWER_TRAVEL, chairRadius)] };
 }
 type Room = ReturnType<typeof layout>;
 const seatYaw = (pose: ChairPose) => pose.yaw + SEAT_SWIVEL + Math.PI;
@@ -204,6 +204,11 @@ export function OrbitalResidents(props: ResidentsProps) {
         return;
       }
       if (p.objects['desk-drawer']?.open) { p.onDrawerAction({ ...action, kind: 'close' }); return; }
+      const pose = CHAIR_POSES[p.sceneId];
+      if (!free([pose.x, pose.z], room.openChairBoxes)) {
+        p.onHover('desk-drawer', '椅子挡住了抽屉，先把椅子移开');
+        return;
+      }
       handle.busy = true;
       keys.current.clear(); jump.current = false; s.path = [];
       if (s.external) { s.external = false; p.onArrive(); }
@@ -437,7 +442,8 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (task && (Math.hypot(task.target[0] - root.position.x, task.target[1] - root.position.z) < 0.005 || task.elapsed > 2.5)) {
         drawerTask.current = null;
         if (p.drawerInteraction.current) p.drawerInteraction.current.busy = false;
-        if (Math.hypot(task.target[0] - root.position.x, task.target[1] - root.position.z) < 0.005 && root.position.z >= DRAWER_CLEAR_Z - 0.005) p.onDrawerAction(task.action);
+        if (!free([pose.x, pose.z], room.openChairBoxes)) p.onHover('desk-drawer', '椅子挡住了抽屉，先把椅子移开');
+        else if (Math.hypot(task.target[0] - root.position.x, task.target[1] - root.position.z) < 0.005 && root.position.z >= DRAWER_CLEAR_Z - 0.005) p.onDrawerAction(task.action);
         else p.onHover('desk-drawer', '身后空间不足，换个位置再拉开抽屉');
       }
       if (!s.path.length && s.external && p.enabled) { s.external = false; p.onArrive(); }
