@@ -11,6 +11,7 @@ export class SkiSound {
   private gain: GainNode | null = null;
   private buffers = new Map<SoundName, AudioBuffer>();
   private sources = new Map<SoundName, AudioBufferSourceNode>();
+  private tones = new Set<{ oscillator: OscillatorNode; volume: GainNode }>();
   private muted = false;
   private paused = false;
   private disposed = false;
@@ -40,6 +41,28 @@ export class SkiSound {
   playEvent(event: SkiEvent) {
     if (event === 'crash' || event === 'caught') this.play('laugh');
     if (event === 'mount') this.play('mount');
+    if (event === 'boost' || event === 'coin') this.playTone(event);
+  }
+
+  private playTone(kind: 'boost' | 'coin') {
+    if (!this.context || !this.gain || this.paused || this.disposed || this.muted || this.tones.size >= 4) return;
+    const now = this.context.currentTime;
+    const duration = kind === 'boost' ? 0.16 : 0.08;
+    const oscillator = this.context.createOscillator();
+    const volume = this.context.createGain();
+    const voice = { oscillator, volume };
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(kind === 'boost' ? 520 : 1150, now);
+    oscillator.frequency.exponentialRampToValueAtTime(kind === 'boost' ? 1040 : 1530, now + duration);
+    volume.gain.setValueAtTime(0, now);
+    volume.gain.linearRampToValueAtTime(kind === 'boost' ? 0.11 : 0.07, now + 0.012);
+    volume.gain.linearRampToValueAtTime(0, now + duration);
+    oscillator.connect(volume); volume.connect(this.gain);
+    oscillator.onended = () => {
+      oscillator.disconnect(); volume.disconnect(); this.tones.delete(voice);
+    };
+    this.tones.add(voice);
+    oscillator.start(now); oscillator.stop(now + duration);
   }
 
   play(name: SoundName) {
@@ -73,6 +96,8 @@ export class SkiSound {
   stop() {
     for (const source of this.sources.values()) { source.stop(); source.disconnect(); }
     this.sources.clear();
+    for (const { oscillator, volume } of this.tones) { oscillator.stop(); oscillator.disconnect(); volume.disconnect(); }
+    this.tones.clear();
   }
 
   dispose() {

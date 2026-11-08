@@ -4,12 +4,13 @@ export interface Circle { x: number; y: number; radius: number }
 export const NAIWA_SCALE = 0.36;
 export const SKI_HALF_LENGTH = 39;
 export const rideHeight = (p: SkiPlayer) => p.partner === 'slide' ? 22 : p.partner === 'charge' ? 42 : 0;
+export const rideOffsetX = (p: SkiPlayer) => p.partner === 'charge' ? 7 : 0;
 export const playerPivot = (p: SkiPlayer) => p.crashTime > 0 ? 18 : 32;
 
 export function bodyPose(p: SkiPlayer) {
   return {
-    lean: p.tucked ? 1.15 : p.grounded ? -Math.max(-0.35, Math.min(0.35, p.angle * 0.28)) : 0,
-    compression: p.tucked ? 14 : p.squash * 8 + (!p.grounded && p.flipping ? 3 : 0),
+    lean: p.tucked ? p.partner ? .55 : 1.15 : p.grounded ? -Math.max(-0.35, Math.min(0.35, p.angle * 0.28)) : 0,
+    compression: p.partner ? (p.tucked ? 13 : 9) + p.squash * 2 : p.tucked ? 14 : p.squash * 8 + (!p.grounded && p.flipping ? 3 : 0),
   };
 }
 

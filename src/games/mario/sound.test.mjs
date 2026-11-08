@@ -10,9 +10,20 @@ const compiled = ts.transpile(source, { target: ts.ScriptTarget.ES2020, module: 
 const { SkiSound } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const contexts = [];
 class FakeContext {
+  currentTime = 0; oscillators = []; madeGain = false;
   state = 'suspended'; sources = []; gain = { gain: { value: 1 }, connect() {} }; destination = {};
   constructor() { contexts.push(this); }
-  createGain() { return this.gain; }
+  createGain() {
+    if (!this.madeGain) { this.madeGain = true; return this.gain; }
+    return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {} }, connect() {}, disconnect() {} };
+  }
+  createOscillator() {
+    const node = { stopped: false, connected: false, onended: null, startAt: -1, stopAt: -1,
+      frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} },
+      connect() { this.connected = true; }, disconnect() { this.connected = false; },
+      start(time) { this.startAt = time; }, stop(time) { this.stopped = true; this.stopAt = time; } };
+    this.oscillators.push(node); return node;
+  }
   resume() { this.state = 'running'; return Promise.resolve(); }
   suspend() { this.state = 'suspended'; return Promise.resolve(); }
   close() { this.state = 'closed'; return Promise.resolve(); }
@@ -50,11 +61,16 @@ test('mute stops playback immediately; pause suspends context and blocks events;
   sound.dispose(); const count = contexts.length; sound.unlock(); sound.play('laugh'); assert.equal(contexts.length, count);
 });
 
-test('only crashes and catches trigger laughter; flips, landing and coins stay silent', async () => {
+test('only crashes and catches trigger original laughter; coin and boost use short tones', async () => {
   globalThis.AudioContext = FakeContext;
   const sound = new SkiSound(); sound.unlock(); await flush();
   const ctx = contexts.at(-1);
   for (const event of ['flip', 'land', 'coin']) sound.playEvent(event);
+  assert.equal(ctx.sources.length, 0);
+  assert.equal(ctx.oscillators.length, 1);
+  assert.equal(ctx.oscillators[0].stopAt, .08);
+  sound.playEvent('boost');
+  assert.equal(ctx.oscillators[1].stopAt, .16);
   assert.equal(ctx.sources.length, 0);
   sound.playEvent('crash');
   assert.deepEqual(ctx.sources[0].startArgs, [0, 0, 3]);
@@ -64,6 +80,27 @@ test('only crashes and catches trigger laughter; flips, landing and coins stay s
   sound.playEvent('mount');
   assert.deepEqual(ctx.sources[2].startArgs, [0, 0, 1.812]);
   sound.dispose();
+});
+
+test('feedback tones are bounded and obey mute, pause, stop and disposal', async () => {
+  globalThis.AudioContext = FakeContext;
+  const sound = new SkiSound(); sound.unlock(); await flush();
+  const ctx = contexts.at(-1);
+  for (let i = 0; i < 20; i++) sound.playEvent('boost');
+  assert.equal(ctx.oscillators.length, 4);
+  ctx.oscillators[0].onended();
+  sound.playEvent('coin');
+  assert.equal(ctx.oscillators.length, 5);
+  sound.setPaused(true); sound.playEvent('boost');
+  assert.equal(ctx.oscillators.length, 5);
+  sound.setPaused(false); sound.setMuted(true);
+  assert.ok(ctx.oscillators.every(node => !node.connected));
+  sound.playEvent('boost'); assert.equal(ctx.oscillators.length, 5);
+  sound.setMuted(false); sound.playEvent('boost');
+  assert.equal(ctx.oscillators.length, 6);
+  sound.dispose(); sound.playEvent('coin'); sound.unlock();
+  assert.equal(ctx.oscillators.length, 6);
+  assert.ok(ctx.oscillators.every(node => !node.connected));
 });
 
 test('unmount during async audio loading cannot open another context or start a cue', async () => {

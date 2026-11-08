@@ -13,6 +13,51 @@ for (const name of ['engine', 'model', 'character']) {
   source = source.replace(`'./${name}'`, JSON.stringify(new URL(`./${name}.ts`, import.meta.url).href));
 }
 const { mountains, drawPlayer } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const niulaiConfig = JSON.parse(await readFile(new URL('./assets/niulai/animations.json', import.meta.url), 'utf8'));
+
+test('rider feet stay on both animated mount saddles at every roll angle and stance', () => {
+  for (const kind of ['slide', 'charge']) for (const grounded of [false, true]) {
+    for (const tucked of [false, true]) for (const angle of [0, .4, Math.PI / 2, Math.PI, Math.PI * 1.5, Math.PI * 2]) {
+      for (let frame = 0; frame < 8; frame++) {
+        const state = createRun('valley');
+        const spec = niulaiConfig.actions[kind];
+        Object.assign(state.player, { partner: kind, angle, grounded, tucked, squash: .5, flipping: !grounded });
+        state.time = (frame + .2) / spec.fps;
+        let matrix = [1, 0, 0, 1, 0, 0];
+        const stack = [], draws = {};
+        const multiply = ([a, b, c, d, e, f]) => {
+          const [aa, bb, cc, dd, ee, ff] = matrix;
+          matrix = [aa*a+cc*b, bb*a+dd*b, aa*c+cc*d, bb*c+dd*d, aa*e+cc*f+ee, bb*e+dd*f+ff];
+        };
+        const ctx = {
+          save() { stack.push([...matrix]); }, restore() { matrix = stack.pop(); },
+          translate(x, y) { multiply([1,0,0,1,x,y]); },
+          rotate(a) { multiply([Math.cos(a),Math.sin(a),-Math.sin(a),Math.cos(a),0,0]); },
+          scale(x, y) { multiply([x,0,0,y,0,0]); },
+          drawImage(image, ...args) { draws[image] = { matrix: [...matrix], args }; },
+        };
+        const clip = image => ({ image, anchor: [150,220], frameWidth:280, frameHeight:260, frameCount:1, fps:1, row:0 });
+        const mount = { image:'mount', anchor:spec.groundAnchor, rideAnchors:spec.rideAnchors,
+          frameWidth:320, frameHeight:360, frameCount:8, fps:spec.fps, row:0 };
+        drawPlayer(ctx, state, { rig: Object.fromEntries(['body','legs','skis'].map(name => [name,clip(name)])), niulai: { [kind]:mount } }, 240, 300, false);
+        const project = (draw, point) => {
+          const [a,b,c,d,e,f] = draw.matrix;
+          const [, , sw, sh, dx, dy, dw, dh] = draw.args;
+          const x = dx + point[0] * dw / sw, y = dy + point[1] * dh / sh;
+          return { x:a*x+c*y+e, y:b*x+d*y+f };
+        };
+        const actualFrame = draws.mount.args[0] / 320;
+        assert.equal(actualFrame, grounded ? frame : 0, 'airborne mount holds its leg pose');
+        const seat = project(draws.mount, spec.rideAnchors[actualFrame]);
+        const foot = project(draws.legs, [150,220]);
+        assert.ok(Math.hypot(seat.x-foot.x, seat.y-foot.y) < 1e-7, `${kind}: saddle drift at ${angle}`);
+        assert.ok(Math.abs(draws.mount.matrix[0] - draws.legs.matrix[0]) < 1e-9);
+        assert.ok(Math.abs(draws.mount.matrix[1] - draws.legs.matrix[1]) < 1e-9);
+        assert.equal(draws.skis, undefined, 'riding never draws detached skis');
+      }
+    }
+  }
+});
 
 test('rendered body and ski transforms match collision volumes through landing and tuck poses', () => {
   for (const angle of [-Math.PI / 2, 0, Math.PI / 2, Math.PI]) {

@@ -11,7 +11,11 @@ import crashUrl from './assets/naiwa/ski-safari-rig/actions/06-ski-crash.svg?url
 import rideUrl from './assets/naiwa/ski-safari-rig/actions/07-ski-ride-penguin.svg?url';
 import idleUrl from './assets/naiwa/ski-safari-rig/actions/08-orig-idle.svg?url';
 import rigUrl from './assets/naiwa/ski-volume-rig.svg?url';
-import type { Partner } from './model';
+import skySvg from './assets/winter/sky.svg?raw';
+import mountainsSvg from './assets/winter/mountains.svg?raw';
+import woodlandSvg from './assets/winter/woodland.svg?raw';
+import decorSvg from './assets/winter/decor.svg?raw';
+import type { Partner, TrailId } from './model';
 
 export type NaiwaAction = 'glide' | 'boost' | 'jump' | 'flip' | 'tuck' | 'crash' | 'ride' | 'idle';
 export interface SpriteClip {
@@ -22,12 +26,14 @@ export interface SpriteClip {
   fps: number;
   row: number;
   anchor: readonly [number, number];
+  rideAnchors?: readonly (readonly [number, number])[];
 }
 export interface SkiAssets {
   naiwa: Partial<Record<NaiwaAction, SpriteClip>>;
   rig?: Partial<Record<'body' | 'legs' | 'skis', SpriteClip>>;
   doubao: SpriteClip | null;
   niulai: Record<Partner, SpriteClip | null>;
+  scenery?: Partial<Record<TrailId, Record<'sky' | 'mountains' | 'woodland' | 'decor', CanvasImageSource>>>;
   errors: string[];
   fallback: boolean;
 }
@@ -159,7 +165,7 @@ async function loadRig(): Promise<NonNullable<SkiAssets['rig']>> {
     const key = `rig-${layer}`;
     const cached = clipCache.get(key);
     if (cached) { rig[layer] = cached; continue; }
-    const frameCount = layer === 'body' ? 16 : 1;
+    const frameCount = 1;
     const snapshot = source.cloneNode(true) as Document;
     snapshot.querySelectorAll('[data-layer]').forEach(node => {
       if (node.getAttribute('data-layer') !== layer) node.remove();
@@ -182,7 +188,7 @@ async function loadAll(): Promise<SkiAssets> {
   });
   await Promise.all([
     attempt('奶娃/分层骨骼', async () => { assets.rig = await loadRig(); }),
-    ...(['idle', 'crash'] as const).map(loadAction),
+    attempt('冬日分层背景', async () => { assets.scenery = await loadScenery(); }),
     attempt('豆包/向右奔跑', async () => {
       assets.doubao = await loadSheet('doubao', doubaoUrl, { frameWidth: 192, frameHeight: 208,
         frameCount: 8, fps: 12, row: 1, anchor: [100, 202] });
@@ -192,13 +198,40 @@ async function loadAll(): Promise<SkiAssets> {
       assets.niulai[action] = await loadSheet(`niulai-${action}`, action === 'slide' ? slideUrl : chargeUrl,
         { frameWidth: niulaiConfig.frameWidth, frameHeight: niulaiConfig.frameHeight,
           frameCount: config.frameCount, fps: config.fps, row: 0, anchor: [config.groundAnchor[0], config.groundAnchor[1]] });
+      assets.niulai[action]!.rideAnchors = config.rideAnchors.map(point => [point[0], point[1]] as const);
     })),
   ]);
-  if (!assets.rig) await Promise.all((Object.keys(actionSpecs) as NaiwaAction[])
-    .filter(action => action !== 'idle' && action !== 'crash').map(loadAction));
+  if (!assets.rig) await Promise.all((Object.keys(actionSpecs) as NaiwaAction[]).map(loadAction));
   assets.errors.sort();
   assets.fallback = assets.errors.length > 0;
   return assets;
+}
+
+async function loadScenery(): Promise<NonNullable<SkiAssets['scenery']>> {
+  const result: NonNullable<SkiAssets['scenery']> = {};
+  const colors: Partial<Record<TrailId, Record<string, string>>> = {
+    forest: { '#d5edf6': '#e2eaf1', '#edf8fa': '#fff1dc', '#c7e0e9': '#d0d8e3', '#a2c5d5': '#b1becf', '#b8d6e1': '#c5ced8', '#789fae': '#879fab' },
+    night: { '#d5edf6': '#293f5e', '#edf8fa': '#7698b1', '#c7e0e9': '#7192ac', '#e9f3f3': '#d2e4ed', '#a2c5d5': '#577d99', '#b8d6e1': '#7599b2', '#f5f8ee': '#dceaf0', '#d7e9ec': '#a1bdcd', '#789fae': '#5b8297', '#edf5ef': '#c5dce6', '#fff9ec': '#e9f3fa', '#e6f1ef': '#cee2e9', '#fffdf1': '#d2e2ec' },
+  };
+  await Promise.all((['valley', 'forest', 'night'] as const).map(async trail => {
+    const layers = {} as NonNullable<SkiAssets['scenery']>[TrailId] & {};
+    await Promise.all(Object.entries({ sky: skySvg, mountains: mountainsSvg, woodland: woodlandSvg, decor: decorSvg }).map(async ([name, svg]) => {
+      const source = svg.replace(/#[a-f\d]{6}/gi, color => colors[trail]?.[color.toLowerCase()] || color);
+      const url = URL.createObjectURL(new Blob([source], { type: 'image/svg+xml' }));
+      try {
+        const image = await decodeImage(url);
+        // Keep twelve reusable 800×450 surfaces, rather than full-size textures.
+        const surface = document.createElement('canvas');
+        surface.width = 800; surface.height = 450;
+        const context = surface.getContext('2d');
+        if (!context) throw new Error('Canvas 2D 不可用');
+        context.drawImage(image, 0, 0, 800, 450);
+        layers[name as keyof typeof layers] = surface;
+      } finally { URL.revokeObjectURL(url); }
+    }));
+    result[trail] = layers;
+  }));
+  return result;
 }
 
 export function loadAssets(retry = false): Promise<SkiAssets> {

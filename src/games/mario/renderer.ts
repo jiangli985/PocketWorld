@@ -1,7 +1,7 @@
 import { terrainY, terrainAngle } from './engine';
 import { TRAILS, type Feature, type Partner, type RenderOptions, type SkiState, type Trail } from './model';
 import type { NaiwaAction, SkiAssets, SpriteClip } from './assets';
-import { bodyPose, playerPivot, NAIWA_SCALE } from './character';
+import { bodyPose, playerPivot, NAIWA_SCALE, rideHeight, rideOffsetX } from './character';
 export type { RenderOptions } from './model';
 
 const W = 800;
@@ -21,10 +21,11 @@ function line(ctx: CanvasRenderingContext2D, x: number, y: number, xx: number, y
   ctx.lineWidth = width;
   ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(xx, yy); ctx.stroke();
 }
-function sprite(ctx: CanvasRenderingContext2D, clip: SpriteClip, time: number, scale: number, phase = 0) {
+function sprite(ctx: CanvasRenderingContext2D, clip: SpriteClip, time: number, scale: number, phase = 0, attached = false) {
   const frame = Math.floor(mod(time * clip.fps + phase, clip.frameCount));
+  const anchor = attached ? clip.rideAnchors?.[frame] || clip.anchor : clip.anchor;
   ctx.drawImage(clip.image, frame * clip.frameWidth, clip.row * clip.frameHeight,
-    clip.frameWidth, clip.frameHeight, -clip.anchor[0] * scale, -clip.anchor[1] * scale,
+    clip.frameWidth, clip.frameHeight, -anchor[0] * scale, -anchor[1] * scale,
     clip.frameWidth * scale, clip.frameHeight * scale);
 }
 
@@ -216,6 +217,16 @@ function fallbackNaiwa(ctx: CanvasRenderingContext2D, time: number, skis: boolea
 }
 
 function drawNaiwa(ctx: CanvasRenderingContext2D, assets: SkiAssets | null, action: NaiwaAction, time: number) {
+  const rig = assets?.rig;
+  if (rig?.body && rig.legs && rig.skis) {
+    ctx.save();
+    if (action === 'idle') ctx.rotate(Math.sin(time * 2) * .025);
+    if (action !== 'ride' && action !== 'idle') sprite(ctx, rig.skis, time, NAIWA_SCALE);
+    sprite(ctx, rig.legs, time, NAIWA_SCALE);
+    sprite(ctx, rig.body, time, NAIWA_SCALE);
+    ctx.restore();
+    return;
+  }
   const clip = assets?.naiwa[action];
   if (clip) sprite(ctx, clip, time, .36);
   else {
@@ -241,9 +252,15 @@ function fallbackDoubao(ctx: CanvasRenderingContext2D, time: number) {
   line(ctx, 7 - swing, -2, 13 - swing, -2, '#4E5359', 4);
 }
 
-function partner(ctx: CanvasRenderingContext2D, assets: SkiAssets | null, type: Partner, time: number) {
+function partner(ctx: CanvasRenderingContext2D, assets: SkiAssets | null, type: Partner, time: number, attached = false) {
   const clip = assets?.niulai[type];
-  if (clip) sprite(ctx, clip, time, type === 'slide' ? .32 : .245);
+  if (clip) {
+    const frame = Math.floor(mod(time * clip.fps, clip.frameCount));
+    const seat = clip.rideAnchors?.[frame];
+    // Normalize the saddle-to-ground span to the existing gameplay height.
+    const scale = attached && seat ? (type === 'slide' ? 22 : 42) / (clip.anchor[1] - seat[1]) : type === 'slide' ? .32 : .245;
+    sprite(ctx, clip, time, scale, 0, attached);
+  }
   else {
     const slide = type === 'slide';
     ellipse(ctx, 0, slide ? -18 : -31, slide ? 34 : 22, slide ? 16 : 28, '#F4AD39');
@@ -255,7 +272,7 @@ function partner(ctx: CanvasRenderingContext2D, assets: SkiAssets | null, type: 
 }
 
 function feature(ctx: CanvasRenderingContext2D, f: Feature, state: SkiState, assets: SkiAssets | null, cameraX: number, cameraY: number) {
-  if (f.used && f.kind !== 'gap' && f.kind !== 'ramp' && f.kind !== 'ice') return;
+  if (f.used && f.kind !== 'ramp' && f.kind !== 'ice') return;
   const x = f.x + f.width / 2 - cameraX;
   const y = f.y - cameraY;
   if (x + f.width < -100 || x - f.width > W + 100) return;
@@ -288,24 +305,15 @@ function feature(ctx: CanvasRenderingContext2D, f: Feature, state: SkiState, ass
     ctx.quadraticCurveTo(3, -6, f.width / 2, -27); ctx.stroke();
     line(ctx, f.width / 2 + 4, 0, f.width / 2 + 4, -48, '#778D91', 2);
     ctx.fillStyle = '#BB5C44'; ctx.beginPath(); ctx.moveTo(f.width / 2 + 4, -48); ctx.lineTo(f.width / 2 + 23, -43); ctx.lineTo(f.width / 2 + 4, -36); ctx.fill();
-  } else if (f.kind === 'ice' || f.kind === 'gap') {
-    const gap = f.kind === 'gap';
-    ctx.fillStyle = gap ? '#7199AE' : '#9FD4E2';
+  } else if (f.kind === 'ice') {
+    ctx.fillStyle = '#9FD4E2';
     ctx.beginPath();
     for (let xx = -f.width / 2; xx <= f.width / 2; xx += 5) {
       const yy = terrainY(f.x + f.width / 2 + xx, state.trail) - f.y;
       if (xx === -f.width / 2) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
     }
-    ctx.lineTo(f.width / 2, gap ? 72 : 6); ctx.quadraticCurveTo(0, gap ? 113 : 12, -f.width / 2, gap ? 64 : 6); ctx.closePath(); ctx.fill();
-    if (gap) {
-      ctx.fillStyle = '#D2E8EE'; ctx.beginPath(); ctx.moveTo(-f.width / 2, 65);
-      ctx.quadraticCurveTo(0, 111, f.width / 2, 73); ctx.lineTo(f.width / 2, 88); ctx.quadraticCurveTo(0, 122, -f.width / 2, 80); ctx.fill();
-      for (let i = 0; i < 5; i++) {
-        const xx = -f.width / 2 + 8 + i * f.width / 5;
-        const yy = terrainY(x + cameraX + xx, state.trail) - f.y;
-        ctx.fillStyle = '#DCF2FA'; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + 3, yy + 19 + i % 2 * 9); ctx.lineTo(xx + 9, yy); ctx.fill();
-      }
-    } else for (let i = 0; i < 4; i++) line(ctx, -f.width * .35 + i * f.width / 5, 2, -f.width * .25 + i * f.width / 5, -3, '#EAFBFF', 2);
+    ctx.lineTo(f.width / 2, 6); ctx.quadraticCurveTo(0, 12, -f.width / 2, 6); ctx.closePath(); ctx.fill();
+    for (let i = 0; i < 4; i++) line(ctx, -f.width * .35 + i * f.width / 5, 2, -f.width * .25 + i * f.width / 5, -3, '#EAFBFF', 2);
   } else {
     ellipse(ctx, 0, 3, 40, 7, '#C6DDE2');
     partner(ctx, assets, f.kind, state.time);
@@ -334,21 +342,50 @@ function snowDust(ctx: CanvasRenderingContext2D, x: number, y: number, time: num
   ctx.globalAlpha = 1;
 }
 
+function boostEffects(ctx: CanvasRenderingContext2D, state: SkiState, x: number, y: number, reduced: boolean) {
+  const p = state.player;
+  if (reduced || state.over || p.boostTime <= 0) return;
+  ctx.save();
+  const strength = Math.min(1, p.boostTime / .25);
+  // Keep the middle of the snow trail clear: streaks live behind the skier
+  // and at the upper edges, while the expanding ring stays around the body.
+  for (let i = 0; i < 7; i++) {
+    const phase = mod(state.time * 2.8 + i / 7, 1);
+    const xx = x - 25 - phase * 120;
+    const yy = y - 14 - i % 3 * 16;
+    ctx.globalAlpha = (1 - phase) * .55 * strength;
+    line(ctx, xx - 15 - phase * 30, yy, xx, yy, i % 2 ? '#FFF3C3' : '#B3DFEA', 2.5);
+  }
+  for (let i = 0; i < 6; i++) {
+    const phase = mod(state.time * 1.7 + i * .23, 1);
+    const xx = i % 2 ? W - phase * 86 : phase * 95;
+    const yy = 215 + i * 16;
+    ctx.globalAlpha = .28 * strength;
+    line(ctx, xx - 22, yy, xx + 12, yy, '#FFF9E9', 2);
+  }
+  if (p.boostFlash > 0) {
+    const progress = 1 - p.boostFlash / .45;
+    ctx.globalAlpha = (1 - progress) * .65;
+    ctx.strokeStyle = '#F8C966'; ctx.lineWidth = 3 * (1 - progress) + 1;
+    ctx.beginPath(); ctx.arc(x, y - 32, 25 + progress * 40, 0, TAU); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function landingEffects(ctx: CanvasRenderingContext2D, state: SkiState, x: number, ground: number, reduced: boolean) {
+  if (reduced || !state.player.grounded || state.player.crashTime > 0 || state.player.squash <= 0) return;
+  const progress = 1 - state.player.squash / .65;
+  ctx.save(); ctx.globalAlpha = (1 - progress) * .65;
+  ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.ellipse(x, ground + 2, 15 + progress * 40, 3 + progress * 5, 0, 0, TAU); ctx.stroke();
+  ctx.restore();
+}
+
 function drawPlayer(ctx: CanvasRenderingContext2D, state: SkiState, assets: SkiAssets | null, x: number, y: number, reduced: boolean) {
   const p = state.player;
   const caught = state.over ? clamp(state.caughtTime / 1.2) : 0;
   const action: NaiwaAction = p.crashTime > 0 || state.over ? 'crash' : p.partner ? 'ride'
     : p.tucked ? 'tuck' : !p.grounded ? p.flipping ? 'flip' : 'jump' : p.speed > 330 ? 'boost' : 'glide';
-  if (p.partner && caught < .8) {
-    const lift = p.partner === 'slide' ? 22 : 42;
-    ctx.save(); ctx.translate(x + (p.partner === 'charge' ? 15 : 0), y + lift);
-    ctx.rotate(p.grounded ? terrainAngle(p.x, state.trail) : p.angle * .2);
-    partner(ctx, assets, p.partner, state.time); ctx.restore();
-    if (p.shield) {
-      ctx.strokeStyle = '#D6A648'; ctx.lineWidth = 2; ctx.beginPath();
-      ctx.arc(x, y - 25, 48, -.7, .7); ctx.stroke();
-    }
-  }
   ctx.save();
   const pivot = playerPivot(p);
   ctx.translate(x - caught * 13, y - pivot + caught * 15);
@@ -356,15 +393,29 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: SkiState, assets: SkiA
   ctx.scale(1 - caught * .8, 1 - caught * .8);
   ctx.translate(0, pivot);
   ctx.globalAlpha = 1 - clamp((caught - .7) / .3);
+  if (p.partner && caught < .8) {
+    ctx.save();
+    const clip = assets?.niulai[p.partner];
+    // The frame's saddle point is the rider's local foot origin. A shared
+    // parent transform keeps that point fixed through every roll angle.
+    if (!clip?.rideAnchors) ctx.translate(rideOffsetX(p), rideHeight(p));
+    partner(ctx, assets, p.partner, p.grounded ? state.time : 0, true);
+    if (p.shield) {
+      ctx.strokeStyle = '#D6A648'; ctx.lineWidth = 2; ctx.beginPath();
+      ctx.arc(0, -25, 48, -.7, .7); ctx.stroke();
+    }
+    ctx.restore();
+  }
   if (p.crashTime > 0 || state.over) ctx.scale(1.2, .58);
   const rig = assets?.rig;
   if (p.crashTime === 0 && !state.over && rig?.body && rig.legs && rig.skis) {
     const pose = bodyPose(p);
     if (!p.partner) sprite(ctx, rig.skis, state.time, NAIWA_SCALE);
     ctx.save();
-    ctx.translate(0, -2);
+    const footPivot = p.partner ? 0 : -2;
+    ctx.translate(0, footPivot);
     ctx.scale(1, 1 - pose.compression / 22);
-    ctx.translate(0, 2);
+    ctx.translate(0, -footPivot);
     sprite(ctx, rig.legs, state.time, NAIWA_SCALE);
     ctx.restore();
     ctx.save();
@@ -402,26 +453,26 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: SkiState, asset
   const time = state.time;
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H);
   ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.imageSmoothingEnabled = true;
-  sky(ctx, trail, cameraX, time, options.reducedMotion);
+  const scenery = assets?.scenery?.[state.trail];
+  if (scenery) {
+    drawSceneryLayer(ctx, scenery.sky, cameraX * .018);
+    drawSceneryLayer(ctx, scenery.mountains, cameraX * .075);
+    drawSceneryLayer(ctx, scenery.woodland, cameraX * .25);
+  } else sky(ctx, trail, cameraX, time, options.reducedMotion);
   snowGround(ctx, state, cameraX, cameraY, trail);
+  if (scenery) drawSceneryLayer(ctx, scenery.decor, cameraX * .6);
   if (menu) {
-    pine(ctx, 74, 434, 1.16, trail.pine, trail.snow);
-    pine(ctx, 729, 462, 1.48, trail.pine, trail.snow);
-    cabin(ctx, 177, 444, 1.05, time, options.reducedMotion);
-    ctx.save(); ctx.translate(635, 461); ctx.scale(1.38, 1.38);
+    pine(ctx, 64, 464, .72, trail.pine, trail.snow);
+    pine(ctx, 750, 475, .83, trail.pine, trail.snow);
+    cabin(ctx, 85, 500, .58, time, options.reducedMotion);
+    ctx.save(); ctx.translate(727, 500); ctx.scale(1.1, 1.1);
     ellipse(ctx, 0, 2, 24, 4, '#A7C5D0'); drawNaiwa(ctx, assets, 'idle', time); ctx.restore();
-    line(ctx, 682, 462, 687, 392, '#6B6050', 3);
-    line(ctx, 690, 461, 694, 392, '#6B6050', 3);
-    line(ctx, 675, 466, 709, 464, '#B5503F', 4);
+    line(ctx, 760, 502, 764, 451, '#6B6050', 3);
+    line(ctx, 768, 501, 772, 451, '#6B6050', 3);
+    line(ctx, 749, 506, 780, 504, '#D36B4D', 4);
   } else {
     const cabinX = 65 - cameraX;
     if (cabinX > -160 && cabinX < W + 160) cabin(ctx, cabinX, terrainY(65, state.trail) - cameraY, .72, time, options.reducedMotion);
-    for (let i = 0; i < 5; i++) {
-      const worldX = Math.floor((cameraX - 200) / 263) * 263 + i * 263;
-      const x = worldX - cameraX;
-      const ground = terrainY(worldX, state.trail) - cameraY;
-      pine(ctx, x, ground + 4, .65 + mod(worldX * .017, .4), trail.pine, trail.snow);
-    }
     for (const f of state.features) feature(ctx, f, state, assets, cameraX, cameraY);
     for (let i = 0; i < Math.min(state.chasers.length, 12); i++) {
       const chaser = state.chasers[i];
@@ -443,7 +494,22 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: SkiState, asset
     ctx.save(); ctx.globalAlpha = clamp(1 - height / 250, .12, .6);
     ellipse(ctx, x + 2, ground + 3, Math.max(8, 26 - height * .04), 4, '#7298A9'); ctx.restore();
     if (p.grounded) snowDust(ctx, x, ground, time, p.speed, options.reducedMotion);
+    landingEffects(ctx, state, x, ground, options.reducedMotion);
+    boostEffects(ctx, state, x, y, options.reducedMotion);
     drawPlayer(ctx, state, assets, x, y, options.reducedMotion);
+    if (p.crashTime > 0 && !options.reducedMotion) {
+      ctx.save();
+      for (let i = 0; i < 3; i++) {
+        const angle = time * 5 + i * TAU / 3;
+        const xx = x + Math.cos(angle) * 25;
+        const yy = y - 42 + Math.sin(angle) * 7;
+        ctx.fillStyle = '#F3BA4D'; ctx.beginPath();
+        ctx.moveTo(xx, yy - 5); ctx.lineTo(xx + 2, yy - 1); ctx.lineTo(xx + 6, yy);
+        ctx.lineTo(xx + 2, yy + 2); ctx.lineTo(xx, yy + 6); ctx.lineTo(xx - 2, yy + 2);
+        ctx.lineTo(xx - 6, yy); ctx.lineTo(xx - 2, yy - 1); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
     if (state.over) caughtSwarm(ctx, state, assets, x, ground, options.reducedMotion);
     if (!options.reducedMotion) for (let i = 0; i < Math.min(state.particles.length, 90); i++) {
       const particle = state.particles[i];
@@ -460,11 +526,18 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: SkiState, asset
       ctx.fillText('向雪谷出发', signX, signY - 53);
     }
   }
-  if (!options.reducedMotion) for (let i = 0; i < 26; i++) {
+  if (!options.reducedMotion) for (let i = 0; i < 14; i++) {
     const x = mod(i * 89.7 - time * (7 + i % 4), W);
     const y = mod(i * 57.1 + time * (9 + i % 5), H);
     ctx.globalAlpha = .2 + i % 3 * .12;
     ellipse(ctx, x, y, i % 4 === 0 ? 2 : 1, i % 4 === 0 ? 2 : 1, '#FFFFFF');
   }
   ctx.restore();
+}
+
+function drawSceneryLayer(ctx: CanvasRenderingContext2D, image: CanvasImageSource, scroll: number) {
+  // Native layers are 16:9; cover the 4:3 cartridge without stretching.
+  const width = H * 16 / 9;
+  const offset = mod(scroll, width);
+  for (let i = -1; i < 2; i++) ctx.drawImage(image, i * width - offset, 0, width + .5, H);
 }

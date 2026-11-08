@@ -105,16 +105,89 @@ test('a natural ground jump has enough airtime for one banked backflip', () => {
   assert.equal(state.flips, 1);
   assert.equal(state.bonus, 120);
   assert.equal(events.filter(e => e === 'flip').length, 1);
+  assert.equal(events.filter(e => e === 'boost').length, 1);
   assert.ok(!events.includes('crash'));
 });
 
-test('walking off an ice gap crashes at the rescue floor or far lip', () => {
-  for (const width of [130, 180, 500]) {
+test('a full airborne turn grants a small immediate boost before landing, once per milestone', () => {
+  for (const direction of [-1, 1]) {
     const state = clearRun();
-    addFeature(state, 'gap', state.player.x + 20, width);
-    const events = tick(state, {}, 250);
-    assert.equal(events.filter(e => e === 'crash').length, 1, `gap width ${width}`);
-    assert.ok(events.filter(e => e === 'land').length <= 1);
+    airborne(state, 600);
+    Object.assign(state.player, { airTime: .3, rotation: direction * (Math.PI * 2 - .01) });
+    const baseline = structuredClone(state);
+    baseline.player.rotation = 0;
+    tick(baseline, { tilt: direction });
+    const events = tick(state, { tilt: direction });
+    assert.equal(events.filter(e => e === 'boost').length, 1);
+    assert.equal(state.player.grounded, false);
+    assert.equal(state.player.boostTime, .9);
+    assert.ok(Math.abs(state.player.speed - baseline.player.speed - 45) < 1e-6);
+    assert.equal(state.flips, 0);
+    assert.equal(state.bonus, 0);
+    assert.equal(state.player.airBoosts, 1);
+    // Crossing the same full-turn boundary again must not pay twice.
+    state.player.rotation = direction * (Math.PI * 2 - .01);
+    assert.ok(!tick(state, { tilt: direction }).includes('boost'));
+    state.player.rotation = direction * (Math.PI * 4 - .01);
+    assert.ok(tick(state, { tilt: direction }).includes('boost'));
+    assert.equal(state.player.airBoosts, 2);
+    assert.equal(state.player.boostTime, .9);
+  }
+});
+
+test('partial turns and automatic upright correction do not earn boosts', () => {
+  const state = clearRun();
+  airborne(state, 600);
+  Object.assign(state.player, { airTime: .3, rotation: -Math.PI * 1.9, angle: -Math.PI * 1.9 });
+  assert.ok(!tick(state, {}, 45).includes('boost'));
+  assert.equal(state.player.boostTime, 0);
+  assert.equal(state.player.airBoosts, 0);
+});
+
+test('boost speed is capped, its timer expires, and frozen simulation preserves the effect', () => {
+  const state = clearRun();
+  airborne(state, 600);
+  Object.assign(state.player, { airTime: .3, rotation: -Math.PI * 2 + .01, speed: 469 });
+  assert.ok(tick(state, { jump: true }).includes('boost'));
+  assert.equal(state.player.speed, 470);
+  const frozen = structuredClone(state);
+  for (const dt of [0, -1, NaN, Infinity]) stepRun(state, emptyInput(), dt);
+  state.events = frozen.events;
+  assert.deepEqual(state, frozen);
+  tick(state, {}, 120);
+  assert.equal(state.player.boostTime, 0);
+  assert.equal(state.player.boostFlash, 0);
+  assert.ok(state.player.speed < 470);
+});
+
+test('reduced motion preserves flip boosts and scores without decorative particles', () => {
+  const state = clearRun();
+  airborne(state, 600);
+  Object.assign(state.player, { airTime: .3, rotation: -Math.PI * 2 + .01 });
+  const reduced = structuredClone(state);
+  stepRun(state, { ...emptyInput(), jump: true }, DT, false);
+  stepRun(reduced, { ...emptyInput(), jump: true }, DT, true);
+  assert.ok(state.events.includes('boost'));
+  assert.ok(state.particles.length > 0);
+  assert.equal(reduced.particles.length, 0);
+  state.particles = [];
+  assert.deepEqual(state, reduced);
+});
+
+test('every trail layout generates continuous snow without holes', () => {
+  for (const { id } of TRAILS) {
+    const state = clearRun(id);
+    for (let segment = 0; segment < 12; segment++) {
+      const x = segment * 2400 + 200;
+      Object.assign(state.player, { x, y: terrainY(x, id), angle: terrainAngle(x, id) });
+      state.features = [];
+      state.nextSegment = segment;
+      const events = tick(state);
+      assert.ok(state.features.length > 0);
+      assert.ok(state.features.every(f => f.kind !== 'gap'), `${id}: segment ${segment}`);
+      assert.equal(state.player.grounded, true);
+      assert.ok(!events.includes('crash'));
+    }
   }
 });
 
@@ -175,21 +248,15 @@ test('ski-tip contact begins landing before the foot anchor reaches the surface'
   assert.equal(state.player.crashTime, 0);
 });
 
-test('the leading ski can land on the far lip while the body is still over a gap', () => {
-  const state = clearRun();
-  addFeature(state, 'gap', state.player.x - 100, 130);
-  airborne(state, 1, 120);
-  const events = tick(state);
-  assert.ok(events.includes('land'));
-  assert.ok(!events.includes('crash'));
-  assert.equal(state.features[0].used, false);
-});
-
 test('the ski tip hits a rock before the torso reaches it', () => {
   const state = clearRun();
+  state.player.boostTime = .8;
+  state.player.boostFlash = .4;
   addFeature(state, 'rock', state.player.x + 30);
   const events = tick(state);
   assert.ok(events.includes('crash'));
+  assert.equal(state.player.boostTime, 0);
+  assert.equal(state.player.boostFlash, 0);
   assert.equal(state.features[0].used, true);
 });
 
@@ -230,17 +297,16 @@ test('repeated fresh presses recover faster but holding a key does not retrigger
   assert.ok(taps.player.invulnerable > 0);
 });
 
-test('slide mount has one shield, partner replacement never stacks, duration uses distance', () => {
+test('slide mount absorbs one hit and partner replacement never stacks shields', () => {
   const state = clearRun();
   addFeature(state, 'slide');
   assert.ok(tick(state).includes('mount'));
   assert.equal(state.player.partner, 'slide');
   assert.equal(state.player.shield, true);
-  assert.ok(Math.abs(state.player.y - (terrainY(state.player.x, state.trail) - 22)) < 0.1);
-  const left = state.player.partnerLeft;
-  const x = state.player.x;
+  const support = skiContacts(state.player)[0];
+  assert.ok(Math.abs(support.y - terrainY(support.x, state.trail)) < 0.1);
   tick(state, {}, 10);
-  assert.ok(Math.abs(left - state.player.partnerLeft - (state.player.x - x)) < 1e-8);
+  assert.equal(state.player.partner, 'slide');
   addFeature(state, 'branch');
   assert.ok(!tick(state).includes('crash'));
   assert.equal(state.player.partner, null);
@@ -256,13 +322,42 @@ test('slide mount has one shield, partner replacement never stacks, duration use
   assert.ok(tick(replacement).includes('mount'));
   assert.equal(replacement.player.partner, 'charge');
   assert.equal(replacement.player.shield, false);
-  assert.equal(replacement.player.partnerLeft, 1900);
-  replacement.player.partnerLeft = 1;
-  tick(replacement);
-  assert.equal(replacement.player.partner, null);
 });
 
-test('charge destroys rocks but branches and gaps remain dangerous', () => {
+test('both mounts last indefinitely without harmful contact and survive safe jumps', () => {
+  for (const { id } of TRAILS) {
+    for (const kind of ['slide', 'charge']) {
+      const state = clearRun(id);
+      addFeature(state, kind);
+      assert.ok(tick(state).includes('mount'));
+      const mountedX = state.player.x;
+      const events = tick(state, {}, 10 * 60 * 120);
+      assert.equal(state.player.partner, kind, `${id}: ${kind}`);
+      assert.ok(state.player.x - mountedX > 1900 * 50);
+      assert.equal(state.player.crashTime, 0);
+      assert.ok(!events.includes('crash'));
+      tick(state, { jump: true, jumpPressed: true });
+      assert.equal(state.player.grounded, false);
+      assert.ok(tick(state, {}, 240).includes('land'));
+      assert.equal(state.player.partner, kind);
+    }
+  }
+});
+
+test('slide absorbs a rock collision and immediately ends the mount', () => {
+  const state = clearRun();
+  addFeature(state, 'slide');
+  tick(state);
+  state.player.boostTime = .8;
+  addFeature(state, 'rock');
+  assert.ok(!tick(state).includes('crash'));
+  assert.equal(state.player.partner, null);
+  assert.equal(state.player.boostTime, 0);
+  assert.equal(state.player.shield, false);
+  assert.ok(state.player.invulnerable > 0);
+});
+
+test('charge keeps riding through rocks but a branch ends the mount', () => {
   const rocks = clearRun();
   addFeature(rocks, 'charge');
   tick(rocks);
@@ -274,15 +369,7 @@ test('charge destroys rocks but branches and gaps remain dangerous', () => {
   assert.equal(rocks.player.partner, 'charge');
   addFeature(rocks, 'branch');
   assert.ok(tick(rocks).includes('crash'));
-  for (const kind of ['slide', 'charge']) {
-    const gap = clearRun();
-    addFeature(gap, kind);
-    tick(gap);
-    addFeature(gap, 'gap', gap.player.x - 10, 500);
-    const events = tick(gap, {}, 100);
-    assert.ok(events.includes('crash'), `${kind} must not bridge an ice gap`);
-    assert.equal(gap.player.partner, null);
-  }
+  assert.equal(rocks.player.partner, null);
 });
 
 test('tucking passes under branches, normal stance crashes; ramp launches and coins score once', () => {
@@ -303,6 +390,8 @@ test('tucking passes under branches, normal stance crashes; ramp launches and co
   const events = tick(coins, {}, 10);
   assert.equal(events.filter(e => e === 'coin').length, 1);
   assert.equal(coins.coins, 1);
+  assert.ok(coins.coinFlash > 0);
+  assert.ok(coins.particles.some(p => p.color === '#FFD475'));
   assert.equal(coins.score, Math.floor(coins.distance) + 25);
 });
 
@@ -334,11 +423,11 @@ test('swept bodies catch crossings at extreme speed, including while riding', ()
   for (const partner of ['slide', 'charge']) {
     const state = clearRun();
     state.player.partner = partner;
-    state.player.partnerLeft = 1000;
     state.player.shield = true;
     state.player.invulnerable = 99;
     state.chasers = [{ x: state.player.x, offset: 0, lane: 0, phase: 0 }];
     assert.ok(tick(state).includes('caught'), partner);
+    assert.equal(state.player.partner, null);
     assert.equal(state.over, true);
   }
 });
@@ -367,13 +456,15 @@ test('one 1/60 call agrees with two 1/120 steps and an oversized frame is capped
   assert.ok(Math.abs(capped.time - 0.1) < 1e-9);
 });
 
-test('idle players recover from the first rock but repeated mistakes end every trail', () => {
+test('without mounts, idle players recover from the first rock but repeated mistakes end every trail', () => {
   for (const { id } of TRAILS) {
     const state = createRun(id);
     let crashes = 0;
     let caught = 0;
     let recoveredFirstCrash = false;
     for (let i = 0; i < 120 * 120 && !state.over; i++) {
+      // Isolate recovery and pursuit from the now unlimited mount protection.
+      state.features = state.features.filter(f => f.kind !== 'slide' && f.kind !== 'charge');
       stepRun(state, emptyInput(), DT);
       crashes += Number(state.events.includes('crash'));
       caught += Number(state.events.includes('caught'));
@@ -382,13 +473,13 @@ test('idle players recover from the first rock but repeated mistakes end every t
     assert.equal(recoveredFirstCrash, true, id);
     assert.ok(crashes >= 2, id);
     assert.equal(state.over, true, id);
-    assert.ok(state.time > 20 && state.time < 90, `${id}: ${state.time}s`);
+    assert.ok(state.time > 10 && state.time < 90, `${id}: ${state.time}s`);
     assert.equal(caught, 1, id);
     assert.deepEqual(tick(state), []);
   }
 });
 
-test('steady skiing maintains a close gap and partner boosts open a temporary lead', () => {
+test('steady skiing maintains a close gap and indefinite mounts keep a bounded lead', () => {
   for (const { id } of TRAILS) {
     for (const partner of ['slide', 'charge']) {
       const state = createRun(id);
@@ -403,9 +494,9 @@ test('steady skiing maintains a close gap and partner boosts open a temporary le
       tick(state, {}, 2 * 120);
       assert.ok(frontGap(state) > baseline + 50, `${id}: ${partner} boost`);
       tick(state, {}, 18 * 120);
-      assert.equal(state.player.partner, null);
-      const restored = frontGap(state);
-      assert.ok(restored >= 200 && restored <= 260, `${id}: restored ${restored}`);
+      assert.equal(state.player.partner, partner);
+      const mountedGap = frontGap(state);
+      assert.ok(mountedGap > baseline + 50 && mountedGap < 500, `${id}: mounted ${mountedGap}`);
       assert.equal(state.over, false);
     }
   }
@@ -418,7 +509,7 @@ test('hand-authored route patterns admit safe jump/tuck paths without invulnerab
     for (let i = 0; i < 180 * 120 && !state.over; i++) {
       const p = state.player;
       const obstacle = state.features.find(f => !f.used
-        && ((f.kind === 'rock' && !p.partner) || f.kind === 'gap' || (f.kind === 'branch' && p.partner))
+        && ((f.kind === 'rock' && p.partner !== 'charge') || (f.kind === 'branch' && p.partner))
         && f.x > p.x && f.x - p.x < 115);
       const tuck = !p.partner && state.features.some(f => f.kind === 'branch'
         && f.x - p.x < 120 && f.x + f.width > p.x - 30);
@@ -443,7 +534,7 @@ test('thirty-minute runs keep every live collection bounded with finite capped d
       if (frontGap(state) < 160) {
         for (const chaser of state.chasers) chaser.x -= 300;
       }
-      const obstacle = state.features.find(f => !f.used && ['rock', 'gap'].includes(f.kind)
+      const obstacle = state.features.find(f => !f.used && f.kind === 'rock'
         && f.x > state.player.x && f.x - state.player.x < 115);
       const branch = state.features.some(f => f.kind === 'branch' && f.x - state.player.x < 120
         && f.x + f.width > state.player.x - 30);
