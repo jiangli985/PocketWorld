@@ -35,3 +35,7 @@ lerna-debug.log*
 .env.*
 !.env.example
 .vite/
+
+# Local review evidence and linked dependencies
+node_modules
+.impeccable/review/

@@ -56,7 +56,11 @@ function mount(kind, overrides = {}) {
     '../interactables': { ROOM_OBSTACLES: [], INTERACTABLE_ITEMS: [] },
     './scene/audioEngine': { roomAudio: audio, PRESET_MUSIC_DISCS: [] },
     './scene/orbital/OrbitalScene': { OrbitalScene: 'OrbitalScene' },
-    './scene/orbital/library': { PRESET_BOOKS: [], loadLocalBooks: () => [] },
+    './scene/orbital/library/useLibrary': { useLibrary: options => ({ dispatch: options.onAction, back: options.onReturn, data: { books: [] }, flow: { current: { phase: 'idle' } } }) },
+    './scene/orbital/library/LibrarySurface': { LibrarySurface: 'LibrarySurface' },
+    './library/residentPose': { applyLibraryPose() {}, carryResident() {}, libraryCrouch: () => 0 },
+    './library/bookMotion': { residentLibraryTarget: () => [0, 0, 0] },
+    './library/catalog': { readingStand: () => [-3.45, 0, -1] },
     './scene/orbital/useWorldController': { useWorldController: () => world },
     './scene/orbital/orbital.css': {},
   };

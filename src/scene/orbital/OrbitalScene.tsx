@@ -21,7 +21,7 @@ const FOCUS: Record<string, { target: [number, number, number]; offset: [number,
   journal: { target: [-0.48, 1.20, -1.94], offset: [0, 1.05, 0.78] },
   schedule: { target: [0.57, 1.20, -1.96], offset: [0, 0.88, 0.48] },
   'schedule-glass': { target: [0.69, 2.30, -3.39], offset: [0, 0.02, 1.75] },
-  'book-01': { target: [-3.35, 0.9, -1.75], offset: [0.3, 1.3, 1.35] },
+  'book-01': { target: [-3.35, 1.03, -1.14], offset: [1.35, 1.12, 2.5] },
   bed: { target: [-2.5, 0.7, 1.0], offset: [3.2, 3.2, 4.0] },
 };
 interface OrbitalSceneProps extends WorldSceneProps {
@@ -35,7 +35,7 @@ function CameraRig(props: OrbitalSceneProps) {
   const fromTarget = useRef(new THREE.Vector3());
   const destination = useRef(new THREE.Vector3());
   const target = useRef(new THREE.Vector3());
-  const moving = useRef(false);
+  const moving = useRef(false), cameraProgress = useRef(0), localFlight = useRef(false);
   const currentView = useRef('habitat/');
   const narrow = size.width < 720;
   const homeDirection = useMemo(() => new THREE.Vector3(narrow ? 13 : 11, 9, narrow ? 12 : 14).normalize(), [narrow]);
@@ -52,7 +52,7 @@ function CameraRig(props: OrbitalSceneProps) {
   }, [camera, size.width, size.height, homeDistance, homeDirection]);
   useEffect(() => {
     if (!controls.current || props.transition.phase === 'idle') return;
-    const view = `${props.transition.toScene}/${props.focusedObject ?? ''}/${size.width}/${size.height}`;
+    const view = `${props.transition.toScene}/${props.focusedObject ?? ''}/${size.width}/${size.height}/${props.library?.cameraView ?? ''}`;
     if (view === currentView.current && props.transition.phase !== 'returning' && props.transition.phase !== 'error') return;
     currentView.current = view;
     fromPosition.current.copy(camera.position);
@@ -63,10 +63,16 @@ function CameraRig(props: OrbitalSceneProps) {
       target.current.copy(origin).add(new THREE.Vector3(...pose.target));
       if (props.focusedObject === 'book-01' && props.transition.toScene === 'observatory') target.current.z += 1.25;
       const offset = new THREE.Vector3(...pose.offset);
+      if (props.focusedObject === 'book-01') {
+        if (props.library?.cameraView === 'close') { offset.set(1.75, .65, .30); target.current.y = 1.08; }
+        if (props.library?.cameraView === 'side') offset.set(2.5, 1.1, -.35);
+      }
       if (props.focusedObject?.startsWith('schedule')) {
         offset.multiplyScalar(Math.max(1, 0.62 / (size.width / size.height)));
         if (narrow && props.focusedObject === 'schedule') target.current.x = origin.x + 0.69;
       }
+      if (props.focusedObject === 'book-01' && narrow) { const close = props.library?.cameraView === 'close'; offset.multiplyScalar(close ? 1.9 : 1.6); target.current.y -= close ? .40 : .55; }
+      if (props.focusedObject === 'book-01' && !narrow) target.current.x += .45;
       destination.current.copy(target.current).add(offset);
       // Frame the shelf and slot together, including on portrait touchscreens.
       if (props.focusedObject === 'computer') destination.current.z = target.current.z + Math.max(pose.offset[2], 2.25 / (2 * Math.tan(THREE.MathUtils.degToRad(17)) * (size.width / size.height)) + 0.25);
@@ -79,12 +85,13 @@ function CameraRig(props: OrbitalSceneProps) {
       controls.current.target.copy(target.current);
       controls.current.update();
       moving.current = false;
-    } else moving.current = true;
-  }, [props.transition.id, props.focusedObject, props.transition.phase === 'error', size.width, size.height]);
-  useFrame(() => {
+    } else { moving.current = true; cameraProgress.current = 0; localFlight.current = props.focusedObject === 'book-01'; }
+  }, [props.transition.id, props.focusedObject, props.transition.phase === 'error', size.width, size.height, props.library?.cameraView]);
+  useFrame((_, delta) => {
     if (!controls.current || !moving.current) return;
     const travel = props.transition.action?.kind === 'travel';
-    const progress = props.motion.current[travel ? 'sceneProgress' : 'progress'];
+    if (localFlight.current) cameraProgress.current = Math.min(1, cameraProgress.current + Math.min(delta, .04) / (props.reducedMotion ? .25 : .8));
+    const progress = localFlight.current ? cameraProgress.current : props.motion.current[travel ? 'sceneProgress' : 'progress'];
     camera.position.lerpVectors(fromPosition.current, destination.current, progress);
     if (travel && !props.reducedMotion) camera.position.y += Math.sin(progress * Math.PI) * 3;
     controls.current.target.lerpVectors(fromTarget.current, target.current, progress);
@@ -136,13 +143,13 @@ function WorldContent(props: OrbitalSceneProps) {
       };
       return <group key={id} position={SCENE_ORIGINS[id]} visible={id === props.sceneId || (props.transition.action?.kind === 'travel' && props.transition.phase !== 'active' && props.transition.phase !== 'error')}>
         {id === props.sceneId && <OrbitalLighting objects={world.objects} />}
-        <HabitatShell variant={id} onFloorClick={point => { if ((!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy) { void roomAudio.unlock(); setWalkTarget(point); } }} />
+        <HabitatShell variant={id} onFloorClick={point => { if ((!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy && (!props.library || props.library.flow.current.phase === 'idle')) { void roomAudio.unlock(); setWalkTarget(point); } }} />
         {id === 'habitat' && <ScheduleSurfaces {...world} visible={props.sceneId === 'habitat'} />}
         <Suspense fallback={null}><HabitatFurniture {...world} /><MediaObjects {...world} /></Suspense>
         {id === props.sceneId && <>
           <FeatureSurfaces {...world} />
           <OrbitalResidents {...world} drawerInteraction={drawerInteraction}
-            drawerEnabled={!props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} onDrawerAction={props.onAction} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={(!props.focusedObject || props.focusedObject === 'bed') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
+            drawerEnabled={!props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} onDrawerAction={props.onAction} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={(!props.focusedObject || props.focusedObject === 'bed') && (!props.library || props.library.view.phase === 'idle') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
         </>}
       </group>;
     })}

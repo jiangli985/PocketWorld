@@ -88,9 +88,10 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
         const updated = { ...current[action.sceneId], [action.objectId]: next };
         if (action.kind === 'sleep' && next.active) updated.chair = { ...(updated.chair ?? CLOSED_OBJECT), active: false };
         if (action.kind === 'sit' && next.active) updated.bed = { ...(updated.bed ?? CLOSED_OBJECT), active: false };
-        if (action.kind === 'travel') {
+        if (action.kind === 'travel' || action.objectId === 'book-01') {
           for (const objectId of ['bed', 'chair']) if (updated[objectId]) updated[objectId] = { ...updated[objectId], active: false };
         }
+        if (action.objectId === 'book-01') { updated.cabinet = { ...(updated.cabinet ?? CLOSED_OBJECT), open: false }; if (updated['cabinet-item']) updated['cabinet-item'] = { ...updated['cabinet-item'], active: false }; }
         if (action.objectId === 'cabinet' && !next.open && updated['cabinet-item']) updated['cabinet-item'] = { ...updated['cabinet-item'], active: false, itemId: undefined };
         if (action.objectId === 'cabinet-item' && next.active) updated.cabinet = { ...(updated.cabinet ?? CLOSED_OBJECT), open: true };
         return { ...current, [action.sceneId]: updated };
