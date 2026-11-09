@@ -16,7 +16,7 @@ type Point = [number, number, number];
 const PLAYER: Point = [-0.35, 1.2, -2.25];
 const PLATTER: Point = [-0.48, 1.295, -2.25];
 const gameModules = import.meta.glob<{ default: React.ComponentType<GameCartridgeProps> }>('../../games/*/index.tsx');
-const gameNames: Record<GameId, string> = { mario: '蘑菇冒险', shooter: '团团魔法录' };
+const gameNames: Record<GameId, string> = { mario: '奶娃滑雪大冒险', shooter: '团团魔法录' };
 const gameColors: Record<GameId, string> = { mario: '#cb795a', shooter: '#8b72b3' };
 // Six accessible records per shelf; the physical end tabs turn through the collection.
 const discPosition = (index: number): Point => [-0.74 + (index % 6) * 0.2, 1.37, -2.86];
@@ -322,7 +322,6 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
 
         {props.activeGame && activeComponent ? <ScreenBoundary key={props.activeGame} onError={() => { setLoadError({ game: props.activeGame!, text: '卡带暂时无法运行，请拔出后重试。' }); props.onFeatureError('卡带暂时无法运行，请拔出后重试。'); }}>
           {React.createElement(activeComponent, { width: 800, height: 600, isActive: gameActive, isMuted: props.isMuted, onExit: eject, onScoreChange: updateScore, onGameOver: result => updateScore(result.score, result.highScore) })}
-          {props.activeGame !== 'shooter' && <div style={{ position: 'absolute', top: 10, left: 20, pointerEvents: 'none', fontSize: 18 }}>得分 {score.current} · 最高 {score.high}{paused ? ' · 已暂停' : ''}</div>}
         </ScreenBoundary> : <div style={screenMessage}>
           <strong style={{ fontSize: 24, letterSpacing: 3 }}>POCKET PLAY</strong>
           <span>{transfer?.game ? transfer.returnOnly ? '卡带正在归位' : transfer.eject ? '正在拔出卡带' : '正在插入卡带' : props.activeGame ? loadError?.game === props.activeGame ? loadError.text : computerFocused ? '正在读取卡带…' : '游戏已暂停，靠近电脑继续' : '按住卡带，拖到右侧卡槽后松手'}</span>
