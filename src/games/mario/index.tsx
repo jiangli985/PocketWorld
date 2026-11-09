@@ -63,6 +63,7 @@ export default function MarioGame({ isActive = true, isMuted = false, onExit, on
   const [showResults, setShowResults] = useState(false);
   const [hud, setHud] = useState(() => snapshot(run.current));
   const menu = useRef<HTMLDivElement>(null);
+  const escape = useRef(() => {});
   const muted = isMuted || localMuted;
 
   const clearInput = useCallback(() => { held.current.clear(); input.current = emptyInput(); }, []);
@@ -145,7 +146,7 @@ export default function MarioGame({ isActive = true, isMuted = false, onExit, on
     const keydown = (event: KeyboardEvent) => {
       if (event.code === 'Escape') {
         event.preventDefault(); event.stopImmediatePropagation();
-        if (!event.repeat) pause();
+        if (!event.repeat) escape.current();
         return;
       }
       if (phaseRef.current !== 'playing' || !keys.includes(event.code)) return;
@@ -215,6 +216,14 @@ export default function MarioGame({ isActive = true, isMuted = false, onExit, on
     input.current.tuck = ['touch-tuck', 'KeyS', 'ArrowDown'].some(value => held.current.has(value));
   };
   const returnHome = () => { run.current = createRun('valley'); go('home'); };
+  const exit = () => { sound.current?.stop(); latest.current.onExit(); };
+  escape.current = () => {
+    const current = phaseRef.current;
+    if (current === 'playing') pause();
+    else if (current === 'paused') resume();
+    else if (current === 'home') exit();
+    else returnHome();
+  };
   const trail = TRAILS.find(value => value.id === run.current.trail)!;
 
   return <div ref={container} className={`ski-game${compact ? ' ski-compact' : ''}${touchUI ? ' ski-touch-ui' : ''}`} tabIndex={-1} aria-label="奶娃滑雪大冒险" onPointerDown={event => event.stopPropagation()} onContextMenu={event => event.preventDefault()}>
@@ -229,7 +238,7 @@ export default function MarioGame({ isActive = true, isMuted = false, onExit, on
         <p className="ski-tagline">雪板一踩，烦恼拜拜。</p>
         <p className="ski-record"><SkiIcon name="cup"/>最高纪录 <strong>{high.toLocaleString()}</strong><small>分</small></p>
         <div className="ski-home-actions"><button className="ski-primary" disabled={loading || !isActive} onClick={() => { sound.current?.unlock(); go('select'); }}>{loading ? '正在准备雪板…' : '出发滑雪'}<SkiIcon name="arrow"/></button>
-          <button className="ski-quiet" onClick={() => { sound.current?.stop(); latest.current.onExit(); }}>退出到电脑</button></div>
+          <button className="ski-quiet" onClick={exit}>退出到电脑</button></div>
         <p className="ski-home-help">{touchUI ? '轻按跳跃 · 长按翻转 · 松手落地' : 'W / 空格 跳跃 · 长按翻转 · S 收身'}</p>
       </div>}
       {phase === 'select' && <div className="ski-select ski-menu-surface ski-wood" ref={menu}>

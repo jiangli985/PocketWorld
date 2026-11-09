@@ -406,9 +406,10 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: SkiState, assets: SkiA
     }
     ctx.restore();
   }
-  if (p.crashTime > 0 || state.over) ctx.scale(1.2, .58);
   const rig = assets?.rig;
-  if (p.crashTime === 0 && !state.over && rig?.body && rig.legs && rig.skis) {
+  const fallen = p.crashTime > 0 || state.over;
+  if (fallen && rig?.body && rig.legs && rig.skis) drawFallenRig(ctx, rig.body, rig.legs, rig.skis, state.time, reduced);
+  else if (!fallen && rig?.body && rig.legs && rig.skis) {
     const pose = bodyPose(p);
     if (!p.partner) sprite(ctx, rig.skis, state.time, NAIWA_SCALE);
     ctx.save();
@@ -424,8 +425,23 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: SkiState, assets: SkiA
     ctx.translate(0, 30);
     sprite(ctx, rig.body, state.time, NAIWA_SCALE);
     ctx.restore();
-  } else drawNaiwa(ctx, assets, action, state.time);
+  } else {
+    if (fallen) ctx.scale(1.2, .58);
+    drawNaiwa(ctx, assets, action, state.time);
+  }
   ctx.restore();
+}
+
+// Sit-down crash built from the same rig layers: skis stuck in the snow behind,
+// legs flat forward from the hip and a dazed body leaning back over the hip.
+function drawFallenRig(ctx: CanvasRenderingContext2D, body: SpriteClip, legs: SpriteClip, skis: SpriteClip, time: number, reduced: boolean) {
+  const sway = reduced ? 0 : Math.sin(time * 6) * .06;
+  ctx.save(); ctx.translate(-32, -26); ctx.rotate(-1.05); sprite(ctx, skis, time, NAIWA_SCALE); ctx.restore();
+  for (const [layer, angle] of [[legs, -1.35], [body, -.3 + sway]] as const) {
+    ctx.save(); ctx.translate(0, -8); ctx.rotate(angle); ctx.translate(0, 30);
+    sprite(ctx, layer, time, NAIWA_SCALE);
+    ctx.restore();
+  }
 }
 
 function caughtSwarm(ctx: CanvasRenderingContext2D, state: SkiState, assets: SkiAssets | null, x: number, y: number, reduced: boolean) {
