@@ -10,14 +10,16 @@ import { HabitatShell } from './HabitatShell';
 import { HabitatFurniture } from './HabitatFurniture';
 import { MediaObjects } from './MediaObjects';
 import { FeatureSurfaces } from './FeatureSurfaces';
+import { JournalBookProvider } from './JournalBookState';
+import { readingPosition } from './FurnitureBooks';
 import { OrbitalResidents } from './OrbitalResidents';
 
 const FOCUS: Record<string, { target: [number, number, number]; offset: [number, number, number] }> = {
   computer: { target: [1.45, 1.58, -2.30], offset: [0, 0.30, 3.5] },
-  'music-player': { target: [-0.45, 1.2, -2.0], offset: [1.4, 2.5, 3.1] },
-  journal: { target: [-0.48, 1.20, -1.94], offset: [0, 1.05, 0.78] },
+  'music-player': { target: [-0.45, 1.2, -2.2], offset: [1.4, 2.5, 3.1] },
+  journal: { target: [-0.49, 1.15, -1.92], offset: [0.3, 0.98, 0.78] },
   schedule: { target: [0.69, 1.20, -1.96], offset: [0, 1.05, 0.78] },
-  'book-01': { target: [-3.35, 0.9, -1.75], offset: [0.3, 1.3, 1.35] },
+  'book-01': { target: readingPosition(false), offset: [0.28, 0.82, 1.05] },
   bed: { target: [-2.5, 0.7, 1.0], offset: [3.2, 3.2, 4.0] },
 };
 interface OrbitalSceneProps extends WorldSceneProps {
@@ -57,10 +59,15 @@ function CameraRig(props: OrbitalSceneProps) {
     const pose = props.focusedObject ? FOCUS[props.focusedObject] : null;
     if (pose) {
       target.current.copy(origin).add(new THREE.Vector3(...pose.target));
-      if (props.focusedObject === 'book-01' && props.transition.toScene === 'observatory') target.current.z += 1.25;
+      if (props.focusedObject === 'book-01' && props.transition.toScene === 'observatory') target.current.z += readingPosition(true)[2] - readingPosition(false)[2];
       destination.current.copy(target.current).add(new THREE.Vector3(...pose.offset));
       // Frame the shelf and slot together, including on portrait touchscreens.
       if (props.focusedObject === 'computer') destination.current.z = target.current.z + Math.max(pose.offset[2], 2.25 / (2 * Math.tan(THREE.MathUtils.degToRad(17)) * (size.width / size.height)) + 0.25);
+      if (props.focusedObject === 'journal' || props.focusedObject === 'book-01') {
+        const width = props.focusedObject === 'journal' ? 0.7 : 0.78;
+        const distance = Math.max(Math.hypot(...pose.offset), width / (2 * Math.tan(THREE.MathUtils.degToRad(17)) * (size.width / size.height)));
+        destination.current.sub(target.current).setLength(distance).add(target.current);
+      }
     } else {
       target.current.copy(origin).add(new THREE.Vector3(0, 1.05, 0));
       destination.current.copy(target.current).addScaledVector(homeDirection, homeDistance);
@@ -121,11 +128,13 @@ function WorldContent(props: OrbitalSceneProps) {
       return <group key={id} position={SCENE_ORIGINS[id]} visible={id === props.sceneId || (props.transition.action?.kind === 'travel' && props.transition.phase !== 'active' && props.transition.phase !== 'error')}>
         {id === props.sceneId && <OrbitalLighting objects={world.objects} />}
         <HabitatShell variant={id} onFloorClick={point => { if ((!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive) { void roomAudio.unlock(); setWalkTarget(point); } }} />
+        <JournalBookProvider>
         <Suspense fallback={null}><HabitatFurniture {...world} /><MediaObjects {...world} /></Suspense>
         {id === props.sceneId && <>
           <FeatureSurfaces {...world} />
           <OrbitalResidents {...world} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={(!props.focusedObject || props.focusedObject === 'bed') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
         </>}
+        </JournalBookProvider>
       </group>;
     })}
   </>;

@@ -2,9 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Html } from '@react-three/drei';
 import type { BookContent, JournalEntry, ScheduleEntry, WorldSceneProps } from '../../types/world';
 import { PRESET_BOOKS } from './library';
+import { JOURNAL_PLACEMENT, readingPosition } from './FurnitureBooks';
+import { JournalNotebook } from './JournalNotebook';
+import { ReadingBook } from './ReadingBook';
 export function FeatureSurfaces(props: WorldSceneProps) {
   const id = props.focusedObject;
   const [journal, setJournal] = useState<JournalEntry>({ id: 'today', date: new Date().toLocaleDateString('sv-SE'), text: '', updatedAt: '' });
+  const [journalVersion, setJournalVersion] = useState(0);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([{ id: 'morning', time: '09:00', title: '', completed: false }, { id: 'afternoon', time: '14:00', title: '', completed: false }, { id: 'evening', time: '20:00', title: '', completed: false }]);
   const [book, setBook] = useState<BookContent>(PRESET_BOOKS[0]);
   const [bookView, setBookView] = useState<'reading' | 'catalog' | 'add'>('reading');
@@ -16,7 +20,6 @@ export function FeatureSurfaces(props: WorldSceneProps) {
   const [saveState, setSaveState] = useState('');
   const [loaded, setLoaded] = useState(false);
   const changed = useRef(false);
-  const swipeStart = useRef<{ id: number; x: number; y: number; multi: boolean } | null>(null);
   const onError = useRef(props.onFeatureError);
   onError.current = props.onFeatureError;
   useEffect(() => { if (id !== 'book-01') setBookView('reading'); }, [id]);
@@ -30,7 +33,10 @@ export function FeatureSurfaces(props: WorldSceneProps) {
         if (id === 'journal') {
           const stored = props.adapters?.journal ? null : localStorage.getItem('pocketworld:journal:today');
           const entry = props.adapters?.journal ? await props.adapters.journal.load(abort.signal) : stored ? JSON.parse(stored) as JournalEntry : journal;
-          if (!abort.signal.aborted && entry && typeof entry.text === 'string') setJournal(entry);
+          if (!abort.signal.aborted && entry && typeof entry.text === 'string') {
+            setJournal(entry);
+            setJournalVersion(value => value + 1);
+          }
         } else if (id === 'schedule') {
           const stored = props.adapters?.schedule ? null : localStorage.getItem('pocketworld:schedule');
           const entries = props.adapters?.schedule ? await props.adapters.schedule.load(abort.signal) : stored ? JSON.parse(stored) as ScheduleEntry[] : schedule;
@@ -71,22 +77,17 @@ export function FeatureSurfaces(props: WorldSceneProps) {
     void props.adapters.library.saveBookmark(book.id, page, abort.signal).catch(() => { if (!abort.signal.aborted) onError.current('阅读位置暂时未能保存。'); });
     return () => abort.abort();
   }, [page, book.id, bookId, loaded, id, props.adapters]);
-  useEffect(() => {
-    if (id !== 'book-01' || bookView !== 'reading') return;
-    const key = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA'].includes(event.target.tagName)) return;
-      if (event.code !== 'ArrowRight' && event.code !== 'ArrowLeft') return;
-      event.preventDefault();
-      const direction = event.code === 'ArrowRight' ? 1 : -1;
-      if (page + direction < 0 || page + direction >= book.pages.length) return;
-      props.onAction({ sceneId: props.sceneId, objectId: 'book-01', kind: 'turn-page', payload: { direction, value: page + direction } });
-    };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, [id, bookView, page, book.pages.length, props.sceneId, props.onAction]);
   const openBook = (nextId: string) => {
     setBookView('reading');
     if (nextId !== bookId) props.onAction({ sceneId: props.sceneId, objectId: 'book-01', kind: 'read', payload: { itemId: nextId } });
+  };
+  const updateJournal = (entry: JournalEntry) => {
+    changed.current = true;
+    setJournal(entry);
+    if (!props.adapters?.journal) {
+      try { localStorage.setItem('pocketworld:journal:today', JSON.stringify(entry)); }
+      catch { onError.current('本地存储暂时不可用。'); }
+    }
   };
   const updateSchedule = (entryId: string, patch: Partial<ScheduleEntry>) => {
     changed.current = true;
@@ -97,42 +98,27 @@ export function FeatureSurfaces(props: WorldSceneProps) {
       catch { onError.current('本地存储暂时不可用。'); }
     }
   };
-  if (!id || !['journal', 'schedule', 'book-01'].includes(id) || !loaded || !props.objects[id]?.open) return null;
-  const placement: Record<string, [number, number, number]> = { journal: [-0.482, 1.225, -1.92], schedule: [0.691, 1.225, -1.95], 'book-01': [-3.40, 0.79, props.sceneId === 'observatory' ? -0.61 : -1.86] };
-  return <Html transform position={placement[id]} rotation={[-Math.PI / 2 + 0.01, 0, 0]} distanceFactor={0.32} zIndexRange={[20, 10]} className="world-page-anchor">
-    <article className="world-page" style={{ touchAction: id === 'book-01' ? 'pan-y' : 'auto' }} onPointerDown={event => {
-      event.stopPropagation();
-      if (swipeStart.current) { swipeStart.current.multi = true; return; }
-      swipeStart.current = { id: event.pointerId, x: event.clientX, y: event.clientY, multi: !event.isPrimary };
-    }} onPointerUp={event => {
-      event.stopPropagation();
-      const start = swipeStart.current;
-      swipeStart.current = null;
-      if (!start || start.multi || start.id !== event.pointerId || id !== 'book-01' || bookView !== 'reading' || Math.abs(event.clientX - start.x) < 25 || Math.abs(event.clientY - start.y) > Math.abs(event.clientX - start.x)) return;
-      const direction = event.clientX < start.x ? 1 : -1;
-      if (page + direction >= 0 && page + direction < book.pages.length) props.onAction({ sceneId: props.sceneId, objectId: id, kind: 'turn-page', payload: { direction, value: page + direction } });
-    }} onPointerCancel={() => { swipeStart.current = null; }} onWheel={event => event.stopPropagation()}>
-      {id === 'book-01' && <nav className="world-book-nav" aria-label="书柜导航">
+  if (!id || !['journal', 'schedule', 'book-01'].includes(id) || !loaded || !props.objects[id]?.open || (id === 'journal' && !['active', 'error'].includes(props.transition.phase))) return null;
+  if (id === 'journal') return <group position={JOURNAL_PLACEMENT.position} scale={JOURNAL_PLACEMENT.scale}>
+    <JournalNotebook key={journalVersion} entry={journal} saveState={saveState} onChange={updateJournal} onGesture={props.onGesture} />
+  </group>;
+  if (id === 'book-01') return <>
+    <ReadingBook book={book} page={page} observatory={props.sceneId === 'observatory'} active={bookView === 'reading'}
+      canTurn={['active', 'error'].includes(props.transition.phase)} onCatalog={() => setBookView('catalog')} onAdd={() => setBookView('add')}
+      onTurn={(direction, value) => props.onAction({ sceneId: props.sceneId, objectId: 'book-01', kind: 'turn-page', payload: { direction, value } })} />
+    {bookView !== 'reading' && <Html center position={readingPosition(props.sceneId === 'observatory')} zIndexRange={[20, 20]}>
+    <article className="world-page" onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
+      <nav className="world-book-nav" aria-label="书柜导航">
+        <button type="button" onClick={() => setBookView('reading')}>返回阅读</button>
         <button type="button" onClick={() => setBookView('catalog')}>书目</button>
         <button type="button" onClick={() => setBookView('add')}>添加书籍</button>
-      </nav>}
-      <small>{id === 'journal' ? journal.date : id === 'schedule' ? '留一些时间给自己' : bookView === 'reading' ? book.author : '书柜 · 我的阅读角'}</small>
-      <h2>{id === 'journal' ? '今天，记住什么' : id === 'schedule' ? '今天的安排' : bookView === 'reading' ? book.title : bookView === 'catalog' ? '书柜藏书' : '添一本自己的书'}</h2>
-      {id === 'journal' && <textarea aria-label="日记正文" placeholder="写下此刻的想法……" value={journal.text} onFocus={() => props.onGesture(true)} onBlur={() => props.onGesture(false)} onChange={event => {
-        changed.current = true;
-        const entry = { ...journal, text: event.target.value, updatedAt: new Date().toISOString() };
-        setJournal(entry);
-        if (!props.adapters?.journal) { try { localStorage.setItem('pocketworld:journal:today', JSON.stringify(entry)); } catch { onError.current('本地存储暂时不可用。'); } }
-      }} />}
-      {id === 'schedule' && <div className="world-agenda">{schedule.map((entry, index) => <label key={entry.id}>
-        <input aria-label={`第${index + 1}项时间`} value={entry.time} onFocus={() => props.onGesture(true)} onBlur={() => props.onGesture(false)} onChange={event => updateSchedule(entry.id, { time: event.target.value })} />
-        <input aria-label={`第${index + 1}项安排`} placeholder="一件想做的事" value={entry.title} onFocus={() => props.onGesture(true)} onBlur={() => props.onGesture(false)} onChange={event => updateSchedule(entry.id, { title: event.target.value })} />
-      </label>)}</div>}
-      {id === 'book-01' && bookView === 'reading' && <p className="world-book-text">{book.pages[page] ?? '这一页暂时空着。'}</p>}
-      {id === 'book-01' && bookView === 'catalog' && <div className="world-book-list">{props.books.map(entry => <button type="button" key={entry.id} onClick={() => openBook(entry.id)}>
+      </nav>
+      <small>书柜 · 我的阅读角</small>
+      <h2>{bookView === 'catalog' ? '书柜藏书' : '添一本自己的书'}</h2>
+      {bookView === 'catalog' && <div className="world-book-list">{props.books.map(entry => <button type="button" key={entry.id} onClick={() => openBook(entry.id)}>
         <strong>{entry.title}</strong><small>{entry.author || '佚名'} · {entry.id.startsWith('visitor-') ? '我的书' : '舱室藏书'}</small>
       </button>)}</div>}
-      {id === 'book-01' && bookView === 'add' && <form className="world-book-form" onSubmit={event => {
+      {bookView === 'add' && <form className="world-book-form" onSubmit={event => {
         event.preventDefault();
         const added = props.onAddBook(bookTitle, bookAuthor, bookText);
         if (!added) return;
@@ -144,7 +130,19 @@ export function FeatureSurfaces(props: WorldSceneProps) {
         <textarea aria-label="书籍正文" placeholder="在这里写下正文，空一行分隔书页……" required maxLength={10000} value={bookText} onFocus={() => props.onGesture(true)} onBlur={() => props.onGesture(false)} onChange={event => setBookText(event.target.value)} />
         <button type="submit">放进书柜</button>
       </form>}
-      <footer>{id === 'book-01' ? bookView === 'reading' ? `${page + 1} / ${book.pages.length} · 滑动书页` : bookView === 'catalog' ? `${props.books.length} 本藏书 · 点击书名阅读` : '只保存在当前浏览器，空一行分隔书页' : saveState || '纸上的时间，慢一点'}</footer>
+      <footer>{bookView === 'catalog' ? `${props.books.length} 本藏书 · 点击书名阅读` : '只保存在当前浏览器，空一行分隔书页'}</footer>
     </article>
-  </Html>;
+    </Html>}
+  </>;
+  return <Html transform position={[0.691, 1.225, -1.95]} rotation={[-Math.PI / 2 + 0.01, 0, 0]} distanceFactor={0.32} zIndexRange={[20, 10]} className="world-page-anchor">
+    <article className="world-page" onPointerDown={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
+      <small>留一些时间给自己</small>
+      <h2>今天的安排</h2>
+      <div className="world-agenda">{schedule.map((entry, index) => <label key={entry.id}>
+        <input aria-label={`第${index + 1}项时间`} value={entry.time} onFocus={() => props.onGesture(true)} onBlur={() => props.onGesture(false)} onChange={event => updateSchedule(entry.id, { time: event.target.value })} />
+        <input aria-label={`第${index + 1}项安排`} placeholder="一件想做的事" value={entry.title} onFocus={() => props.onGesture(true)} onBlur={() => props.onGesture(false)} onChange={event => updateSchedule(entry.id, { title: event.target.value })} />
+      </label>)}</div>
+      <footer>{saveState || '纸上的时间，慢一点'}</footer>
+    </article>
+    </Html>
 }

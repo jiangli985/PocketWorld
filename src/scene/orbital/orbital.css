@@ -51,7 +51,25 @@
 .world-agenda input:first-child { color: #856844; }
 .world-page textarea:focus-visible, .world-page input:focus-visible { outline: 1px solid #a99167; outline-offset: 4px; }
 .world-page ::selection { background: #c7d4bf; color: #303c31; }
-.world-book-text { font: 16px/2 'Songti SC', serif; white-space: pre-line; flex: 1; }
+/* Native text editing drives the printed texture; these elements do not cover the paper. */
+.world-journal-native-layer { position: relative; width: 1px; height: 1px; pointer-events: none; }
+.world-journal-native-layer textarea { position: absolute; width: 1px; height: 22px; min-height: 0; padding: 0; margin: 0; border: 0; opacity: 0; resize: none; pointer-events: none; font: 16px/22px SimSun, serif; }
+.world-journal-paper-hit { display: block; width: 24px; height: 26px; padding: 0; margin: 0; border: 0; background: transparent; color: transparent; opacity: 0; cursor: pointer; touch-action: manipulation; }
+.world-journal-paper-hit:focus-visible { opacity: 1; outline: 1px solid #92734d; outline-offset: 1px; }
+.world-journal-date-hit { box-sizing: border-box; width: 100px; padding: 0 6px; text-align: right; font: 10px/26px Georgia, serif; cursor: text; }
+.world-journal-date-hit:focus { opacity: 1; color: #82745c; caret-color: #7c513d; background: #f5f0e1; outline: 1px solid #92734d; outline-offset: 1px; }
+.world-journal-touch-tools { display: grid; gap: 4px; padding: 4px; border: 1px solid #d5c7a9; border-radius: 8px; background: #f5f0e8; color: #4d5b53; }
+.world-journal-touch-row, .world-journal-touch-row > div { display: flex; align-items: center; }
+.world-journal-touch-row { gap: 4px; }
+.world-journal-touch-row > span { padding: 0 4px; white-space: nowrap; font-size: 12px; }
+.world-journal-touch-row button { min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: inherit; font: 14px system-ui, sans-serif; touch-action: manipulation; }
+.world-journal-touch-row button[aria-pressed=true] { background: #dce4d5; color: #374d3b; font-weight: 700; }
+.world-journal-touch-row > button { font-size: 24px; }
+.world-reader-tools { display: flex; align-items: center; justify-content: center; gap: 6px; width: max-content; max-width: calc(100vw - 20px); flex-wrap: wrap; padding: 4px 8px; border: 1px solid #d5c7a9; border-radius: 8px; background: #f5f0e8f5; color: #4d5b53; box-shadow: 0 3px 12px #2d2c251f; }
+.world-reader-tools button { min-width: 30px; min-height: 32px; border: 0; border-radius: 4px; padding: 0 6px; background: transparent; color: inherit; font: 12px system-ui, 'Microsoft YaHei', sans-serif; cursor: pointer; white-space: nowrap; }
+.world-reader-tools button:hover:not(:disabled) { background: #e7e5d7; }
+.world-reader-tools button:disabled { opacity: 0.35; cursor: default; }
+.world-reader-tools output { min-width: 48px; text-align: center; font: 13px Georgia, serif; }
 .world-book-nav { display: flex; gap: 16px; justify-content: flex-end; margin-bottom: 12px; }
 .world-book-nav button, .world-book-form button { border: 0; background: transparent; color: #765d42; font: 13px 'Songti SC', serif; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
 .world-book-nav button:focus-visible, .world-book-list button:focus-visible, .world-book-form button:focus-visible { outline: 1px solid #a99167; outline-offset: 3px; }
@@ -78,7 +96,6 @@
   .orbital-guide span { display: none; }
   .orbital-now-playing { left: 24px; bottom: 151px; }
   .orbital-now-playing p { max-width: 200px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .world-book-text { font-size: 22px; line-height: 1.6; }
   .world-page textarea { font-size: 22px; line-height: 29px; }
   .world-agenda input { font-size: 21px; }
   .world-page h2 { font-size: 25px; }

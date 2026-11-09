@@ -4,7 +4,7 @@ import { ObjectHandle } from './ObjectHandle';
 import { SoftBox, Tube } from './Primitives';
 import { ReactiveKeyboard } from './ReactiveKeyboard';
 import { FurnitureCylinder as Cylinder, FurnitureMotion, FURNITURE as C } from './FurnitureParts';
-import { FurnitureBook } from './FurnitureBooks';
+import { FurnitureBook, JOURNAL_PLACEMENT } from './FurnitureBooks';
 
 function FurnitureComputer({ world }: { world: WorldModelProps }) {
   const state = world.objects.computer ?? CLOSED_OBJECT;
@@ -50,7 +50,7 @@ export function FurnitureDesk({ world }: { world: WorldModelProps }) {
       </FurnitureMotion>
     </ObjectHandle>
     <FurnitureComputer world={world} />
-    <FurnitureBook world={world} id="journal" kind="write" position={[-0.63, 1.121, -1.94]} color="#8e5b46" scale={0.82} rotation={[0, -0.12, 0]} />
+    <FurnitureBook world={world} id="journal" kind="write" {...JOURNAL_PLACEMENT} color="#8e5b46" />
     <FurnitureBook world={world} id="schedule" kind="plan" position={[0.55, 1.121, -1.96]} color="#7b9184" scale={0.76} rotation={[0, 0.08, 0]} />
   </group>;
 }

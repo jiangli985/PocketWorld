@@ -11,14 +11,20 @@ export const FURNITURE = {
 };
 export type FurnitureVector = [number, number, number];
 
-export function FurnitureMotion({ children, axis = 'y', target, mode = 'rotation', reducedMotion = false, ...props }: Omit<ThreeElements['group'], 'ref'> & {
-  axis?: 'x' | 'y' | 'z'; target: number; mode?: 'rotation' | 'position'; reducedMotion?: boolean;
+export function FurnitureMotion({ children, axis = 'y', target, mode = 'rotation', reducedMotion = false, duration, ...props }: Omit<ThreeElements['group'], 'ref'> & {
+  axis?: 'x' | 'y' | 'z'; target: number; mode?: 'rotation' | 'position'; reducedMotion?: boolean; duration?: number;
 }) {
   const group = useRef<THREE.Group>(null);
+  const travel = useRef({ from: 0, elapsed: 0 });
+  useEffect(() => { travel.current = { from: group.current?.[mode][axis] ?? 0, elapsed: 0 }; }, [target, mode, axis, duration]);
   useFrame((_, dt) => {
     if (!group.current) return;
     const transform = group.current[mode];
-    transform[axis] = reducedMotion ? target : THREE.MathUtils.damp(transform[axis], target, 8, Math.min(dt, 0.05));
+    if (duration && !reducedMotion) {
+      travel.current.elapsed += dt;
+      const t = Math.min(1, travel.current.elapsed / duration);
+      transform[axis] = THREE.MathUtils.lerp(travel.current.from, target, t * t * (3 - 2 * t));
+    } else transform[axis] = reducedMotion ? target : THREE.MathUtils.damp(transform[axis], target, 8, Math.min(dt, 0.05));
   });
   return <group {...props} ref={group}>{children}</group>;
 }

@@ -9,10 +9,11 @@ interface ObjectHandleProps extends Omit<ThreeElements['group'], 'id' | 'onPoint
   hint: string;
   world: WorldModelProps;
   drag?: 'x' | 'y' | 'z';
+  pageSwipe?: boolean;
   payload?: WorldAction['payload'];
 }
 /** A real object's input ownership, not an invisible menu hotspot. */
-export function ObjectHandle({ id, action, hint, world, drag, payload, children, ...props }: ObjectHandleProps) {
+export function ObjectHandle({ id, action, hint, world, drag, pageSwipe, payload, children, ...props }: ObjectHandleProps) {
   const held = useRef<{ x: number; y: number; pointerId: number; target: EventTarget | null } | null>(null);
   const movable = useRef<THREE.Group>(null);
   const callbacks = useRef(world);
@@ -42,9 +43,11 @@ export function ObjectHandle({ id, action, hint, world, drag, payload, children,
   const up = (event: ThreeEvent<PointerEvent>) => {
     if (!held.current || event.pointerId !== held.current.pointerId) return;
     event.stopPropagation();
-    const distance = Math.hypot(event.clientX - held.current.x, event.clientY - held.current.y);
-    const direction = event.clientX >= held.current.x ? 1 : -1;
+    const dx = event.clientX - held.current.x, dy = event.clientY - held.current.y;
+    const distance = Math.hypot(dx, dy);
+    const direction = (dx >= 0 ? 1 : -1) * (pageSwipe ? -1 : 1);
     release();
+    if (pageSwipe && distance >= 9 && (Math.abs(dx) < 25 || Math.abs(dx) < Math.abs(dy))) return;
     if (distance < 9 || drag) world.onAction({ sceneId: world.sceneId, objectId: id, kind: action, payload: { ...payload, ...(distance > 9 ? { direction } : {}) } });
   };
   return <group {...props} name={`Interactable_${id}`} userData={{ objectId: id, action, sceneId: world.sceneId }}
@@ -52,7 +55,7 @@ export function ObjectHandle({ id, action, hint, world, drag, payload, children,
     onPointerOut={() => { if (!held.current) world.onHover(null); }}
     onPointerDown={down} onPointerUp={up}
     onPointerMove={event => {
-      if (!held.current || !drag || !movable.current) return;
+      if (!held.current || !drag || pageSwipe || !movable.current) return;
       event.stopPropagation();
       movable.current.position[drag] = THREE.MathUtils.clamp((drag === 'y' ? held.current.y - event.clientY : event.clientX - held.current.x) * 0.002, -0.15, 0.15);
     }}>

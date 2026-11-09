@@ -13,8 +13,8 @@ import { CartridgePickup } from './CartridgePickup';
 import { CARTRIDGE_SLOT as SLOT, cartridgePosition, cartridgeTransferPoint } from './cartridge-motion';
 
 type Point = [number, number, number];
-const PLAYER: Point = [-0.35, 1.2, -2.25];
-const PLATTER: Point = [-0.48, 1.295, -2.25];
+const PLAYER: Point = [-0.35, 1.2, -2.45];
+const PLATTER: Point = [-0.48, 1.295, -2.45];
 const gameModules = import.meta.glob<{ default: React.ComponentType<GameCartridgeProps> }>('../../games/*/index.tsx');
 const gameNames: Record<GameId, string> = { mario: '蘑菇冒险', shooter: '团团魔法录' };
 const gameColors: Record<GameId, string> = { mario: '#cb795a', shooter: '#8b72b3' };
@@ -282,7 +282,7 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
         <mesh rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.03, 0.03, 0.035, 16]} /><meshStandardMaterial color={props.isMuted ? '#7a7f73' : '#d7b46e'} /></mesh>
       </ObjectHandle>
     </group>
-    {sceneVisible && props.focusedObject === 'music-player' && <Label position={[-0.35, 1.85, -2.25]} width={250}>{props.activeDisc.title} · {transfer?.disc ? '正在放入唱片' : props.isMusicPlaying ? '播放中' : '唱针已抬起'}<br />拿取唱片换曲 · 空白唱片导入音乐{pageCount > 1 ? ` · 唱片架 ${visiblePage + 1}/${pageCount}` : ''}</Label>}
+    {sceneVisible && props.focusedObject === 'music-player' && <Label position={[-0.35, 1.85, -2.45]} width={250}>{props.activeDisc.title} · {transfer?.disc ? '正在放入唱片' : props.isMusicPlaying ? '播放中' : '唱针已抬起'}<br />拿取唱片换曲 · 空白唱片导入音乐{pageCount > 1 ? ` · 唱片架 ${visiblePage + 1}/${pageCount}` : ''}</Label>}
 
     {(['mario', 'shooter'] as const).map(game => <CartridgePickup key={game} id={`game-cartridge-${game}`} world={world} position={cartridgePosition(game)}
       enabled={sceneVisible && !props.activeGame && !transfer && ['idle', 'active', 'error'].includes(props.transition.phase)}

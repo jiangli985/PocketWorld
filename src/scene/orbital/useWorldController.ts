@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
+import { loadLastReadingBook, loadReadingPage, saveReadingPage } from './library';
 import { CLOSED_OBJECT, type SleepSession, type WorldAction, type WorldActionContext, type WorldFeatureAdapters, type WorldMotion, type WorldObjectState, type WorldSceneId, type WorldTransition } from '../../types/world';
 
 export function nextObjectState(previous: WorldObjectState, action: WorldAction): WorldObjectState {
   switch (action.kind) {
     case 'open': return { ...previous, open: !previous.open };
     case 'close': return { ...previous, open: false, active: false };
-    case 'write': case 'plan': case 'read': return { ...previous, open: true, active: true, page: action.kind === 'read' && action.payload?.itemId && action.payload.itemId !== previous.itemId ? 0 : previous.page, itemId: action.payload?.itemId ?? action.objectId };
+    case 'read': {
+      const itemId = action.payload?.itemId ?? previous.itemId ?? action.objectId;
+      return { ...previous, open: true, active: true, itemId, page: action.payload?.value ?? (itemId === previous.itemId ? previous.page : 0) };
+    }
+    case 'write': case 'plan': return { ...previous, open: true, active: true, itemId: action.payload?.itemId ?? action.objectId };
     case 'turn-page': return { ...previous, open: true, active: true, page: Math.max(0, action.payload?.value ?? previous.page + (action.payload?.direction ?? 1)) };
     case 'sleep': case 'sit': return { ...previous, active: !previous.active };
     case 'wake': case 'stand': return { ...previous, active: false };
@@ -52,6 +57,9 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
   const onAction = useCallback(async (request: WorldAction) => {
     if (request.sceneId !== live.current.sceneId) return;
     const displayed = live.current;
+    const displayedObject = displayed.sceneObjects[request.sceneId][request.objectId];
+    if (request.kind === 'read' && request.objectId === 'book-01' && displayed.focusedObject === request.objectId && displayedObject?.open &&
+      (!request.payload?.itemId || request.payload.itemId === displayedObject.itemId)) return;
     cancelPending();
     setGestureActive(false);
     setError(null);
@@ -61,8 +69,12 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
     const visiblePrevious = displayed.sceneObjects[request.sceneId][request.objectId] ?? previous;
     let action = request;
     if (request.kind === 'sleep' && visiblePrevious.active) action = { ...request, kind: 'wake' };
-    if ((request.kind === 'write' || request.kind === 'plan' || request.kind === 'read') && visiblePrevious.open && displayed.focusedObject === request.objectId && (request.kind !== 'read' || !request.payload?.itemId || request.payload.itemId === visiblePrevious.itemId)) {
+    if ((request.kind === 'write' || request.kind === 'plan') && visiblePrevious.open && displayed.focusedObject === request.objectId) {
       action = { ...request, kind: 'turn-page', payload: { ...request.payload, direction: request.payload?.direction ?? 1 } };
+    }
+    if (request.kind === 'read' && request.objectId === 'book-01') {
+      const itemId = request.payload?.itemId ?? previous.itemId ?? loadLastReadingBook() ?? request.objectId;
+      action = { ...request, payload: { ...request.payload, itemId, value: request.payload?.value ?? loadReadingPage(itemId) } };
     }
     const id = ++sequence.current;
     const abort = new AbortController();
@@ -112,6 +124,7 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
             if (!abort.signal.aborted) sleepSession.current = null;
           }
           if (abort.signal.aborted) return;
+          if (action.objectId === 'book-01' && (action.kind === 'read' || action.kind === 'turn-page') && next.itemId) saveReadingPage(next.itemId, next.page);
           setSceneId(destination);
           setTransition({ id, phase: 'active', action, fromScene: destination, toScene: destination });
           pending.current = null;
@@ -123,7 +136,7 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
           setTransition({ id, phase: 'error', action: null, fromScene: snapshot.sceneId, toScene: snapshot.sceneId });
         }
       };
-      const duration = reducedMotion.current ? 0.12 : action.kind === 'travel' ? 1.8 : 0.9;
+      const duration = reducedMotion.current && action.objectId !== 'journal' ? 0.12 : action.kind === 'travel' ? 1.8 : 0.9;
       transaction.timeline = gsap.timeline({ onComplete: () => { void finish(); } });
       transaction.timeline.to(motion.current, { progress: 1, sceneProgress: 1, duration, ease: 'power2.inOut' });
       if (action.kind === 'travel') transaction.timeline.call(() => {
@@ -156,7 +169,7 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
     setTransition({ id, phase: 'returning', action, fromScene: current.sceneId, toScene: current.sceneId });
     const timeline = gsap.timeline({ onComplete: () => { pending.current = null; setTransition({ id, phase: 'idle', action: null, fromScene: current.sceneId, toScene: current.sceneId }); } });
     pending.current = { abort, context, timeline, rollback: () => {} };
-    timeline.to(motion.current, { progress: 1, duration: reducedMotion.current ? 0.1 : 0.8, ease: 'power2.inOut' });
+    timeline.to(motion.current, { progress: 1, duration: reducedMotion.current && action.objectId !== 'journal' ? 0.1 : 0.8, ease: 'power2.inOut' });
   }, [cancelPending, onAction]);
 
   const onHover = useCallback((id: string | null, hint = '') => setHover(id ? { id, hint } : null), []);

@@ -37,3 +37,25 @@ export function loadLocalBooks(): BookContent[] {
 export function storeLocalBooks(books: BookContent[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
 }
+
+const LAST_BOOK_KEY = 'pocketworld:library:last-book';
+const BOOKMARK_PREFIX = 'pocketworld:library:bookmark:';
+
+export function loadLastReadingBook(): string | undefined {
+  try { return localStorage.getItem(LAST_BOOK_KEY) || undefined; }
+  catch { return undefined; }
+}
+
+export function loadReadingPage(id: string): number {
+  try {
+    const page = Number(localStorage.getItem(BOOKMARK_PREFIX + id));
+    return Number.isSafeInteger(page) && page >= 0 ? page : 0;
+  } catch { return 0; }
+}
+
+export function saveReadingPage(id: string, page: number): void {
+  try {
+    localStorage.setItem(BOOKMARK_PREFIX + id, String(page));
+    localStorage.setItem(LAST_BOOK_KEY, id);
+  } catch { /* In-memory reading still works when storage is unavailable. */ }
+}

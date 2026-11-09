@@ -3,15 +3,30 @@ import { CLOSED_OBJECT, type WorldModelProps } from '../../types/world';
 import { ObjectHandle } from './ObjectHandle';
 import { SoftBox, Tube } from './Primitives';
 import { FurnitureMotion, FURNITURE as C, type FurnitureVector } from './FurnitureParts';
+import { JournalBinding, JOURNAL_MODEL_SCALE } from './JournalBinding';
+import { useReadingBook } from './JournalBookState';
+import { StudyBook } from './book-study/StudyBook';
+import { loadLastReadingBook } from './library';
+
+export const JOURNAL_PLACEMENT = { position: [-0.49, 1.121, -1.92] as FurnitureVector, scale: 0.82 };
+const READING_OFFSET: FurnitureVector = [-0.12, 0.671, 0.04];
+export const readingPosition = (observatory: boolean): FurnitureVector => [-3.45 + READING_OFFSET[0], READING_OFFSET[1], (observatory ? -0.65 : -1.9) + READING_OFFSET[2]];
 
 export function FurnitureBook({ world, id, position, rotation = [0, 0, 0], color = '#8b5744', kind = 'read', scale = 1 }: {
   world: WorldModelProps; id: string; position: FurnitureVector; rotation?: FurnitureVector; color?: string; kind?: 'read' | 'write' | 'plan'; scale?: number;
 }) {
   const state = world.objects[id] ?? CLOSED_OBJECT;
   const opened = state.open || state.active;
+  const reader = useReadingBook();
+  const readingId = kind === 'read' ? state.itemId ?? loadLastReadingBook() : undefined;
+  const readingTitle = world.books.find(book => book.id === readingId)?.title ?? world.books[0]?.title ?? '书柜藏书';
   const label = kind === 'write' ? '翻开日记 · 写下今天' : kind === 'plan' ? '展开日程 · 安排计划' : opened ? '翻动书页' : '取阅书籍';
   return <group position={position} rotation={rotation} scale={scale}>
-    <ObjectHandle id={id} action={opened && kind === 'read' ? 'turn-page' : kind} hint={label} world={world} drag="x" payload={kind === 'read' && opened ? { direction: 1 } : undefined}>
+    <ObjectHandle id={id} action={opened && kind === 'read' ? 'turn-page' : kind} hint={label}
+      world={kind === 'read' && opened ? { ...world, onAction: action => reader.current.turn?.(action.payload?.direction ?? 1) } : world}
+      drag="x" pageSwipe={kind === 'read' && opened} payload={kind === 'read' && opened ? { direction: 1 } : undefined}>
+      {kind === 'write' ? <JournalBinding opened={opened} color={color} /> : kind === 'read' ?
+        <group scale={JOURNAL_MODEL_SCALE}><StudyBook opened={opened} control={reader} coverColor={color} coverTitle={readingTitle} /></group> : <>
       <SoftBox dims={[0.36, 0.025, 0.47]} position={[0.18, 0.0125, 0]} radius={0.009} color={color} />
       <SoftBox dims={[0.325, 0.065, 0.435]} position={[0.185, 0.057, 0]} radius={0.006} color={C.paper} />
       <SoftBox dims={[0.025, 0.11, 0.47]} position={[0, 0.055, 0]} radius={0.009} color={color} />
@@ -24,6 +39,7 @@ export function FurnitureBook({ world, id, position, rotation = [0, 0, 0], color
         <SoftBox dims={[0.32, 0.004, 0.43]} position={[0.16, 0, 0]} radius={0.001} color="#fff3d6" />
       </FurnitureMotion>
       <SoftBox dims={[0.024, 0.003, 0.13]} position={[0.27, 0.093, 0.22]} radius={0.001} color="#c5774b" />
+      </>}
     </ObjectHandle>
   </group>;
 }
@@ -43,7 +59,7 @@ export function FurnitureBookcase({ world, observatory = false }: { world: World
       <SoftBox dims={[0.11, 0.33 + (i % 3) * 0.035, 0.32]} position={[0, 0.18, 0]} color={['#6e8780', '#b58b55', '#7a5360'][i % 3]} radius={0.009} />
       <SoftBox dims={[0.065, 0.012, 0.005]} position={[0, 0.3, 0.163]} color={C.cream} radius={0.002} />
     </ObjectHandle>)}
-    <FurnitureBook world={world} id="book-01" position={[-0.12, 0.671, 0.04]} color="#6c8382" scale={0.95} />
+    <FurnitureBook world={world} id="book-01" position={READING_OFFSET} color="#536d70" scale={0.95} />
     <SoftBox dims={[0.36, 0.13, 0.32]} position={[0.22, 1.705, 0]} color="#ba895d" />
     <ObjectHandle id="cabinet" action={cabinet.open ? 'close' : 'open'} hint={cabinet.open ? '关上柜门' : '拉开柜门'} world={world} drag="x">
       <FurnitureMotion target={cabinet.open ? -1.75 : 0} reducedMotion={world.reducedMotion} position={[-0.52, 0.38, 0.286]}>

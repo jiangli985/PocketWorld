@@ -65,7 +65,9 @@ export interface WorldActionAdapter {
   commit?: (context: WorldActionContext) => void | Promise<void>;
   cancel?: (context: WorldActionContext) => void;
 }
-export interface JournalEntry { id: string; date: string; text: string; updatedAt: string }
+export type JournalWeather = 'sunny' | 'cloudy' | 'rainy' | 'snowy';
+export interface JournalPage { text: string; weather?: JournalWeather; date?: string }
+export interface JournalEntry { id: string; date: string; text: string; updatedAt: string; pages?: JournalPage[] }
 export interface ScheduleEntry { id: string; time: string; title: string; completed: boolean }
 export interface BookContent { id: string; title: string; author?: string; pages: string[] }
 export interface SleepSession { startedAt: string; endedAt?: string; sceneId: WorldSceneId }

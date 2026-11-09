@@ -1,0 +1,32 @@
+:root { font-family: "Microsoft YaHei", sans-serif; color: #39443c; background: #dedbcf; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { font: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible { outline: 2px solid #687963; outline-offset: 4px; }
+main { position: relative; width: 100%; height: 100dvh; min-height: 540px; overflow: hidden; }
+header { position: absolute; inset: 30px 38px auto; z-index: 2; display: flex; align-items: center; justify-content: space-between; }
+header a { font: 22px Georgia, serif; color: inherit; text-decoration: none; }
+header span { font-size: 12px; letter-spacing: .12em; opacity: .65; }
+.study-caption { position: absolute; top: 105px; left: 42px; z-index: 1; pointer-events: none; }
+.study-caption p { margin: 0 0 14px; font: 26px SimSun, serif; letter-spacing: .12em; }
+.study-caption span { font-size: 11px; opacity: .6; letter-spacing: .12em; }
+.study-canvas { position: absolute; inset: 0; }
+.study-views { position: absolute; bottom: 158px; right: 38px; display: flex; gap: 4px; padding: 4px; border: 1px solid #6c77632b; border-radius: 22px; background: #f4f1e380; }
+.study-views button { padding: 8px 15px; border-radius: 18px; background: transparent; border: none; font-size: 12px; color: #59634f; }
+.study-views button[aria-pressed=true] { background: #f8f4e8; color: #354432; }
+footer { position: absolute; bottom: 24px; width: 100%; display: grid; justify-items: center; gap: 15px; }
+.study-controls { display: flex; align-items: center; gap: 28px; border: 1px solid #ffffffa8; padding: 10px 12px; border-radius: 14px; background: #f6f3e7e8; box-shadow: 0 7px 30px #3b483b12; }
+.study-cover { background: #475b4b; border: none; border-radius: 8px; color: #f5f1e4; padding: 14px 23px; font-size: 13px; letter-spacing: .08em; }
+.study-pagination { display: flex; align-items: center; gap: 12px; }
+.study-pagination button { border: none; background: transparent; color: #455543; font-size: 23px; width: 40px; height: 40px; }
+.study-pagination output { text-align: center; min-width: 85px; font: 15px Georgia, "Microsoft YaHei", serif; font-variant-numeric: tabular-nums; }
+button:disabled { opacity: .35; cursor: default; }
+footer p { margin: 0; color: #6e7566; font-size: 11px; letter-spacing: .04em; }
+@media (max-width: 600px) {
+  header { inset: 22px 22px auto; } header a { font-size: 19px; } header span { font-size: 10px; }
+  .study-caption { top: 85px; left: 25px; } .study-caption p { font-size: 20px; }
+  .study-views { right: 20px; bottom: 165px; }
+  .study-controls { gap: 12px; } .study-cover { padding: 14px 16px; }
+  .study-pagination { gap: 2px; } footer p { font-size: 10px; text-align: center; padding: 0 18px; }
+}

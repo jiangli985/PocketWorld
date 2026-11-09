@@ -1,0 +1,75 @@
+async page => {
+  const context = await page.context().browser().newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+  const p = await context.newPage(), errors = [];
+  p.on('pageerror', error => errors.push(error.message));
+  p.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  const assert = (value, message) => { if (!value) throw Error(message); };
+  const settled = () => p.locator('.world-journal-content[data-turning="false"]').waitFor();
+  const printedPoint = (index, x, y) => p.evaluate(async ({ index, x, y }) => {
+    const { _roots } = await import('/node_modules/.vite/deps/@react-three_fiber.js');
+    const THREE = await import('/node_modules/.vite/deps/three.js');
+    const { journalSurfacePoint } = await import('/src/scene/orbital/JournalNotebook.tsx');
+    const state = _roots.get(document.querySelector('canvas')).store.getState();
+    const editor = state.scene.getObjectByName('Journal_Editor');
+    const spread = Math.ceil(index / 2);
+    editor.updateWorldMatrix(true, false);
+    const point = editor.localToWorld(new THREE.Vector3(...journalSurfacePoint(index, x, y, spread).position)).project(state.camera);
+    const bounds = state.gl.domElement.getBoundingClientRect();
+    return { x: bounds.left + (point.x + 1) * bounds.width / 2, y: bounds.top + (1 - point.y) * bounds.height / 2 };
+  }, { index, x, y });
+  try {
+    await p.goto('http://127.0.0.1:5173/');
+    await p.evaluate(() => localStorage.setItem('pocketworld:journal:today', JSON.stringify({ id: 'today', date: '2026-11-09', text: '今天记一点事。', updatedAt: '' })));
+    await p.reload(); await p.locator('canvas').waitFor(); await p.waitForTimeout(250); await p.keyboard.press('j');
+    const right = p.getByRole('textbox', { name: '日记右页正文' }); await right.waitFor(); await settled();
+    const point = await printedPoint(0, 65, 95);
+    await p.mouse.click(point.x, point.y);
+    assert(await right.evaluate(input => document.activeElement === input), 'clicking printed text must focus the native editor');
+    assert(await right.evaluate(input => input.selectionStart) === 2, 'printed characters must map to the native caret offset');
+    await p.keyboard.insertText('X');
+    assert(await right.inputValue() === '今天X记一点事。', 'typing at the printed caret must insert at that position');
+    const start = await printedPoint(0, 32, 95), end = await printedPoint(0, 88, 95);
+    await p.mouse.move(start.x, start.y); await p.mouse.down(); await p.mouse.move(end.x, end.y, { steps: 8 }); await p.mouse.up();
+    assert(await right.evaluate(input => input.selectionEnd > input.selectionStart), 'dragging across printed text must select it');
+    await p.screenshot({ path: '.vite/journal-integrated-selection.png' });
+    await right.press('End'); await right.pressSequentially('abc123', { delay: 0 });
+    const cdp = await context.newCDPSession(p);
+    await cdp.send('Input.imeSetComposition', { text: 'nihao', selectionStart: 5, selectionEnd: 5 });
+    assert(await right.evaluate(input => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', isComposing: true, bubbles: true, cancelable: true }))), 'IME candidate navigation must remain with the input method');
+    await cdp.send('Input.insertText', { text: '你好😀' });
+    assert((await right.inputValue()).endsWith('abc123你好😀'), 'fast input, Chinese IME and emoji must remain intact');
+    const beforeTurn = await right.inputValue();
+    await right.fill('字'.repeat(40)); await right.press('ArrowUp');
+    assert(await right.evaluate(input => input.selectionStart) === 25, 'up arrow must follow printed line wrapping');
+    await right.press('Control+Home'); await right.press('ArrowDown');
+    assert(await right.evaluate(input => input.selectionStart) === 15, 'down arrow must follow printed line wrapping');
+    await right.fill(beforeTurn);
+    await p.getByRole('group', { name: '右页天气' }).getByRole('button', { name: '晴', exact: true }).click();
+    await p.screenshot({ path: '.vite/journal-integrated-written.png' });
+    await p.getByRole('button', { name: '下一页', exact: true }).click(); await p.waitForTimeout(400);
+    await p.screenshot({ path: '.vite/journal-integrated-turn.png' }); await settled();
+    const left = p.getByRole('textbox', { name: '日记左页正文' });
+    await left.fill('左页，留下昨天的风。'); await right.fill('右页，记住今天的光。');
+    const leftPoint = await printedPoint(1, 58, 95);
+    await p.mouse.click(leftPoint.x, leftPoint.y);
+    assert(await left.evaluate(input => document.activeElement === input), 'the reversed leaf must accept clicks on printed text');
+    await p.getByRole('group', { name: '左页天气' }).getByRole('button', { name: '雨', exact: true }).click();
+    await p.getByRole('group', { name: '右页天气' }).getByRole('button', { name: '晴', exact: true }).click();
+    await p.screenshot({ path: '.vite/journal-integrated-spread.png' });
+    const maps = await p.evaluate(async () => {
+      const { _roots } = await import('/node_modules/.vite/deps/@react-three_fiber.js');
+      const scene = _roots.get(document.querySelector('canvas')).store.getState().scene;
+      return [scene.getObjectByName('Study_Leaf_0').material[5].map?.image.width, scene.getObjectByName('Study_Leaf_1').material[4].map?.image.width];
+    });
+    assert(maps.every(width => width === 636), 'both editors must print onto the actual skinned leaves');
+    await p.keyboard.press('Escape'); await p.waitForTimeout(1500); await p.keyboard.press('j'); await right.waitFor();
+    assert(await right.inputValue() === beforeTurn, 'closing and reopening must preserve page one');
+    await p.getByRole('button', { name: '下一页', exact: true }).click(); await settled();
+    assert(await left.inputValue() === '左页，留下昨天的风。', 'left page must survive closing');
+    assert(await right.inputValue() === '右页，记住今天的光。', 'right page must survive closing');
+    await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(1100);
+    await p.screenshot({ path: '.vite/journal-integrated-mobile.png' });
+    assert(errors.length === 0, errors.join('\n'));
+    return { passed: true, checks: ['click on curved text', 'native caret offset', 'drag selection', 'rapid typing + IME + emoji', 'independent weather', 'actual leaf textures', 'cover reopening preserves both pages', '390px layout', 'no runtime errors'] };
+  } finally { await context.close(); }
+}
