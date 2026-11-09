@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 import { TRAILS } from './model.ts';
 import { createRun } from './engine.ts';
-import { playerBody, skiContacts } from './character.ts';
+import { playerBody, playerPivot, skiContacts } from './character.ts';
 
 let source = await readFile(new URL('./renderer.ts', import.meta.url), 'utf8');
 source += '\nexport { mountains, drawPlayer };';
@@ -93,6 +93,38 @@ test('rendered body and ski transforms match collision volumes through landing a
       verify('skis', { x: -39, y: -2 }, skiContacts(state.player)[0]);
       verify('skis', { x: 39, y: -2 }, skiContacts(state.player)[2]);
     }
+  }
+});
+
+test('crash and caught poses sit the unsquashed rig on the snow instead of flattening the standing pose', () => {
+  for (const over of [false, true]) for (const angle of [-.3, 0, .3]) {
+    const state = createRun('valley');
+    Object.assign(state.player, { angle, crashTime: over ? 0 : 1 });
+    state.over = over;
+    let matrix = [1, 0, 0, 1, 0, 0];
+    const stack = [], transforms = {};
+    const multiply = ([a, b, c, d, e, f]) => {
+      const [aa, bb, cc, dd, ee, ff] = matrix;
+      matrix = [aa*a+cc*b, bb*a+dd*b, aa*c+cc*d, bb*c+dd*d, aa*e+cc*f+ee, bb*e+dd*f+ff];
+    };
+    const ctx = {
+      save() { stack.push([...matrix]); }, restore() { matrix = stack.pop(); },
+      translate(x, y) { multiply([1,0,0,1,x,y]); },
+      rotate(a) { multiply([Math.cos(a),Math.sin(a),-Math.sin(a),Math.cos(a),0,0]); },
+      scale(x, y) { multiply([x,0,0,y,0,0]); },
+      drawImage(image) { transforms[image] = [...matrix]; },
+    };
+    const clip = image => ({ image, anchor: [150, 220], frameWidth: 280, frameHeight: 260, frameCount: 1, fps: 1, row: 0 });
+    const rig = Object.fromEntries(['body', 'legs', 'skis'].map(layer => [layer, clip(layer)]));
+    drawPlayer(ctx, state, { rig, naiwa: {} }, 0, 0, true);
+    assert.deepEqual(Object.keys(transforms).sort(), ['body', 'legs', 'skis']);
+    for (const [a, b, c, d] of Object.values(transforms)) {
+      assert.ok(Math.abs(Math.hypot(a, b) - Math.hypot(c, d)) < 1e-9, 'layers keep their proportions');
+    }
+    const [, , , , e, f] = transforms.legs;
+    const pivot = playerPivot(state.player);
+    const groundY = -Math.sin(angle) * e + Math.cos(angle) * (f + pivot) - pivot;
+    assert.ok(groundY > -4 && groundY < 2, `feet rest on the slope (${groundY})`);
   }
 });
 
