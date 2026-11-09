@@ -272,7 +272,11 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
     {[-1, 1].map(direction => <ObjectHandle key={direction} id="music-rack" action="select" hint={pageCount > 1 ? '翻动唱片架，查看更多唱片' : '唱片架'} payload={{ direction }} world={world} position={[direction < 0 ? -0.87 : 0.4, 1.31, -2.87]}>
       <SoftBox dims={[0.035, 0.29, 0.21]} color="#765b43" />
     </ObjectHandle>)}
-    <ObjectHandle id="music-import" action="insert" hint="空白唱片 · 导入本地音乐" world={world} position={[0.43, 1.35, -2.26]} onClick={event => { event.stopPropagation(); if (sceneVisible && event.delta < 9) props.onImportMusic(); }}>
+    <ObjectHandle id="music-import" action="insert" hint="空白唱片 · 导入本地音乐" world={world} position={[0.43, 1.35, -2.26]} onClick={event => { event.stopPropagation(); if (!sceneVisible || event.delta >= 9) return;
+      const action: WorldAction = { sceneId: props.sceneId, objectId: 'music-import', kind: 'insert' };
+      const ready = !props.onApproach || props.onApproach([0.43, 1.35, -2.26], action, () => {});
+      if (ready) props.onImportMusic();
+      else props.onHover('music-import', '走近后，再点击空白唱片选择音乐'); }}>
       <Disc colors={['#efe4c7', '#c8a879']} radius={0.145} />
     </ObjectHandle>
     <group position={[2.57, 1.4, -2.55]}>

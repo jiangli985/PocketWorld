@@ -33,6 +33,7 @@ export interface WorldModelProps {
   books: BookContent[];
   library?: LibraryController;
   focusedObject: string | null;
+  onApproach?: (point: [number, number, number], action: WorldAction, perform: () => void) => boolean;
   onAction: (action: WorldAction) => void;
   onHover: (id: string | null, hint?: string) => void;
   onGesture: (active: boolean) => void;

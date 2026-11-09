@@ -28,7 +28,7 @@ function mount(kind, overrides = {}) {
   const react = {
     useRef: value => ({ current: value }),
     useMemo: fn => fn(), useCallback: fn => fn,
-    useState: value => [typeof value === 'function' ? value() : value, () => {}],
+    useState: value => [typeof value === 'function' ? value() : value, next => { if (next?.objectId) actions.push(`request:${next.kind}`); }],
     useSyncExternalStore: (_, snapshot) => snapshot(),
     useEffect: effect => effects.push(effect),
     createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
@@ -68,7 +68,7 @@ function mount(kind, overrides = {}) {
   const names = { orbital: 'OrbitalResidents', legacy: 'Protagonist', app: 'App' };
   const props = {
     sceneId: 'habitat', objects: {}, enabled: true, reducedMotion: false, walkTarget: null,
-    drawerEnabled: true, drawerInteraction: { current: null }, onDrawerAction() {},
+    interaction: { current: null }, drawerEnabled: true, drawerInteraction: { current: null }, onDrawerAction() {},
     onGesture() {}, onHover() {}, onArrive() {}, onAction() {},
     controlsEnabled: true, posture: 'standing', onPostureChange() {}, onClearWalkTarget() {},
     onNearbyChange() {}, onInteract() {}, onPositionUpdate() {}, ...overrides,
@@ -160,11 +160,11 @@ test('legacy: holding movement against a wall stops footsteps until movement res
   } finally { view.dispose(); }
 });
 
-test('bed shortcut unlocks audio synchronously before dispatching the action', () => {
+test('bed shortcut unlocks audio before queuing the approach request', () => {
   const view = mount('app');
   try {
     view.key('KeyB');
-    assert.deepEqual(view.actions, ['unlock', 'sleep']);
+    assert.deepEqual(view.actions, ['unlock', 'request:sleep']);
   } finally { view.dispose(); }
 });
 
@@ -279,5 +279,207 @@ test('drawer: a chair rolling into the opening during retreat cancels the action
     for (let i = 0; i < 180; i++) view.frame(1 / 60);
     assert.equal(opened.length, 0);
     assert.equal(view.props.drawerInteraction.current.busy, false);
+  } finally { view.dispose(); }
+});
+
+for (const fps of [30, 60, 144]) {
+  test(`mouse interaction waits for the resident to walk close at ${fps} FPS`, () => {
+    const view = mount('orbital');
+    let performed = 0;
+    try {
+      view.props.interaction.current([-3.3, 1, -1.8], { sceneId: 'habitat', objectId: 'book-01', kind: 'read' }, () => performed++);
+      assert.equal(performed, 0);
+      for (let i = 0; i < fps / 2; i++) view.frame(1 / fps);
+      assert.equal(performed, 0);
+      for (let i = 0; i < fps * 10 && !performed; i++) view.frame(1 / fps);
+      assert.equal(performed, 1);
+      assert.ok(Math.hypot(view.root.position.x + 3.3, view.root.position.z + 1.8) <= 1.15);
+      for (let i = 0; i < fps; i++) view.frame(1 / fps);
+      assert.equal(performed, 1);
+    } finally { view.dispose(); }
+  });
+}
+
+test('manual movement cancels the pending mouse interaction', () => {
+  const view = mount('orbital');
+  let performed = 0;
+  try {
+    view.props.interaction.current([-3.3, 1, -1.8], { sceneId: 'habitat', objectId: 'book-01', kind: 'read' }, () => performed++);
+    view.frame(1 / 60);
+    view.key('KeyD');
+    for (let i = 0; i < 600; i++) view.frame(1 / 60);
+    assert.equal(performed, 0);
+  } finally { view.dispose(); }
+});
+
+for (const yaw of [0.15, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+  for (const side of [0, 1, 2, 3]) {
+    test(`chair accepts side ${side} and boards from its front at yaw ${yaw}`, () => {
+      const view = mount('orbital');
+      let performed = 0;
+      try {
+        Object.assign(view.chair, { x: 0.4, z: 0.3, yaw, vx: 0, vz: 0, spin: 0 });
+        const a = side * Math.PI / 2;
+        view.root.position.set(view.chair.x + Math.sin(a) * 1.1, 0, view.chair.z + Math.cos(a) * 1.1);
+        view.props.interaction.current([view.chair.x, 0.7, view.chair.z], { sceneId: 'habitat', objectId: 'chair', kind: 'sit' }, () => {
+          performed++;
+          const facing = view.chair.yaw - 0.2 + Math.PI;
+          const dx = view.root.position.x - view.chair.x, dz = view.root.position.z - view.chair.z;
+          assert.ok(dx * Math.sin(facing) + dz * Math.cos(facing) > 0.7);
+          assert.ok(Math.abs(dx * Math.cos(facing) - dz * Math.sin(facing)) < 0.06);
+          view.props.objects.chair = { active: true };
+        });
+        for (let i = 0; i < 900 && !performed; i++) view.frame(1 / 60);
+        assert.equal(performed, 1);
+        for (let i = 0; i < 180; i++) view.frame(1 / 60);
+        assert.equal(view.root.userData.posture, 'chair');
+        const facing = view.chair.yaw - 0.2 + Math.PI;
+        assert.ok(Math.abs(Math.atan2(Math.sin(view.root.rotation.y - facing), Math.cos(view.root.rotation.y - facing))) < 0.02);
+      } finally { view.dispose(); }
+    });
+  }
+}
+
+test('default desk chair is pulled back enough to board from the front', () => {
+  const view = mount('orbital');
+  let performed = 0;
+  try {
+    const initialZ = view.chair.z;
+    view.props.interaction.current([view.chair.x, 0.7, view.chair.z], { sceneId: 'habitat', objectId: 'chair', kind: 'sit' }, () => performed++);
+    for (let i = 0; i < 900 && !performed; i++) view.frame(1 / 60);
+    assert.equal(performed, 1);
+    assert.ok(view.chair.z > initialZ);
+    assert.ok(view.root.position.z >= -1.445);
+  } finally { view.dispose(); }
+});
+
+test('clicking the far corner of the bed still uses its safe entry', () => {
+  const view = mount('orbital');
+  let performed = 0;
+  try {
+    view.props.interaction.current([-3.4, 0.8, -0.25], { sceneId: 'habitat', objectId: 'bed', kind: 'sleep' }, () => performed++);
+    for (let i = 0; i < 900 && !performed; i++) view.frame(1 / 60);
+    assert.equal(performed, 1);
+    assert.ok(Math.hypot(view.root.position.x + 1.48, view.root.position.z - 0.95) < 0.06);
+  } finally { view.dispose(); }
+});
+
+test('a remote drawer click approaches before retreating and opening', () => {
+  let performed = 0;
+  const view = mount('orbital', { onDrawerAction: () => performed++ });
+  try {
+    const action = { sceneId: 'habitat', objectId: 'desk-drawer', kind: 'open' };
+    view.props.interaction.current([0.35, 1, -1.65], action, () => view.props.drawerInteraction.current.request(action));
+    assert.equal(view.props.drawerInteraction.current.busy, false);
+    for (let i = 0; i < 900 && !performed; i++) view.frame(1 / 60);
+    assert.equal(performed, 1);
+    assert.ok(view.root.position.z >= -0.56);
+  } finally { view.dispose(); }
+});
+
+test('a newer click replaces the pending interaction', () => {
+  const view = mount('orbital');
+  let first = 0, second = 0;
+  try {
+    view.props.interaction.current([-3.3, 1, -1.8], { sceneId: 'habitat', objectId: 'book-01', kind: 'read' }, () => first++);
+    view.frame(1 / 60);
+    view.props.interaction.current([-0.95, 0.3, 1.95], { sceneId: 'habitat', objectId: 'pet', kind: 'pet' }, () => second++);
+    for (let i = 0; i < 900; i++) view.frame(1 / 60);
+    assert.equal(first, 0);
+    assert.equal(second, 1);
+  } finally { view.dispose(); }
+});
+
+test('Escape cancels a pending interaction before the object opens', () => {
+  const view = mount('orbital');
+  let performed = 0;
+  try {
+    view.props.interaction.current([-3.3, 1, -1.8], { sceneId: 'habitat', objectId: 'book-01', kind: 'read' }, () => performed++);
+    view.frame(1 / 60);
+    view.key('Escape');
+    for (let i = 0; i < 900; i++) view.frame(1 / 60);
+    assert.equal(performed, 0);
+  } finally { view.dispose(); }
+});
+
+test('a chair with no safe front entry cannot seat the resident through furniture', () => {
+  const view = mount('orbital');
+  let performed = 0;
+  try {
+    Object.assign(view.chair, { x: 1.45, z: -0.85, yaw: 0.15 });
+    view.root.position.set(1.45, 0, 0.1);
+    view.props.interaction.current([view.chair.x, 0.7, view.chair.z], { sceneId: 'habitat', objectId: 'chair', kind: 'sit' }, () => performed++);
+    for (let i = 0; i < 900; i++) view.frame(1 / 60);
+    assert.equal(performed, 0);
+    assert.equal(view.root.userData.posture, 'standing');
+    assert.ok(Math.abs(view.chair.z + 0.85) < 0.001);
+  } finally { view.dispose(); }
+});
+
+test('object dragging keeps the original hit point and defers the actual action', () => {
+  const effects = [], requests = [], actions = [];
+  const react = {
+    useRef: current => ({ current }), useEffect: effect => effects.push(effect),
+    createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
+  };
+  const component = load('./orbital/ObjectHandle.tsx', {
+    react, three: THREE, '../../types/world': load('../types/world.ts', {}),
+  }, { window: new EventTarget() }).ObjectHandle;
+  const tree = component({ id: 'lamp', action: 'toggle', hint: '', drag: 'y', world: {
+    sceneId: 'observatory', onGesture() {}, onHover() {},
+    onAction: action => actions.push(action),
+    onApproach: (point, action, perform) => { requests.push({ point, action, perform }); return false; },
+  } });
+  const cleanup = effects.map(effect => effect());
+  try {
+    const event = { button: 0, clientX: 100, clientY: 100, pointerId: 1,
+      target: { setPointerCapture() {}, releasePointerCapture() {} }, point: { x: 16, y: 1.2, z: -2 }, stopPropagation() {} };
+    tree.props.onPointerDown(event);
+    tree.props.onPointerUp({ ...event, clientY: 200, point: { x: 14.25, y: 0, z: 0.5 } });
+    assert.equal(actions.length, 0);
+    assert.deepEqual(Array.from(requests[0].point), [2, 1.2, -2]);
+    requests[0].perform();
+    assert.equal(actions.length, 1);
+  } finally { cleanup.forEach(cleanup => cleanup?.()); }
+});
+
+for (let side = 0; side < 8; side++) {
+  test(`E around chair side ${side} walks to its front before sitting`, () => {
+    const performed = [], hints = [];
+    const view = mount('orbital', { onHover: (id, hint) => hints.push({ id, hint }) });
+    view.props.onAction = action => {
+      performed.push(action);
+      if (action.objectId === 'chair' && action.kind === 'sit') {
+        const facing = view.chair.yaw - 0.2 + Math.PI;
+        const dx = view.root.position.x - view.chair.x, dz = view.root.position.z - view.chair.z;
+        assert.ok(dx * Math.sin(facing) + dz * Math.cos(facing) > 0.7);
+        assert.ok(Math.abs(dx * Math.cos(facing) - dz * Math.sin(facing)) < 0.06);
+        view.props.objects.chair = { active: true };
+      }
+    };
+    try {
+      Object.assign(view.chair, { x: 0.4, z: 0.3, yaw: 0.15, vx: 0, vz: 0, spin: 0 });
+      const angle = side * Math.PI / 4;
+      view.root.position.set(view.chair.x + Math.sin(angle) * 1.05, 0, view.chair.z + Math.cos(angle) * 1.05);
+      view.frame(1 / 60);
+      view.key('KeyE');
+      assert.equal(performed.length, 0);
+      for (let i = 0; i < 600; i++) view.frame(1 / 60);
+      assert.equal(performed.filter(action => action.objectId === 'chair' && action.kind === 'sit').length, 1);
+      assert.equal(view.root.userData.posture, 'chair');
+      assert.ok(hints.some(item => item.hint === 'E · 起身'));
+    } finally { view.dispose(); }
+  });
+}
+
+test('E at the drawer handle still selects the drawer beside the chair', () => {
+  const performed = [];
+  const view = mount('orbital', { onAction: action => performed.push(action) });
+  try {
+    view.root.position.set(0.35, 0, -1.32);
+    view.frame(1 / 60);
+    view.key('KeyE');
+    assert.equal(performed.length, 1);
+    assert.equal(performed[0].objectId, 'desk-drawer');
   } finally { view.dispose(); }
 });

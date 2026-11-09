@@ -43,7 +43,7 @@ function FurnitureChair({ world, lounge = false }: { world: WorldModelProps; lou
     </>}
     <group ref={seat}>
       {!lounge && <Cylinder radius={0.042} height={0.3} position={[0, 0.325, 0]} color="#b9bbb2" metalness={0.8} />}
-      <FurnitureMotion target={state.active ? SEAT_SWIVEL : 0.12} reducedMotion={world.reducedMotion}>
+      <FurnitureMotion target={SEAT_SWIVEL} reducedMotion={world.reducedMotion}>
         <SoftBox dims={lounge ? [1.04, 0.18, 1.0] : [0.77, 0.13, 0.75]} position={[0, 0.54, 0]} color={C.edge} radius={0.07} />
         <FurnitureCushion dims={lounge ? [0.94, 0.24, 0.9] : [0.74, 0.18, 0.71]} position={[0, 0.65, 0]} color={lounge ? '#bc9770' : C.cloth} />
         <Tube points={[[-0.29, 0.56, 0.22], [-0.3, 0.82, 0.35], [-0.29, 1.15, 0.35]]} radius={0.026} color={C.ink} />
