@@ -4,7 +4,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 export const STANDING_IDLE = {
   delay: 6, firstYawn: [50, 70], repeatYawn: [65, 95],
   fadeIn: 1.2, fadeOut: .28, yawnBlend: .85,
-  breathPeriod: 4.8, breathPitch: .009, swayRoll: .007,
+  breathPeriod: 4.8, breathPitch: .025, swayPeriod: 9, swayRoll: .035,
+  headTurn: .055, shoulderRoll: .025, armSwing: .075, elbowRelax: .12,
 } as const;
 const smooth = (value: number) => { const t = THREE.MathUtils.clamp(value, 0, 1); return t * t * (3 - 2 * t); };
 const interval = (range: readonly number[], random: () => number) => range[0] + random() * (range[1] - range[0]);
@@ -66,13 +67,29 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
     return { joint, curve: track.createInterpolant() };
   }) ?? [];
   const spine = root.getObjectByName('mixamorigSpine2')!;
+  const neck = root.getObjectByName('mixamorigNeck')!;
+  const arms = ['Right', 'Left'].map(side => ({
+    shoulder: root.getObjectByName('mixamorig' + side + 'Shoulder')!,
+    upper: root.getObjectByName('mixamorig' + side + 'Arm')!,
+    forearm: root.getObjectByName('mixamorig' + side + 'ForeArm')!,
+  }));
   const identity = new THREE.Quaternion(), rotation = new THREE.Quaternion(), euler = new THREE.Euler();
+  const offset = (joint: THREE.Object3D, x: number, y: number, z: number, weight: number) => {
+    rotation.setFromEuler(euler.set(x, y, z)).slerp(identity, 1 - weight);
+    joint.quaternion.multiply(rotation);
+  };
   return (state: IdleState) => {
     const breath = Math.sin(state.phase * Math.PI * 2 / STANDING_IDLE.breathPeriod);
-    const sway = Math.sin(state.phase * Math.PI * 2 / 11);
-    rotation.setFromEuler(euler.set(breath * STANDING_IDLE.breathPitch, 0, sway * STANDING_IDLE.swayRoll));
-    rotation.slerp(identity, 1 - smooth(state.weight));
-    spine.quaternion.multiply(rotation);
+    const sway = Math.sin(state.phase * Math.PI * 2 / STANDING_IDLE.swayPeriod);
+    const weight = smooth(state.weight);
+    offset(spine, breath * STANDING_IDLE.breathPitch, 0, sway * STANDING_IDLE.swayRoll, weight);
+    offset(neck, -breath * .012, sway * STANDING_IDLE.headTurn, -sway * .015, weight);
+    arms.forEach((arm, side) => {
+      const direction = side ? 1 : -1;
+      offset(arm.shoulder, 0, 0, direction * breath * STANDING_IDLE.shoulderRoll, weight);
+      offset(arm.upper, sway * STANDING_IDLE.armSwing, 0, direction * .025, weight);
+      offset(arm.forearm, STANDING_IDLE.elbowRelax * (.65 + .35 * breath), 0, 0, weight);
+    });
     if (state.yawnTime < 0 || !state.yawnWeight) return;
     for (const { joint, curve } of channels) {
       rotation.fromArray(curve.evaluate(state.yawnTime));

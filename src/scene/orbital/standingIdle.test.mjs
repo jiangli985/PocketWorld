@@ -78,3 +78,29 @@ test('exported yawn binds to Luna and preserves every foot and root transform', 
   assert.equal(clip.tracks.length, 54);
   rig.dispose();
 });
+
+
+test('ordinary idle visibly moves head and hands while preserving planted feet', async () => {
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-walk-room.glb', import.meta.url));
+  const rig = createResidentRig(gltf.scene, gltf.animations.find(c => c.name === 'Walk_Grounded_Loop'));
+  const player = createIdlePlayer(rig.mesh);
+  const state = createIdleState(random);
+  state.weight = 1;
+  const names = ['Head', 'LeftHand', 'RightHand', 'LeftFoot', 'RightFoot'];
+  const joints = names.map(name => rig.mesh.getObjectByName('mixamorig' + name));
+  const bounds = joints.map(() => new THREE.Box3());
+  const point = new THREE.Vector3();
+  try {
+    for (let frame = 0; frame <= 9 * 60; frame++) {
+      rig.applyPose(0, 0);
+      state.phase = frame / 60;
+      player(state);
+      rig.mesh.updateMatrixWorld(true);
+      joints.forEach((joint, i) => bounds[i].expandByPoint(joint.getWorldPosition(point)));
+    }
+    const travel = bounds.map(box => box.getSize(new THREE.Vector3()).length());
+    for (let i = 0; i < 3; i++) assert(travel[i] > .015 && travel[i] < .14, names[i] + ' travel ' + travel[i]);
+    assert(travel[3] < 1e-8 && travel[4] < 1e-8);
+    console.log('ordinary idle movement in metres', Object.fromEntries(names.map((name, i) => [name, travel[i]])));
+  } finally { rig.dispose(); }
+});
