@@ -5,9 +5,29 @@ import {
   skyVertex, skyFragment, starVertex, starFragment, particleVertex, particleFragment,
   planetVertex, earthFragment, cloudFragment, atmosphereFragment,
 } from './shaders/cosmos';
+import {
+  BASE_SUN_DIRECTION, SUN_CYCLE_SECONDS, createSunOrbit, readSunOverrides, roomLightDirection, sampleSun, startPhase,
+} from './sunCycle';
 
-/** Unit vector from the habitat / Earth toward the Sun; use for the scene key light. */
-export const SUN_DIRECTION: [number, number, number] = [-0.534522, 0.801784, 0.267261];
+/**
+ * Shared, mutable Sun state. `Cosmos` writes it once per frame; the sky, Earth and the
+ * room key light read it, so all three always agree on where the Sun is.
+ */
+export interface SunState {
+  /** Unit vector from the habitat toward the Sun (world space). */
+  direction: THREE.Vector3;
+  /** Key-light direction for the room: same azimuth, never from below the floor. */
+  light: THREE.Vector3;
+  /** 0 inside Earth's shadow, 1 in full sunlight. */
+  daylight: { value: number };
+  /** 1 while the Sun grazes Earth's limb, 0 far from it. */
+  warmth: number;
+}
+
+export function createSunState(): SunState {
+  const direction = new THREE.Vector3(...BASE_SUN_DIRECTION).normalize();
+  return { direction, light: direction.clone(), daylight: { value: 1 }, warmth: 0 };
+}
 
 const GALACTIC_POLE = new THREE.Vector3(0.32, 0.88, -0.35).normalize();
 const STAR_COUNT = 9000;
@@ -107,15 +127,16 @@ function Drift({ clock }: { clock: CosmicClock }) {
   );
 }
 
-function CelestialSphere({ clock, onBeforeRender }: { clock: CosmicClock; onBeforeRender: THREE.Object3D['onBeforeRender'] }) {
+function CelestialSphere({ clock, sun, onBeforeRender }: { clock: CosmicClock; sun: SunState; onBeforeRender: THREE.Object3D['onBeforeRender'] }) {
   const sphere = useRef<THREE.Group>(null);
   const dpr = useThree(state => state.viewport.dpr);
   const narrow = useThree(state => state.size.width < 720);
   const starGeometry = useMemo(createStarGeometry, []);
-  const sun = useMemo(() => new THREE.Vector3(...SUN_DIRECTION).normalize(), []);
   const earthGlow = useMemo(() => new THREE.Vector3(...(narrow ? EARTH_NARROW_POSITION : EARTH_POSITION)).normalize(), [narrow]);
-  const skyUniforms = useMemo(() => ({ uTime: clock, uSun: { value: sun }, uGalacticPole: { value: GALACTIC_POLE }, uEarthGlow: { value: earthGlow } }), [clock, sun, earthGlow]);
-  const starUniforms = useMemo(() => ({ uTime: clock, uPixelRatio: { value: dpr } }), [clock]);
+  const skyUniforms = useMemo(() => ({
+    uTime: clock, uSun: { value: sun.direction }, uDaylight: sun.daylight, uGalacticPole: { value: GALACTIC_POLE }, uEarthGlow: { value: earthGlow },
+  }), [clock, sun, earthGlow]);
+  const starUniforms = useMemo(() => ({ uTime: clock, uPixelRatio: { value: dpr }, uDaylight: sun.daylight }), [clock, sun]);
   useEffect(() => { starUniforms.uPixelRatio.value = dpr; }, [dpr, starUniforms]);
   useFrame(() => { sphere.current?.quaternion.setFromAxisAngle(GALACTIC_POLE, clock.value * 0.0025); });
   return (
@@ -132,11 +153,11 @@ function CelestialSphere({ clock, onBeforeRender }: { clock: CosmicClock; onBefo
   );
 }
 
-function Earth({ clock }: { clock: CosmicClock }) {
+function Earth({ clock, sun }: { clock: CosmicClock; sun: SunState }) {
   const spin = useRef<THREE.Group>(null);
   const narrow = useThree(state => state.size.width < 720);
   const radius = narrow ? EARTH_RADIUS * EARTH_NARROW_SCALE : EARTH_RADIUS;
-  const uniforms = useMemo(() => ({ uTime: clock, uSun: { value: new THREE.Vector3(...SUN_DIRECTION).normalize() } }), [clock]);
+  const uniforms = useMemo(() => ({ uTime: clock, uSun: { value: sun.direction } }), [clock, sun]);
   useFrame(() => { if (spin.current) spin.current.rotation.y = clock.value * 0.008; });
   return (
     <group position={narrow ? EARTH_NARROW_POSITION : EARTH_POSITION} rotation={[0.05, 2.05, 0.13]}>
@@ -162,11 +183,20 @@ function Earth({ clock }: { clock: CosmicClock }) {
 /** Mount once inside Canvas, outside SCENE_ORIGINS. Compatible with near=.1 / far=2000.
  * Copy only camera translation at draw time, after camera controls have run, retaining
  * celestial directions during rotations and removing room-scale stellar parallax.
+ *
+ * Also advances the compressed orbital day and writes it into `sun` (see sunCycle.ts).
+ * Reduced motion keeps the Sun at its starting position unless `?sun=` pins a phase.
  */
-export const Cosmos: React.FC<{ reducedMotion: boolean }> = ({ reducedMotion }) => {
+export const Cosmos: React.FC<{ reducedMotion: boolean; sun: SunState }> = ({ reducedMotion, sun }) => {
   const distant = useRef<THREE.Group>(null);
   const worldPosition = useMemo(() => new THREE.Vector3(), []);
   const clock = useMemo<CosmicClock>(() => ({ value: 0 }), []);
+  const narrow = useThree(state => state.size.width < 720);
+  const orbit = useMemo(() => narrow
+    ? createSunOrbit(EARTH_NARROW_POSITION, EARTH_RADIUS * EARTH_NARROW_SCALE)
+    : createSunOrbit(EARTH_POSITION, EARTH_RADIUS), [narrow]);
+  const overrides = useMemo(() => readSunOverrides(window.location.search), []);
+  const phase = useRef<number | null>(null);
   const follow = (camera: THREE.Camera) => {
     if (!distant.current) return;
     camera.getWorldPosition(worldPosition);
@@ -174,14 +204,22 @@ export const Cosmos: React.FC<{ reducedMotion: boolean }> = ({ reducedMotion }) 
     distant.current.parent?.worldToLocal(distant.current.position);
   };
   useFrame(({ camera }, delta) => {
-    if (!reducedMotion) clock.value += Math.min(delta, 0.1);
+    const step = Math.min(delta, 0.1);
+    if (!reducedMotion) clock.value += step;
+    if (phase.current === null) phase.current = overrides.phase ?? startPhase(orbit);
+    else if (!reducedMotion && overrides.phase === null) phase.current = (phase.current + step * overrides.speed / SUN_CYCLE_SECONDS) % 1;
+    const sample = sampleSun(orbit, phase.current);
+    sun.direction.set(...sample.direction);
+    sun.light.set(...roomLightDirection(sample.direction));
+    sun.daylight.value = sample.daylight;
+    sun.warmth = sample.warmth;
     follow(camera);
   });
   return (
     <>
       <group ref={distant} name="cosmos">
-        <CelestialSphere clock={clock} onBeforeRender={(_renderer, _scene, camera) => { follow(camera); distant.current?.updateMatrixWorld(true); }} />
-        <Earth clock={clock} />
+        <CelestialSphere clock={clock} sun={sun} onBeforeRender={(_renderer, _scene, camera) => { follow(camera); distant.current?.updateMatrixWorld(true); }} />
+        <Earth clock={clock} sun={sun} />
       </group>
       <Drift clock={clock} />
     </>
