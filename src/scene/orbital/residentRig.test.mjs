@@ -83,3 +83,51 @@ test('interaction controls follow the skinned joints in room units and restore t
     assert(pose.angleTo(asset.getObjectByName('mixamorigLeftArm').quaternion) > .1);
   } finally { rig.dispose(); }
 });
+
+test('hair and skirt follow movement without shifting body bones and settle after stopping', () => {
+  const { asset, rig, mesh } = instance();
+  const bones = mesh.skeleton.bones;
+  const base = bones.map(() => new THREE.Quaternion());
+  const dt = 1 / 60;
+  const speed = .576 * RESIDENT_SCALE;
+  function pose(phase, yaw, walkWeight, dx, dz, enabled = true) {
+    rig.applyPose(phase, walkWeight);
+    bones.forEach((bone, i) => base[i].copy(bone.quaternion));
+    rig.followMotion(dt, enabled, yaw, dx, dz, phase);
+    const angles = { Hair_: 0, Dress_: 0 };
+    bones.forEach((bone, i) => {
+      const part = Object.keys(angles).find(prefix => bone.name.startsWith(prefix));
+      const angle = bone.quaternion.clone().normalize().angleTo(base[i].normalize());
+      if (part) angles[part] = Math.max(angles[part], angle);
+      else assert(bone.quaternion.clone().normalize().equals(base[i]), bone.name);
+    });
+    return angles;
+  }
+  try {
+    let angles;
+    for (let i = 0; i < 40; i++) {
+      const yaw = Math.min(i, 25) * .035;
+      angles = pose(i * dt, yaw, 1, Math.sin(yaw) * speed * dt, Math.cos(yaw) * speed * dt);
+    }
+    assert(angles.Hair_ > .02 && angles.Dress_ > .012);
+    angles = pose(.65, .875, 0, 0, 0);
+    assert(angles.Hair_ > .01 && angles.Dress_ > .01, 'stop retains momentum');
+    for (let i = 0; i < 90; i++) angles = pose(.65, .875, 0, 0, 0);
+    assert(angles.Hair_ < .00001 && angles.Dress_ < .00001, 'settles on the authored pose');
+
+    // Rotate the real head in place as the standing idle layer does.
+    const head = asset.getObjectByName('mixamorigHead');
+    let maxHair = 0;
+    for (let i = 0; i < 25; i++) {
+      rig.applyPose(0, 0);
+      const hair = asset.getObjectByName('Hair_Back_C_02');
+      const rest = hair.quaternion.clone();
+      head.rotateY(i * .02);
+      rig.followMotion(dt, true, .875, 0, 0, 0);
+      maxHair = Math.max(maxHair, hair.quaternion.clone().normalize().angleTo(rest.normalize()));
+    }
+    assert(maxHair > .01, 'hair follows a turn of the head while standing');
+    angles = pose(.65, .875, 0, 0, 0, false);
+    assert(angles.Hair_ < .00001 && angles.Dress_ < .00001, 'contact and reduced motion use the base pose');
+  } finally { rig.dispose(); }
+});

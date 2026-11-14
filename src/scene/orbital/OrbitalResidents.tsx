@@ -847,6 +847,10 @@ export function OrbitalResidents(props: ResidentsProps) {
         playingChair ? s.soleLift : 0,
       );
       if (playingBed) playingBed(bed.time);
+      // Add the offsets after authored animation, only when there is no contact pose to preserve.
+      rig.current.followMotion(rawDelta,
+        !interactionPose && !libraryActive && !p.focusedObject && !p.reducedMotion && !document.hidden,
+        root.rotation.y, root.position.x - frameX, root.position.z - frameZ, s.walkTime);
     }
     if (library && rig.current) library.tick(dt);
     root.userData.posture = s.exiting ? 'standing-up' : s.posture;
