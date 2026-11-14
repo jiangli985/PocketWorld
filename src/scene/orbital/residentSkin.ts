@@ -13,12 +13,12 @@ function warmSkin(material: MeshStandardMaterial) {
           smoothstep(0.025, 0.13, base.r - base.g) *
           smoothstep(0.035, 0.15, base.r - base.b) *
           smoothstep(-0.035, 0.030, base.g - base.b);
-        vec3 skinTint = mix(vec3(1.0), vec3(0.99, 0.79, 0.82), skin);
+        vec3 skinTint = mix(vec3(1.0), vec3(0.99, 0.84, 0.86), skin);
         diffuseColor.rgb *= skinTint;
       `)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         // The fill uses the same atlas; keep its effect around the eyes and hairline.
-        totalEmissiveRadiance *= skinTint * mix(1.0, 0.86, skin);
+        totalEmissiveRadiance *= skinTint * mix(1.0, 0.90, skin);
       `);
   };
   copy.customProgramCacheKey = () => 'luna-skin-tint-v1';
