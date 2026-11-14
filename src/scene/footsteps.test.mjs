@@ -105,7 +105,7 @@ function mount(kind, overrides = {}) {
   effects.forEach(effect => cleanups.push(effect()));
   const root = groups.find(item => item.name === 'OrbitalResident')?.group;
   return {
-    root, pivot: groups[1]?.group, sounds, actions, props, chair: dependencies['./chairPose'].CHAIR_POSES.habitat,
+    root, sounds, actions, props, chair: dependencies['./chairPose'].CHAIR_POSES.habitat,
     key(code, type = 'keydown') {
       const event = new Event(type, { cancelable: true });
       Object.assign(event, { code, repeat: false });
@@ -120,36 +120,33 @@ function mount(kind, overrides = {}) {
   };
 }
 
-for (const fps of [60, 120, 144, 240]) {
-  test(`orbital: one landing sound per jump at ${fps} FPS`, () => {
-    const view = mount('orbital');
+for (const sceneId of ['habitat', 'observatory']) {
+  test(`${sceneId}: Space leaves Luna on the floor without consuming the key or playing a sound`, () => {
+    const view = mount('orbital', { sceneId });
     try {
-      view.key('Space');
-      for (let i = 0; i < fps; i++) view.frame(1 / fps);
-      assert.equal(view.root.position.y, 0);
-      assert.equal(view.sounds.filter(sound => sound.variant === 'push').length, 1);
-      assert.equal(view.sounds.filter(sound => sound.variant === 'land').length, 1);
-      for (let i = 0; i < fps / 2; i++) view.frame(1 / fps);
-      assert.equal(view.sounds.filter(sound => sound.variant === 'land').length, 1);
+      const start = view.root.position.clone();
+      assert.equal(view.key('Space').defaultPrevented, false);
+      for (let i = 0; i < 60; i++) {
+        view.frame(1 / 60);
+        assert.deepEqual(view.root.position.toArray(), start.toArray());
+      }
+      assert.deepEqual(view.sounds, []);
+      assert.deepEqual(view.actions, []);
     } finally { view.dispose(); }
   });
 }
 
-test('moving through a jump keeps the gait animated without airborne walking sounds', () => {
+test('walking after Space advances the resident and plays footsteps', () => {
   const view = mount('orbital');
   try {
-    view.key('KeyD');
+    const start = view.root.position.clone();
     view.key('Space');
-    const swings = [];
+    view.key('KeyD');
     for (let i = 0; i < 60; i++) {
-      view.frame(1 / 120);
-      assert.ok(view.root.position.y > 0);
-      if (i >= 36) swings.push(view.pivot.rotation.z);
+      view.frame(1 / 60);
+      assert.equal(view.root.position.y, 0);
     }
-    assert.ok(Math.max(...swings) - Math.min(...swings) > 0.02);
-    assert.equal(view.sounds.filter(sound => !sound.variant).length, 0);
-    for (let i = 0; i < 120; i++) view.frame(1 / 120);
-    assert.equal(view.sounds.filter(sound => sound.variant === 'land').length, 1);
+    assert.ok(view.root.position.distanceTo(start) > 0.4);
     assert.ok(view.sounds.some(sound => !sound.variant));
   } finally { view.dispose(); }
 });
@@ -162,7 +159,7 @@ test('the old bed shortcut no longer starts room interactions', () => {
   } finally { view.dispose(); }
 });
 
-test('push and landing survive nearby walking sounds while duplicate contacts stay throttled', () => {
+test('chair pushes survive nearby walking sounds while duplicate contacts stay throttled', () => {
   const engine = load('./audioEngine.ts', {}).roomAudio;
   const ctx = { currentTime: 0, state: 'running' };
   const voices = [];
@@ -174,30 +171,24 @@ test('push and landing survive nearby walking sounds while duplicate contacts st
   engine.playFootstep({ variant: 'push' });
   engine.playFootstep();
   assert.deepEqual(voices.map(voice => voice.variant), ['walk', 'push']);
-  ctx.currentTime = 0.5;
+  ctx.currentTime = 0.12;
   engine.playFootstep();
-  ctx.currentTime = 0.52;
-  engine.playFootstep({ variant: 'land' });
-  engine.playFootstep({ variant: 'land' });
-  engine.playFootstep();
-  assert.deepEqual(voices.map(voice => voice.variant), ['walk', 'push', 'walk', 'land', 'land']);
-  assert.equal(voices.at(-1).foot, 1);
-  assert.ok(Math.abs(voices.at(-1).time - voices.at(-2).time - 0.024) < 1e-10);
+  assert.deepEqual(voices.map(voice => voice.variant), ['walk', 'push', 'walk']);
   engine.setMuted(true);
   ctx.currentTime = 1;
   engine.playFootstep({ variant: 'push' });
-  assert.equal(voices.length, 5);
+  assert.equal(voices.length, 3);
 });
 
 
 for (const fps of [30, 60, 144]) {
-  test(`drawer: retreat finishes before opening and ignores movement/jump at ${fps} FPS`, () => {
+  test(`drawer: retreat finishes before opening and ignores movement at ${fps} FPS`, () => {
     const opened = [];
     const view = mount('orbital', { onDrawerAction: action => opened.push({ kind: action.kind, z: view.root.position.z }) });
     try {
       view.root.position.set(0.35, 0, -1.32);
       view.props.drawerInteraction.current.request({ sceneId: 'habitat', objectId: 'desk-drawer', kind: 'open' });
-      view.key('KeyW'); view.key('Space');
+      view.key('KeyW');
       view.props.drawerInteraction.current.request({ sceneId: 'habitat', objectId: 'desk-drawer', kind: 'open' });
       for (let i = 0; i < fps * 2; i++) {
         view.frame(1 / fps);
@@ -359,12 +350,13 @@ test('clicking the far corner of the bed still uses its safe entry', () => {
   } finally { view.dispose(); }
 });
 
-test('a remote drawer click approaches before retreating and opening', () => {
+test('a remote drawer approach survives Space, then retreats and opens', () => {
   let performed = 0;
   const view = mount('orbital', { onDrawerAction: () => performed++ });
   try {
     const action = { sceneId: 'habitat', objectId: 'desk-drawer', kind: 'open' };
     view.props.interaction.current([0.35, 1, -1.65], action, () => view.props.drawerInteraction.current.request(action));
+    view.key('Space');
     assert.equal(view.props.drawerInteraction.current.busy, false);
     for (let i = 0; i < 900 && !performed; i++) view.frame(1 / 60);
     assert.equal(performed, 1);

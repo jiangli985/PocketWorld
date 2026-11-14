@@ -55,9 +55,7 @@ function LoadedResident({ rig }: { rig: MutableRefObject<ResidentRig | null> }) 
       resident.dispose();
     };
   }, [resident, rig]);
-  return <group ref={container}>
-    <mesh name="ResidentHitArea" position={[0, 0.725, 0.02]} visible={false}><capsuleGeometry args={[0.2, 1.05, 4, 8]} /></mesh>
-  </group>;
+  return <group ref={container} />;
 }
 
 function ModelStatus({ failed = false }: { failed?: boolean }) {
