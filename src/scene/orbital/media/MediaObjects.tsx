@@ -76,6 +76,8 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
   const computerFocused = props.focusedObject === 'computer';
   const sceneVisible = props.transition.toScene === props.sceneId && props.transition.phase !== 'leaving' && props.transition.phase !== 'returning' && !(props.transition.phase === 'entering' && props.transition.fromScene !== props.transition.toScene);
   const displayVisible = computerFocused && sceneVisible && ['active', 'error'].includes(props.transition.phase);
+  const cartridgesEnabled = sceneVisible && (!props.focusedObject || computerFocused)
+    && !props.activeGame && !transfer && !queuedInsertion && ['idle', 'active', 'error'].includes(props.transition.phase);
   const expanded = !!props.activeGame && presentation !== 'collapsed' && presentation !== 'embedded' && (presentation === 'expanded' || narrow);
   const gameActive = displayVisible && presentation !== 'collapsed' && !paused && !hidden && windowFocused && !transfer?.game && !pickup && !loadError;
   const activeComponent = loaded?.game === props.activeGame ? loaded.Component : null;
@@ -150,7 +152,7 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
   }, [queuedInsertion, sceneVisible, displayVisible, props.activeGame, props.transition, begin]);
   const selectCartridge = (game: GameId) => {
     const world = latest.current;
-    if (transferRef.current || pickupRef.current || queuedInsertion || world.activeGame) return;
+    if (!cartridgesEnabled || transferRef.current || pickupRef.current || world.activeGame) return;
     if (world.library && world.library.flow.current.phase !== 'idle') return;
     const from = cartridgePosition(game);
     if (displayVisible) { begin({ game, from, to: SLOT }); return; }
@@ -227,7 +229,7 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
     <RecordPlayer {...props} />
 
     {(['mario', 'shooter'] as const).map(game => <CartridgePickup key={game} id={`game-cartridge-${game}`} world={world} position={cartridgePosition(game)}
-      enabled={sceneVisible && !props.activeGame && !transfer && !queuedInsertion && ['idle', 'active', 'error'].includes(props.transition.phase)}
+      enabled={cartridgesEnabled}
       onGrab={() => {
         if (pickupRef.current || transferRef.current || latest.current.activeGame) return false;
         pickupRef.current = game; setPickup(game); setNearSlot(false); return true;

@@ -69,6 +69,7 @@ export const skyVertex = /* glsl */ `
 export const skyFragment = /* glsl */ `
   uniform float uTime;
   uniform vec3 uSun;
+  uniform float uDaylight;
   uniform vec3 uGalacticPole;
   uniform vec3 uEarthGlow;
   varying vec3 vLocalDirection;
@@ -103,7 +104,9 @@ export const skyFragment = /* glsl */ `
     color += vec3(0.08, 0.18, 0.28) * pow(halo, 2.0) * 0.35;
 
     float sun = max(dot(normalize(vWorldDirection), uSun), 0.0);
-    color += vec3(1.0, 0.9, 0.72) * (smoothstep(0.99985, 0.99993, sun) * 9.0 + pow(sun, 260.0) * 0.5 + pow(sun, 18.0) * 0.03);
+    // The disc itself is hidden by the Earth mesh; its glow fades with the eclipse.
+    float glow = pow(sun, 1400.0) * 1.4 + pow(sun, 260.0) * 0.5 + pow(sun, 18.0) * 0.03;
+    color += vec3(1.0, 0.9, 0.72) * (smoothstep(0.99985, 0.99993, sun) * 9.0 + glow * uDaylight);
     gl_FragColor = vec4(color, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -116,12 +119,14 @@ export const starVertex = /* glsl */ `
   attribute vec2 aTwinkle;
   uniform float uTime;
   uniform float uPixelRatio;
+  uniform float uDaylight;
   varying vec3 vColor;
   void main() {
     float pulse = sin(uTime * aTwinkle.y + aTwinkle.x) * 0.5 + 0.5;
     float flicker = sin(uTime * aTwinkle.y * 2.7 + aTwinkle.x * 3.1) * 0.5 + 0.5;
     float twinkle = mix(0.6, 1.1, pulse * 0.75 + flicker * 0.25);
-    vColor = aColor * twinkle;
+    // Eyes adapt: stars read dimmer in sunlight and brighter inside Earth's shadow.
+    vColor = aColor * twinkle * mix(1.3, 0.85, uDaylight);
     gl_PointSize = aSize * uPixelRatio * (0.85 + 0.3 * pulse);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
@@ -231,6 +236,10 @@ export const earthFragment = /* glsl */ `
     color += vec3(0.9, 0.95, 1.0) * specular * (1.0 - land) * (1.0 - polar) * daylight * 0.22;
     float limb = pow(1.0 - max(dot(n, viewDirection), 0.0), 3.0);
     color += vec3(0.08, 0.26, 0.55) * limb * (0.25 + daylight * 0.45);
+    // City lights on the night side, kept to land away from the poles and deserts.
+    float cities = smoothstep(0.62, 0.9, snoise(p * 26.0) * 0.5 + 0.5) * smoothstep(0.35, 0.8, snoise(p * 5.0) * 0.5 + 0.5);
+    cities *= land * (1.0 - polar) * (1.0 - arid * 0.7) * (1.0 - smoothstep(-0.18, 0.02, sunHeight));
+    color += vec3(1.0, 0.68, 0.32) * cities * 0.45;
     gl_FragColor = vec4(color, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -271,7 +280,13 @@ export const atmosphereFragment = /* glsl */ `
     float twilight = (1.0 - smoothstep(0.0, 0.3, abs(sunHeight))) * 0.25;
     vec3 blue = mix(vec3(0.10, 0.34, 0.86), vec3(0.36, 0.68, 1.0), facing);
     vec3 color = mix(blue, vec3(0.45, 0.55, 0.95), twilight);
-    gl_FragColor = vec4(color, rim * (0.16 + day * 0.34));
+    // Orbital sunrise / sunset: with the Sun behind Earth the limb lights up as a thin
+    // ring, orange at the terminator and blue above it.
+    float behind = pow(max(dot(-viewDirection, uSun), 0.0), 40.0);
+    float ring = pow(1.0 - facing, 6.0) * behind;
+    vec3 flare = mix(vec3(1.0, 0.48, 0.16), vec3(0.42, 0.66, 1.0), smoothstep(-0.05, 0.25, sunHeight));
+    color = color * (1.0 - ring) + flare * ring * 3.0;
+    gl_FragColor = vec4(color, min(1.0, rim * (0.16 + day * 0.34) + ring * 0.9));
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
