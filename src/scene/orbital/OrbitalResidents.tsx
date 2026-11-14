@@ -12,6 +12,7 @@ import { residentLibraryTarget } from './library/bookMotion';
 import { readingStand, shelfOrigin } from './library/catalog';
 import { HIP_HEIGHT as HIP, ResidentModel, type ResidentLeg, type ResidentRig } from './ResidentModel';
 import { WALK_SPEED } from './residentRig';
+import { createIdlePlayer, createIdleState, loadYawn, loadLookingAround, stepIdle, STANDING_IDLE } from './standingIdle';
 import { CHAIR_SIT_SECONDS, createChairMotion, stepChairMotion } from './chairMotion';
 import { BED_ENTRY, BED_YAW, BED_DURATION, advanceBedTime, createBedPlayer, loadBedClip } from './bedMotion';
 import { canReachDrawer, drawerObstacle, DRAWER_CLEAR_Z, DRAWER_TRAVEL, type DrawerInteraction } from './drawerInteraction';
@@ -218,6 +219,13 @@ export function OrbitalResidents(props: ResidentsProps) {
   const resident = useRef<THREE.Group>(null);
   const hips = useRef<THREE.Group>(null);
   const rig = useRef<ResidentRig | null>(null);
+  const idle = useRef(createIdleState());
+  const idleMotion = useRef({ rig: null as ResidentRig | null, player: null as ReturnType<typeof createIdlePlayer> | null,
+    clip: null as THREE.AnimationClip | null, loading: false, retryAt: 0,
+    lookClip: null as THREE.AnimationClip | null, lookLoading: false, lookRetryAt: 0 });
+  const idleInput = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const keys = useRef(new Set<string>());
   const drawerTask = useRef<{ action: WorldAction; target: Point; elapsed: number } | null>(null);
   const drawerExtension = useRef(0);
@@ -391,6 +399,8 @@ export function OrbitalResidents(props: ResidentsProps) {
 
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
+      if (event.code === 'Space') return;
+      idleInput.current = true;
       const p = current.current;
       if (event.code === 'Escape' && (approach.current || (state.current.posture === 'chair' && !p.focusedObject))) {
         // App's Escape handler must not restore its stale object snapshot after stand().
@@ -420,14 +430,25 @@ export function OrbitalResidents(props: ResidentsProps) {
       }
     };
     const up = (event: KeyboardEvent) => { keys.current.delete(event.code); };
-    const clear = () => keys.current.clear();
+    const clear = () => {
+      idleInput.current = true;
+      keys.current.clear();
+    };
     const hide = () => { if (document.hidden) clear(); };
+    const activity = () => { idleInput.current = true; };
+    const dragging = (event: PointerEvent) => { if (event.buttons) activity(); };
+    window.addEventListener('pointerdown', activity);
+    window.addEventListener('pointermove', dragging);
+    window.addEventListener('wheel', activity, { passive: true });
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', clear);
     document.addEventListener('visibilitychange', hide);
     return () => {
       clear();
+      window.removeEventListener('pointerdown', activity);
+      window.removeEventListener('pointermove', dragging);
+      window.removeEventListener('wheel', activity);
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', clear);
       document.removeEventListener('visibilitychange', hide);
       if (state.current.nearby) current.current.onHover(null);
@@ -439,6 +460,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   }, [props.enabled]);
   useEffect(() => {
     if (!props.walkTarget || !props.enabled || drawerTask.current) return;
+    idleInput.current = true;
     approach.current = null;
     stand();
     const s = state.current;
@@ -789,10 +811,35 @@ export function OrbitalResidents(props: ResidentsProps) {
       });
     }
     if (rig.current && library && flow) applyLibraryPose(rig.current, root, p.sceneId, flow, dt);
+    const idleEligible = !!rig.current && p.enabled && !p.focusedObject && !p.reducedMotion
+      && !document.hidden && s.posture === 'standing' && wanted === 'standing' && !s.exiting
+      && !walking && distance < .00001 && walkWeight.current === 0
+      && !keys.current.size && !idleInput.current && !s.path.length && !s.external
+      && !approach.current && !drawerTask.current && !libraryActive;
+    stepIdle(idle.current, rawDelta, idleEligible, idleMotion.current.clip?.duration ?? 0, Math.random, idleMotion.current.lookClip?.duration ?? 0);
+    idleInput.current = false;
+    const im = idleMotion.current;
+    if (idle.current.elapsed >= STANDING_IDLE.delay && !im.lookClip && !im.lookLoading && idle.current.elapsed >= im.lookRetryAt) {
+      im.lookLoading = true;
+      void loadLookingAround().then(clip => { if (mounted.current) { im.lookClip = clip; im.rig = null; } })
+        .catch(() => { im.lookRetryAt = idle.current.elapsed + 30; })
+        .finally(() => { im.lookLoading = false; });
+    }
+    if (idle.current.elapsed >= STANDING_IDLE.delay && !im.clip && !im.loading && idle.current.elapsed >= im.retryAt) {
+      im.loading = true;
+      void loadYawn().then(clip => { if (mounted.current) { im.clip = clip; im.rig = null; } })
+        .catch(() => { im.retryAt = idle.current.elapsed + 30; })
+        .finally(() => { im.loading = false; });
+    }
+    if (rig.current && im.rig !== rig.current) {
+      im.rig = rig.current;
+      im.player = createIdlePlayer(rig.current.mesh, im.clip ?? undefined, im.lookClip ?? undefined);
+    }
     if (rig.current) {
       const playingBed = s.posture === 'bed' && bed.player;
       const playingChair = p.sceneId === 'habitat' && s.posture === 'chair';
       if (!playingBed) rig.current.applyPose(s.walkTime, ease(walkWeight.current));
+      if (!playingBed && !playingChair && !libraryActive && !p.reducedMotion) im.player?.(idle.current);
       rig.current.applyChairPose?.(
         playingChair ? chairMotion.current.time : 0,
         playingChair ? ease(chairMotion.current.align) : 0,
@@ -803,6 +850,8 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
     if (library && rig.current) library.tick(dt);
     root.userData.posture = s.exiting ? 'standing-up' : s.posture;
+    root.userData.standingIdle = { elapsed: idle.current.elapsed, weight: idle.current.weight, yawnTime: idle.current.yawnTime,
+      nextYawn: idle.current.nextYawn, lookTime: idle.current.lookTime, nextLook: idle.current.nextLook };
     root.userData.chairPhase = s.posture === 'chair' ? chairMotion.current.phase : 'idle';
     root.userData.chairHeight = chairMotion.current.height;
     root.userData.bedTime = s.posture === 'bed' ? bed.time : null;

@@ -22,7 +22,7 @@ function load(path, dependencies, globals = {}) {
   return context.exports;
 }
 
-function mount(kind, overrides = {}) {
+function mount(kind, overrides = {}, idleLibrary) {
   const effects = [], cleanups = [], frames = [], sounds = [], actions = [];
   const target = Object.assign(new EventTarget(), { location: { search: '' }, clearTimeout });
   const camera = new THREE.PerspectiveCamera();
@@ -70,6 +70,9 @@ function mount(kind, overrides = {}) {
     './library/bookMotion': { residentLibraryTarget: () => [0, 0, 0] },
     './library/catalog': { readingStand: () => [-3.28, 0, -1.92], shelfOrigin: () => [-3.28, 0, -2.79] },
     './scene/orbital/useWorldController': { useWorldController: () => world },
+    './standingIdle': load('./orbital/standingIdle.ts', { three: THREE, 'three/examples/jsm/loaders/GLTFLoader.js': { GLTFLoader: class {
+      loadAsync(url) { return idleLibrary ? Promise.resolve(idleLibrary[url]) : Promise.reject(new Error('Animation offline in controller tests')); }
+    } } }),
     './scene/orbital/orbital.css': {},
   };
   const files = { orbital: './orbital/OrbitalResidents.tsx', app: '../App.tsx' };
@@ -518,4 +521,64 @@ test('walking next to an air gap does not push the chair, but a closer step does
     for (let i = 0; i < 16; i++) view.frame(1 / 60);
     assert.ok(view.chair.z < z);
   } finally { view.dispose(); }
+});
+
+
+test('standing idle starts early, ignores Space and resets on movement, focus and reduced motion', () => {
+  const view = mount('orbital');
+  const advance = seconds => { for (let i = 0; i < seconds * 60; i++) view.frame(1 / 60); };
+  try {
+    advance(8);
+    assert.equal(view.root.userData.standingIdle.weight, 1);
+    view.key('KeyD'); view.frame(1 / 60);
+    assert.equal(view.root.userData.standingIdle.elapsed, 0);
+    view.key('KeyD', 'keyup'); advance(8);
+    assert.equal(view.root.userData.standingIdle.weight, 1);
+    const elapsedBeforeSpace = view.root.userData.standingIdle.elapsed;
+    view.key('Space'); view.frame(1 / 60);
+    assert.ok(view.root.userData.standingIdle.elapsed > elapsedBeforeSpace);
+    assert.equal(view.root.userData.standingIdle.weight, 1);
+    advance(9);
+    view.props.focusedObject = 'journal'; advance(15);
+    assert.equal(view.root.userData.standingIdle.elapsed, 0);
+    assert.equal(view.root.userData.standingIdle.weight, 0);
+    view.props.focusedObject = null;
+    view.props.reducedMotion = true; advance(80);
+    assert.equal(view.root.userData.standingIdle.elapsed, 0);
+    assert.equal(view.root.userData.standingIdle.yawnTime, -1);
+  } finally { view.dispose(); }
+});
+
+test('loaded looking gesture ignores Space and is interrupted by movement, focus, disabling and reduced motion', async () => {
+  const idleLibrary = {};
+  for (const name of ['luna-yawn', 'luna-looking-around']) {
+    const { gltf } = await loadModel(new URL(`../../assets/public/models/resident/${name}.glb`, import.meta.url));
+    idleLibrary[`./models/resident/${name}.glb`] = gltf;
+  }
+  for (const trigger of [view => view.key('KeyD'),
+    view => { view.props.focusedObject = 'journal'; }, view => { view.props.enabled = false; },
+    view => { view.props.reducedMotion = true; }]) {
+    const view = mount('orbital', {}, idleLibrary);
+    const advance = seconds => { for (let i = 0; i < seconds * 60; i++) view.frame(1 / 60); };
+    try {
+      advance(8);
+      await new Promise(setImmediate);
+      for (let i = 0; i < 35 * 60 && view.root.userData.standingIdle.lookTime < 1; i++) view.frame(1 / 60);
+      assert(view.root.userData.standingIdle.lookTime >= 1, 'real clip must be playing before interruption');
+      const lookBeforeSpace = view.root.userData.standingIdle.lookTime;
+      view.key('Space'); view.frame(1 / 60);
+      assert.ok(view.root.userData.standingIdle.lookTime > lookBeforeSpace);
+      trigger(view); view.frame(1 / 60);
+      assert.equal(view.root.userData.standingIdle.elapsed, 0);
+      advance(.5);
+      assert.equal(view.root.userData.standingIdle.lookTime, -1);
+      assert.equal(view.root.userData.standingIdle.weight, 0);
+      if (view.props.reducedMotion) {
+        advance(120);
+        assert.equal(view.root.userData.standingIdle.lookTime, -1);
+        assert.equal(view.root.userData.standingIdle.yawnTime, -1);
+        assert.equal(view.root.userData.standingIdle.elapsed, 0);
+      }
+    } finally { view.dispose(); }
+  }
 });
