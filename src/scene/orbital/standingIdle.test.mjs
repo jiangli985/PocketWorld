@@ -18,6 +18,98 @@ const { createResidentRig } = compile('./residentRig.ts');
 const random = () => .5;
 const raw = readFileSync(new URL('../../../assets/public/models/resident/luna-yawn.glb', import.meta.url));
 const { animations: [clip] } = await new GLTFLoader().parseAsync(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), '');
+const lookRaw = readFileSync(new URL('../../../assets/public/models/resident/luna-looking-around.glb', import.meta.url));
+const { animations: [lookClip] } = await new GLTFLoader().parseAsync(lookRaw.buffer.slice(lookRaw.byteOffset, lookRaw.byteOffset + lookRaw.byteLength), '');
+
+test('both gestures finish once, never overlap, and ordinary > looking > yawn at 30/60/120 Hz', () => {
+  for (const hz of [30, 60, 120]) {
+    for (const sample of [0, .5, .999]) {
+      const rng = () => sample, state = createIdleState(rng);
+      const counts = [0, 0], seconds = [0, 0];
+      let previous = -1, started = 0, ended = -Infinity;
+      for (let frame = 0; frame < hz * 1200; frame++) {
+        stepIdle(state, 1 / hz, true, clip.duration, rng, lookClip.duration);
+        assert(!(state.yawnTime >= 0 && state.lookTime >= 0));
+        const active = state.lookTime >= 0 ? 0 : state.yawnTime >= 0 ? 1 : -1;
+        if (active >= 0) seconds[active] += 1 / hz;
+        if (active !== previous) {
+          if (previous >= 0) {
+            assert.equal(active, -1, 'must return to ordinary idle');
+            const duration = previous === 0 ? lookClip.duration : clip.duration;
+            assert(Math.abs(frame / hz - started - duration) <= 2 / hz);
+            ended = frame / hz;
+          } else {
+            assert(frame / hz - ended >= 8 - 2 / hz);
+            counts[active]++;
+            started = frame / hz;
+          }
+        }
+        previous = active;
+      }
+      assert(counts[0] > counts[1]);
+      assert(seconds[0] > seconds[1]);
+      assert(1200 - seconds[0] - seconds[1] > 1200 * .65);
+    }
+  }
+});
+
+test('looking interruption holds current sample while fading, resets deadlines, and absent clips never block yawns', () => {
+  const state = createIdleState(random);
+  for (let i = 0; i < 27 * 60; i++) stepIdle(state, 1 / 60, true, clip.duration, random, lookClip.duration);
+  assert(state.lookTime > 1);
+  const held = state.lookTime;
+  stepIdle(state, 1 / 60, false, clip.duration, random, lookClip.duration);
+  assert.equal(state.lookTime, held);
+  assert.equal(state.elapsed, 0);
+  assert.equal(state.nextLook, 25);
+  for (let i = 0; i < 60; i++) stepIdle(state, 1 / 60, true, clip.duration, random, lookClip.duration);
+  assert.equal(state.lookTime, -1);
+  assert.equal(state.lookWeight, 0);
+  const offline = createIdleState(random);
+  for (let i = 0; i < 62 * 60; i++) stepIdle(offline, 1 / 60, true, clip.duration, random, 0);
+  assert(offline.yawnTime > 1);
+  assert.equal(offline.lookTime, -1);
+});
+
+test('real looking clip keeps root and foot matrices fixed and blends continuously into walking', async () => {
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-walk-room.glb', import.meta.url));
+  const rig = createResidentRig(gltf.scene, gltf.animations.find(c => c.name === 'Walk_Grounded_Loop'));
+  const player = createIdlePlayer(rig.mesh, clip, lookClip);
+  assert.equal(lookClip.name, 'Luna_Looking_Around');
+  assert(Math.abs(lookClip.duration - 190 / 30) < 1e-6);
+  assert.equal(lookClip.tracks.length, 54);
+  rig.applyPose(0, 0); rig.mesh.updateMatrixWorld(true);
+  const fixed = ['Hips', 'LeftFoot', 'RightFoot', 'LeftToeBase', 'RightToeBase'].map(n => rig.mesh.getObjectByName('mixamorig' + n));
+  const anchors = fixed.map(b => b.matrixWorld.clone());
+  const bones = []; rig.mesh.traverse(b => { if (b.isBone) bones.push(b); });
+  const state = createIdleState(random);
+  let previous;
+  try {
+    for (let i = 0; i < 34 * 120; i++) {
+      stepIdle(state, 1 / 120, true, clip.duration, random, lookClip.duration);
+      rig.applyPose(0, 0); player(state); rig.mesh.updateMatrixWorld(true);
+      fixed.forEach((b, k) => assert.deepEqual(b.matrixWorld.elements, anchors[k].elements));
+      bones.forEach(b => assert(b.quaternion.toArray().every(Number.isFinite)));
+      if (previous) bones.forEach((b, k) => assert(b.quaternion.angleTo(previous[k]) < .12, 'pose pop at ' + i));
+      previous = bones.map(b => b.quaternion.clone());
+    }
+    for (const time of [.5, 2, 4, 5.8]) {
+      Object.assign(state, { lookTime: time, lookWeight: 1, weight: 1, elapsed: 27, interrupted: false });
+      previous = undefined;
+      for (let i = 0; i <= 60; i++) {
+        stepIdle(state, 1 / 120, false, clip.duration, random, lookClip.duration);
+        rig.applyPose(i / 120, Math.min(1, i / 36));
+        rig.mesh.updateMatrixWorld(true);
+        const walkingFeet = fixed.map(b => b.matrixWorld.clone());
+        player(state); rig.mesh.updateMatrixWorld(true);
+        fixed.forEach((b, k) => assert.deepEqual(b.matrixWorld.elements, walkingFeet[k].elements));
+        if (previous) bones.forEach((b, k) => assert(b.quaternion.angleTo(previous[k]) < .22, 'walk interruption pop'));
+        previous = bones.map(b => b.quaternion.clone());
+      }
+      assert.equal(state.lookTime, -1);
+    }
+  } finally { rig.dispose(); }
+});
 
 test('ordinary idle dominates ten minutes at 30/60/120 Hz and yawns play once in full', () => {
   for (const hz of [30, 60, 120]) {

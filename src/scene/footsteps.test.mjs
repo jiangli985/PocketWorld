@@ -22,7 +22,7 @@ function load(path, dependencies, globals = {}) {
   return context.exports;
 }
 
-function mount(kind, overrides = {}) {
+function mount(kind, overrides = {}, idleLibrary) {
   const effects = [], cleanups = [], frames = [], sounds = [], actions = [];
   const target = Object.assign(new EventTarget(), { location: { search: '' }, clearTimeout });
   const camera = new THREE.PerspectiveCamera();
@@ -70,7 +70,9 @@ function mount(kind, overrides = {}) {
     './library/bookMotion': { residentLibraryTarget: () => [0, 0, 0] },
     './library/catalog': { readingStand: () => [-3.28, 0, -1.92], shelfOrigin: () => [-3.28, 0, -2.79] },
     './scene/orbital/useWorldController': { useWorldController: () => world },
-    './standingIdle': load('./orbital/standingIdle.ts', { three: THREE, 'three/examples/jsm/loaders/GLTFLoader.js': { GLTFLoader: class { loadAsync() { return Promise.reject(new Error('Animation offline in controller tests')); } } } }),
+    './standingIdle': load('./orbital/standingIdle.ts', { three: THREE, 'three/examples/jsm/loaders/GLTFLoader.js': { GLTFLoader: class {
+      loadAsync(url) { return idleLibrary ? Promise.resolve(idleLibrary[url]) : Promise.reject(new Error('Animation offline in controller tests')); }
+    } } }),
     './scene/orbital/orbital.css': {},
   };
   const files = { orbital: './orbital/OrbitalResidents.tsx', app: '../App.tsx' };
@@ -551,4 +553,35 @@ test('standing idle starts early and movement, jumping, focus and reduced motion
     assert.equal(view.root.userData.standingIdle.elapsed, 0);
     assert.equal(view.root.userData.standingIdle.yawnTime, -1);
   } finally { view.dispose(); }
+});
+
+test('loaded looking gesture is interrupted by movement, jump, focus, disabling and reduced motion', async () => {
+  const idleLibrary = {};
+  for (const name of ['luna-yawn', 'luna-looking-around']) {
+    const { gltf } = await loadModel(new URL(`../../assets/public/models/resident/${name}.glb`, import.meta.url));
+    idleLibrary[`./models/resident/${name}.glb`] = gltf;
+  }
+  for (const trigger of [view => view.key('KeyD'), view => view.key('Space'),
+    view => { view.props.focusedObject = 'journal'; }, view => { view.props.enabled = false; },
+    view => { view.props.reducedMotion = true; }]) {
+    const view = mount('orbital', {}, idleLibrary);
+    const advance = seconds => { for (let i = 0; i < seconds * 60; i++) view.frame(1 / 60); };
+    try {
+      advance(8);
+      await new Promise(setImmediate);
+      for (let i = 0; i < 35 * 60 && view.root.userData.standingIdle.lookTime < 1; i++) view.frame(1 / 60);
+      assert(view.root.userData.standingIdle.lookTime >= 1, 'real clip must be playing before interruption');
+      trigger(view); view.frame(1 / 60);
+      assert.equal(view.root.userData.standingIdle.elapsed, 0);
+      advance(.5);
+      assert.equal(view.root.userData.standingIdle.lookTime, -1);
+      assert.equal(view.root.userData.standingIdle.weight, 0);
+      if (view.props.reducedMotion) {
+        advance(120);
+        assert.equal(view.root.userData.standingIdle.lookTime, -1);
+        assert.equal(view.root.userData.standingIdle.yawnTime, -1);
+        assert.equal(view.root.userData.standingIdle.elapsed, 0);
+      }
+    } finally { view.dispose(); }
+  }
 });
