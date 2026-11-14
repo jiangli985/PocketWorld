@@ -164,6 +164,37 @@ test('hair and skirt follow movement without shifting body bones and settle afte
     for (let i = 0; i < 90; i++) angles = pose(.65, .875, 0, 0, 0);
     assert(angles.Hair_ < .00001 && angles.Dress_ < .00001, 'settles on the authored pose');
 
+    // Check the skinned surface so rotating a lightly weighted joint alone cannot pass.
+    const indices = mesh.geometry.getAttribute('skinIndex');
+    const weights = mesh.geometry.getAttribute('skinWeight');
+    const vertices = { hair: [], skirt: [] };
+    for (let index = 0; index < indices.count; index += 27) {
+      for (let slot = 0; slot < 4; slot++) {
+        if (weights.array[index * 4 + slot] < .55) continue;
+        const name = bones[indices.array[index * 4 + slot]].name;
+        if (/^Hair_(Back|Side)_.+_0[34]$/.test(name)) vertices.hair.push(index);
+        if (/^Dress_.+_03$/.test(name)) vertices.skirt.push(index);
+      }
+    }
+    const vertex = index => mesh.localToWorld(mesh.getVertexPosition(index, new THREE.Vector3()));
+    const maximum = { hair: 0, skirt: 0 };
+    for (let frame = 0; frame < 60; frame += 2) {
+      const phase = frame / 60;
+      rig.applyPose(phase, 1);
+      rig.mesh.updateMatrixWorld(true);
+      const rest = { hair: vertices.hair.map(vertex), skirt: vertices.skirt.map(vertex) };
+      rig.followMotion(2 * dt, true, 0, 0, speed * 2 * dt, phase);
+      rig.mesh.updateMatrixWorld(true);
+      for (const part of ['hair', 'skirt']) {
+        vertices[part].forEach((index, sample) => {
+          maximum[part] = Math.max(maximum[part], vertex(index).distanceTo(rest[part][sample]));
+        });
+      }
+    }
+    assert(maximum.hair > .06 && maximum.hair < .11, `hair surface displacement: ${maximum.hair}`);
+    assert(maximum.skirt > .029 && maximum.skirt < .065, `skirt surface displacement: ${maximum.skirt}`);
+    pose(0, 0, 0, 0, 0, false);
+
     // Rotate the real head in place as the standing idle layer does.
     const head = asset.getObjectByName('mixamorigHead');
     let maxHair = 0;

@@ -74,7 +74,7 @@ function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
     if (!match) return [];
     const hair = match[1] === 'Hair';
     const depth = Number(match[3]);
-    const weight = (hair ? [.12, .28, .36, .32] : [.16, .34, .40])[depth - 1]
+    const weight = (hair ? [.17, .34, .42, .40] : [.21, .41, .48])[depth - 1]
       * (hair && match[2].startsWith('Front') ? .45 : 1);
     joint.getWorldQuaternion(inverse).invert();
     return [{
@@ -83,7 +83,7 @@ function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
       rollAxis: new THREE.Vector3(0, 0, 1).applyQuaternion(inverse),
     }];
   });
-  const hairPitch = followSpring(13), hairRoll = followSpring(11);
+  const hairPitch = followSpring(14), hairRoll = followSpring(12);
   const skirtPitch = followSpring(17), skirtRoll = followSpring(15);
   const clamp = THREE.MathUtils.clamp;
   const angleDelta = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
@@ -106,10 +106,10 @@ function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
     const walk = clamp(Math.hypot(dx, dz) / (dt * WALK_SPEED), 0, 1);
     const forwardSpeed = clamp((dx * Math.sin(yaw) + dz * Math.cos(yaw)) / (dt * WALK_SPEED), -.35, 1);
     const swing = Math.sin(phase * Math.PI * 2);
-    const hairPitchAngle = hairPitch.step(.11 * forwardSpeed + .043 * swing * walk, dt);
-    const hairRollAngle = hairRoll.step(-.19 * headTurn + .038 * swing * walk, dt);
-    const skirtPitchAngle = skirtPitch.step(.066 * forwardSpeed + .036 * swing * walk, dt);
-    const skirtRollAngle = skirtRoll.step(-.125 * turning + .075 * swing * walk, dt);
+    const hairPitchAngle = hairPitch.step(.15 * forwardSpeed + .090 * swing * walk, dt);
+    const hairRollAngle = hairRoll.step(-.31 * headTurn + .105 * swing * walk, dt);
+    const skirtPitchAngle = skirtPitch.step(.085 * forwardSpeed + .060 * swing * walk, dt);
+    const skirtRollAngle = skirtRoll.step(-.20 * turning + .145 * swing * walk, dt);
     for (const { joint, hair, weight, pitchAxis, rollAxis } of parts) {
       const pitch = (hair ? hairPitchAngle : skirtPitchAngle) * weight;
       const roll = (hair ? hairRollAngle : skirtRollAngle) * weight;
