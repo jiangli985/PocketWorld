@@ -107,7 +107,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     <footer className="orbital-footer">
       <div className="orbital-location"><span className="orbital-live-dot" /><span>{travelling ? '前往下一间舱室' : world.sceneId === 'habitat' ? '生活舱' : '观景阅览舱'}</span><span className="orbital-location-rule" /><span>ORBITAL HOME</span></div>
       <p className="orbital-status" role="status" aria-live="polite">{status}</p>
-      <p className="orbital-guide">拖动环绕 · 捏合缩放 · 点地面走动<span>WASD 行走 / Space 跳跃 / E 互动</span></p>
+      <p className="orbital-guide">拖动环绕 · 捏合缩放 · 点地面走动<span>WASD / 方向键行走 · E 互动</span></p>
     </footer>
     {audio.isPlaying && <aside className="orbital-now-playing"><span className="orbital-record-dot" /><div><small>NOW PLAYING</small><p>{audio.disc.title}</p></div></aside>}
     {draggingFile && <div className="orbital-drop-message"><span className="orbital-drop-disc" /><p>让这段音乐，留在这里。</p><small>松手制作一张自己的唱片</small></div>}
