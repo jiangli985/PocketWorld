@@ -57,7 +57,6 @@ function mount(kind, overrides = {}) {
     './Cat': { Cat: 'Cat' },
     './ResidentModel': { HIP_HEIGHT: 0.69, ResidentModel: 'ResidentModel' },
     './residentRig': load('./orbital/residentRig.ts', { three: THREE }),
-    './standingIdle': load('./orbital/standingIdle.ts', { three: THREE, 'three/examples/jsm/loaders/GLTFLoader.js': { GLTFLoader: class { loadAsync() { return Promise.reject(new Error('Animation offline in controller tests')); } } } }),
     './bedMotion': load('./orbital/bedMotion.ts', { three: THREE, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './journalLayout': load('./orbital/journalLayout.ts', {}),
     './chairPose': load('./orbital/chairPose.ts', {}),
@@ -71,6 +70,7 @@ function mount(kind, overrides = {}) {
     './library/bookMotion': { residentLibraryTarget: () => [0, 0, 0] },
     './library/catalog': { readingStand: () => [-3.28, 0, -1.92], shelfOrigin: () => [-3.28, 0, -2.79] },
     './scene/orbital/useWorldController': { useWorldController: () => world },
+    './standingIdle': load('./orbital/standingIdle.ts', { three: THREE, 'three/examples/jsm/loaders/GLTFLoader.js': { GLTFLoader: class { loadAsync() { return Promise.reject(new Error('Animation offline in controller tests')); } } } }),
     './scene/orbital/orbital.css': {},
   };
   const files = { orbital: './orbital/OrbitalResidents.tsx', app: '../App.tsx' };

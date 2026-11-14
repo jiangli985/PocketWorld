@@ -407,6 +407,7 @@ export function OrbitalResidents(props: ResidentsProps) {
 
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
+      idleInput.current = true;
       const p = current.current;
       if (event.code === 'Escape' && (approach.current || (state.current.posture === 'chair' && !p.focusedObject))) {
         // App's Escape handler must not restore its stale object snapshot after stand().
@@ -458,6 +459,11 @@ export function OrbitalResidents(props: ResidentsProps) {
         if (state.current.lift === 0) jump.current = true;
       }
     };
+    const activity = () => { idleInput.current = true; };
+    const dragging = (event: PointerEvent) => { if (event.buttons) activity(); };
+    window.addEventListener('pointerdown', activity);
+    window.addEventListener('pointermove', dragging);
+    window.addEventListener('wheel', activity, { passive: true });
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', clear);
@@ -466,6 +472,9 @@ export function OrbitalResidents(props: ResidentsProps) {
     document.addEventListener('visibilitychange', hide);
     return () => {
       clear();
+      window.removeEventListener('pointerdown', activity);
+      window.removeEventListener('pointermove', dragging);
+      window.removeEventListener('wheel', activity);
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', clear);
       window.removeEventListener('pointerup', touchUp); window.removeEventListener('pointercancel', clear); document.removeEventListener('visibilitychange', hide);
       if (state.current.nearby) current.current.onHover(null);
