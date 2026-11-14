@@ -5,7 +5,7 @@ import type { OrbitControls as Controls } from 'three-stdlib';
 import * as THREE from 'three';
 import { SCENE_ORIGINS, type WorldObjectState, type WorldSceneId, type WorldSceneProps } from '../../types/world';
 import { roomAudio } from '../audioEngine';
-import { Cosmos, SUN_DIRECTION } from './Cosmos';
+import { Cosmos, createSunState, type SunState } from './Cosmos';
 import { HabitatShell } from './HabitatShell';
 import { HabitatFurniture } from './HabitatFurniture';
 import { MediaObjects } from './media/MediaObjects';
@@ -109,19 +109,38 @@ function CameraRig(props: OrbitalSceneProps) {
     minPolarAngle={0.05} maxPolarAngle={1.30}
     target={[0, 1.05, 0]} />;
 }
-function OrbitalLighting({ objects }: Pick<WorldSceneProps, 'objects'>) {
+const SUN_DAY_COLOR = new THREE.Color('#fff2d9');
+const SUN_LIMB_COLOR = new THREE.Color('#ff9a52');
+const SKY_DAY_COLOR = new THREE.Color('#f1e7d9');
+const SKY_SHADOW_COLOR = new THREE.Color('#9eaed4');
+const SUN_INTENSITY = 2.3;
+
+function OrbitalLighting({ objects, sun }: Pick<WorldSceneProps, 'objects'> & { sun: SunState }) {
   const lamp = useRef<THREE.PointLight>(null);
   const ambient = useRef<THREE.HemisphereLight>(null);
+  const key = useRef<THREE.DirectionalLight>(null);
+  const scene = useThree(state => state.scene);
   const sunTarget = useMemo(() => new THREE.Object3D(), []);
+  useEffect(() => () => { scene.environmentIntensity = 1; }, [scene]);
   useFrame((_, delta) => {
     const sleeping = objects.bed?.active;
+    const daylight = sun.daylight.value;
     if (lamp.current) lamp.current.intensity = THREE.MathUtils.damp(lamp.current.intensity, objects.lamp?.active === false ? 0 : sleeping ? 1 : 4, 5, delta);
-    if (ambient.current) ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, sleeping ? 0.18 : 0.48, 3, delta);
+    if (ambient.current) {
+      ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, sleeping ? 0.18 : 0.22 + 0.26 * daylight, 3, delta);
+      ambient.current.color.lerpColors(SKY_SHADOW_COLOR, SKY_DAY_COLOR, daylight);
+    }
+    if (key.current) {
+      key.current.position.copy(sun.light).multiplyScalar(18);
+      key.current.intensity = SUN_INTENSITY * daylight;
+      key.current.color.lerpColors(SUN_DAY_COLOR, SUN_LIMB_COLOR, sun.warmth * 0.85);
+    }
+    scene.environmentIntensity = 0.45 + 0.55 * daylight;
   });
   return <>
     <primitive object={sunTarget} />
     <hemisphereLight ref={ambient} args={['#f1e7d9', '#3b4145', 0.48]} />
-    <directionalLight target={sunTarget} color="#fff2d9" intensity={2.3} position={SUN_DIRECTION.map(n => n * 18) as [number, number, number]} castShadow
+    <directionalLight ref={key} target={sunTarget} color="#fff2d9" intensity={SUN_INTENSITY} position={sun.light.toArray().map(n => n * 18) as [number, number, number]} castShadow
       shadow-mapSize={[2048, 2048]} shadow-camera-left={-8} shadow-camera-right={8} shadow-camera-top={8} shadow-camera-bottom={-8}
       shadow-camera-near={0.1} shadow-camera-far={60} shadow-normalBias={0.035} shadow-bias={-0.0001} />
     <pointLight ref={lamp} position={[-1, 2.5, -1]} color="#ffca8b" intensity={4} distance={8} decay={2} />
@@ -132,11 +151,12 @@ function WorldContent(props: OrbitalSceneProps) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
   const drawerInteraction = useRef<DrawerInteraction | null>(null);
   const interaction = useRef<NonNullable<WorldSceneProps['onApproach']> | null>(null);
+  const sun = useMemo(createSunState, []);
   useEffect(() => { setWalkTarget(null); }, [props.sceneId]);
   return <ScheduleProvider adapters={props.adapters}>
     <PerspectiveCamera makeDefault fov={34} position={[11, 10.05, 14]} near={0.08} far={2000} />
     <CameraRig {...props} />
-    <Cosmos reducedMotion={props.reducedMotion} />
+    <Cosmos reducedMotion={props.reducedMotion} sun={sun} />
     <Environment resolution={128} frames={1}>
       <Lightformer form="rect" intensity={2} color="#f5e8d3" position={[0, 5, -2]} rotation={[Math.PI / 2, 0, 0]} scale={[10, 8, 1]} />
       <Lightformer intensity={0.7} color="#a8bed1" position={[5, 1, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 4, 1]} />
@@ -154,7 +174,7 @@ function WorldContent(props: OrbitalSceneProps) {
         },
       };
       return <group key={id} position={SCENE_ORIGINS[id]} visible={id === props.sceneId || (props.transition.action?.kind === 'travel' && props.transition.phase !== 'active' && props.transition.phase !== 'error')}>
-        {id === props.sceneId && <OrbitalLighting objects={world.objects} />}
+        {id === props.sceneId && <OrbitalLighting objects={world.objects} sun={sun} />}
         <HabitatShell variant={id} onFloorClick={point => { if ((!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy && (!props.library || props.library.flow.current.phase === 'idle')) { void roomAudio.unlock(); setWalkTarget(point); } }} />
         {id === 'habitat' && <ScheduleSurfaces {...world} visible={props.sceneId === 'habitat'} />}
         <Suspense fallback={null}><HabitatFurniture {...world} /><MediaObjects {...world} /></Suspense>
