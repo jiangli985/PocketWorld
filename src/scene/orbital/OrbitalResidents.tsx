@@ -12,7 +12,7 @@ import { residentLibraryTarget } from './library/bookMotion';
 import { readingStand, shelfOrigin } from './library/catalog';
 import { HIP_HEIGHT as HIP, ResidentModel, type ResidentLeg, type ResidentRig } from './ResidentModel';
 import { WALK_SPEED } from './residentRig';
-import { createIdlePlayer, createIdleState, loadYawn, stepIdle, STANDING_IDLE } from './standingIdle';
+import { createIdlePlayer, createIdleState, loadYawn, loadLookingAround, stepIdle, STANDING_IDLE } from './standingIdle';
 import { CHAIR_SIT_SECONDS, createChairMotion, stepChairMotion } from './chairMotion';
 import { BED_ENTRY, BED_YAW, BED_DURATION, advanceBedTime, createBedPlayer, loadBedClip } from './bedMotion';
 import { canReachDrawer, drawerObstacle, DRAWER_CLEAR_Z, DRAWER_TRAVEL, type DrawerInteraction } from './drawerInteraction';
@@ -220,7 +220,9 @@ export function OrbitalResidents(props: ResidentsProps) {
   const hips = useRef<THREE.Group>(null);
   const rig = useRef<ResidentRig | null>(null);
   const idle = useRef(createIdleState());
-  const idleMotion = useRef({ rig: null as ResidentRig | null, player: null as ReturnType<typeof createIdlePlayer> | null, clip: null as THREE.AnimationClip | null, loading: false, retryAt: 0 });
+  const idleMotion = useRef({ rig: null as ResidentRig | null, player: null as ReturnType<typeof createIdlePlayer> | null,
+    clip: null as THREE.AnimationClip | null, loading: false, retryAt: 0,
+    lookClip: null as THREE.AnimationClip | null, lookLoading: false, lookRetryAt: 0 });
   const idleInput = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -862,9 +864,15 @@ export function OrbitalResidents(props: ResidentsProps) {
       && s.lift === 0 && s.velocity === 0 && !walking && distance < .00001 && walkWeight.current === 0
       && !keys.current.size && !idleInput.current && !s.path.length && !s.external
       && !approach.current && !drawerTask.current && !libraryActive && !touch.current;
-    stepIdle(idle.current, rawDelta, idleEligible, idleMotion.current.clip?.duration ?? 0);
+    stepIdle(idle.current, rawDelta, idleEligible, idleMotion.current.clip?.duration ?? 0, Math.random, idleMotion.current.lookClip?.duration ?? 0);
     idleInput.current = false;
     const im = idleMotion.current;
+    if (idle.current.elapsed >= STANDING_IDLE.delay && !im.lookClip && !im.lookLoading && idle.current.elapsed >= im.lookRetryAt) {
+      im.lookLoading = true;
+      void loadLookingAround().then(clip => { if (mounted.current) { im.lookClip = clip; im.rig = null; } })
+        .catch(() => { im.lookRetryAt = idle.current.elapsed + 30; })
+        .finally(() => { im.lookLoading = false; });
+    }
     if (idle.current.elapsed >= STANDING_IDLE.delay && !im.clip && !im.loading && idle.current.elapsed >= im.retryAt) {
       im.loading = true;
       void loadYawn().then(clip => { if (mounted.current) { im.clip = clip; im.rig = null; } })
@@ -873,7 +881,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
     if (rig.current && im.rig !== rig.current) {
       im.rig = rig.current;
-      im.player = createIdlePlayer(rig.current.mesh, im.clip ?? undefined);
+      im.player = createIdlePlayer(rig.current.mesh, im.clip ?? undefined, im.lookClip ?? undefined);
     }
     if (rig.current) {
       const playingBed = s.posture === 'bed' && bed.player;
@@ -891,7 +899,8 @@ export function OrbitalResidents(props: ResidentsProps) {
     if (library && rig.current) library.tick(dt);
     root.userData.posture = s.exiting ? 'standing-up' : s.posture;
     root.userData.grounded = s.lift === 0;
-    root.userData.standingIdle = { elapsed: idle.current.elapsed, weight: idle.current.weight, yawnTime: idle.current.yawnTime, nextYawn: idle.current.nextYawn };
+    root.userData.standingIdle = { elapsed: idle.current.elapsed, weight: idle.current.weight, yawnTime: idle.current.yawnTime,
+      nextYawn: idle.current.nextYawn, lookTime: idle.current.lookTime, nextLook: idle.current.nextLook };
     root.userData.chairPhase = s.posture === 'chair' ? chairMotion.current.phase : 'idle';
     root.userData.chairHeight = chairMotion.current.height;
     root.userData.bedTime = s.posture === 'bed' ? bed.time : null;
