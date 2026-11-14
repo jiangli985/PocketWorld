@@ -47,9 +47,9 @@
       "license": null,
       "licensePage": null,
       "used": true,
-      "bytes": 7087592,
-      "sha256": "ccab0f90867ebdfe3293cc4ef2de8a85c8f94c2da95613711c1db7f7193c55ca",
-      "processing": "Tripo GLB supplied by a project member. Packaged byte-for-byte; runtime scales and animates the skinned mesh."
+      "bytes": 4445308,
+      "sha256": "13a2f74be5cde26383049a85aa657013890a2d6fa70466dd67c0fee1b6f15fbf",
+      "processing": "Project member supplied cartoon cat 3d model.glb (Tripo). Fitted with Blender Rigify Cat and exported with web FK joints. See assets/models/cat/README.md."
     },
     {
       "file": "resident/luna-bed-v3.glb",

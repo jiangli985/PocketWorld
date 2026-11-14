@@ -19,7 +19,7 @@ type PetMotion = { time: number; remaining: number; value: number };
 
 function joint(scene: THREE.Object3D, name: string) {
   const node = scene.getObjectByName(name);
-  if (!node?.parent) throw new Error(`Missing cat model joint: ${name}`);
+  if (!(node instanceof THREE.Bone) || !node.parent) throw new Error(`Missing cat model joint: ${name}`);
   const parentSpace = node.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
   return {
     node,
@@ -27,6 +27,10 @@ function joint(scene: THREE.Object3D, name: string) {
     up: new THREE.Vector3(0, 1, 0).applyQuaternion(parentSpace),
     forward: new THREE.Vector3(0, 0, 1).applyQuaternion(parentSpace),
   };
+}
+
+function tailWag(time: number, strength: number, phase = 0) {
+  return Math.sin(time * 2.2 - phase) * 0.14 + Math.sin(time * 10 - phase) * 0.20 * strength;
 }
 
 function CatModel({ resident, motion, reducedMotion }: Omit<CatProps, 'value'> & { motion: PetMotion }) {
@@ -37,9 +41,10 @@ function CatModel({ resident, motion, reducedMotion }: Omit<CatProps, 'value'> &
     const object = clone(scene);
     object.name = 'CatModel';
     object.updateMatrixWorld(true);
-    // The exported rig names the face joint bone_13. The joints use their own local axes.
-    const head = joint(object, 'bone_13');
-    const tail = joint(object, 'tripoTail_0');
+    // The Blender export faces +Z. Convert the model's pose axes into each joint's parent space.
+    const head = joint(object, 'Cat_Head');
+    const tail = joint(object, 'Cat_TailBase');
+    const tailMid = joint(object, 'Cat_TailMid');
     const bounds = new THREE.Box3().setFromObject(object, true);
     const size = bounds.getSize(new THREE.Vector3());
     const center = bounds.getCenter(new THREE.Vector3());
@@ -53,27 +58,31 @@ function CatModel({ resident, motion, reducedMotion }: Omit<CatProps, 'value'> &
         skeletons.add(child.skeleton);
       }
     });
-    return { object, head, tail, skeletons, rotation: new THREE.Quaternion(), target: new THREE.Vector3() };
+    return { object, head, tail, tailMid, skeletons, rotation: new THREE.Quaternion(), target: new THREE.Vector3() };
   }, [scene]);
   useEffect(() => () => model.skeletons.forEach(skeleton => skeleton.dispose()), [model]);
 
   useFrame((_, delta) => {
     const group = pivot.current;
     if (!group) return;
-    const { head, tail, rotation, target } = model;
+    const { head, tail, tailMid, rotation, target } = model;
     const { time, remaining } = motion;
     const strength = reducedMotion ? 0 : Math.min(remaining * 4, 1);
     group.position.y = CUSHION_TOP + Math.sin((PET_DURATION - remaining) * 9) ** 2 * 0.08 * strength;
     if (resident.current && !reducedMotion) {
       group.worldToLocal(resident.current.getWorldPosition(target));
       const direction = THREE.MathUtils.clamp(Math.atan2(target.x, target.z), -0.27, 0.27);
-      yaw.current = THREE.MathUtils.damp(yaw.current, direction, 5, delta);
+      yaw.current = THREE.MathUtils.damp(yaw.current, direction, 5, Math.min(delta, 0.05));
     } else yaw.current = 0;
     head.node.quaternion.copy(head.rest)
       .premultiply(rotation.setFromAxisAngle(head.up, yaw.current))
       .premultiply(rotation.setFromAxisAngle(head.forward, Math.sin(time * 9) * 0.10 * strength));
-    const wag = reducedMotion ? 0 : Math.sin(time * 2.2) * 0.14 + Math.sin(time * 10) * 0.20 * strength;
-    tail.node.quaternion.copy(tail.rest).premultiply(rotation.setFromAxisAngle(tail.up, wag));
+    tail.node.quaternion.copy(tail.rest);
+    tailMid.node.quaternion.copy(tailMid.rest);
+    if (!reducedMotion) {
+      tail.node.quaternion.premultiply(rotation.setFromAxisAngle(tail.up, tailWag(time, strength)));
+      tailMid.node.quaternion.premultiply(rotation.setFromAxisAngle(tailMid.up, 0.5 * tailWag(time, strength, 0.7)));
+    }
   });
 
   return <group ref={pivot} position-y={CUSHION_TOP}><primitive object={model.object} /></group>;
@@ -94,8 +103,8 @@ export function Cat({ resident, value, reducedMotion }: CatProps) {
     if (!sparks.current.visible) return;
     sparks.current.children.forEach((child, i) => {
       const rise = reducedMotion ? 0.1 : ((PET_DURATION - motion.remaining + i * 0.25) % 1.1) * 0.45;
-      child.position.set(Math.sin(i * 2.1) * 0.22, 0.7 + rise, Math.cos(i * 2.1) * 0.15);
-      child.scale.setScalar(Math.min(1, motion.remaining * 3) * 0.7);
+      child.position.set(Math.sin(i * 2.1) * 0.22, 0.65 + rise, Math.cos(i * 2.1) * 0.15);
+      child.scale.setScalar(reducedMotion ? 0.7 : Math.min(1, motion.remaining * 3) * 0.7);
     });
   });
 
