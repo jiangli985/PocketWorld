@@ -1,0 +1,97 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+const module = { exports: {} };
+vm.runInNewContext(ts.transpileModule(readFileSync(new URL('./sunCycle.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module, exports: module.exports, URLSearchParams });
+const {
+  createSunOrbit, sampleSun, startPhase, sunAngle, roomLightDirection, readSunOverrides,
+  BASE_SUN_DIRECTION, ECLIPSE_FRACTION, SUN_CYCLE_SECONDS, ROOM_LIGHT_MIN_ELEVATION,
+} = module.exports;
+
+// Mirrors the Earth layouts in Cosmos.tsx.
+const LAYOUTS = {
+  wide: createSunOrbit([-623, -277, -588], 115),
+  narrow: createSunOrbit([-606, -259, -613], 115 * 0.72),
+};
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const angleBetween = (a, b) => Math.acos(Math.min(1, Math.max(-1, dot(a, b)))) * 180 / Math.PI;
+
+test('the Sun is hidden behind Earth for the configured share of each lap', () => {
+  for (const [name, orbit] of Object.entries(LAYOUTS)) {
+    const steps = 20000;
+    let dark = 0;
+    for (let i = 0; i < steps; i++) {
+      const sun = sampleSun(orbit, i / steps);
+      if (sun.daylight < 0.5) {
+        dark++;
+        assert.ok(angleBetween(sun.direction, orbit.earth) < orbit.angularRadius + 1, `${name}: dark Sun must sit behind Earth`);
+      }
+    }
+    assert.ok(Math.abs(dark / steps - ECLIPSE_FRACTION) < 0.02, `${name}: eclipse share ${dark / steps}`);
+    assert.equal(sampleSun(orbit, 0.5).daylight, 0);
+    assert.equal(sampleSun(orbit, 0).daylight, 1);
+  }
+});
+
+test('every visit starts in daylight with the original key-light direction', () => {
+  for (const orbit of Object.values(LAYOUTS)) {
+    const phase = startPhase(orbit);
+    const sun = sampleSun(orbit, phase);
+    assert.ok(angleBetween(sun.direction, BASE_SUN_DIRECTION) < 0.5);
+    assert.equal(sun.daylight, 1);
+    assert.equal(sun.warmth, 0);
+  }
+  const wide = LAYOUTS.wide;
+  let phase = startPhase(wide);
+  let seconds = 0;
+  while (sampleSun(wide, phase).daylight > 0.5) { phase += 1 / (SUN_CYCLE_SECONDS * 10); seconds += 0.1; }
+  assert.ok(seconds > 60 && seconds < 180, `first sunset after ${seconds.toFixed(1)}s`);
+});
+
+test('the Sun moves smoothly, slowest next to Earth and with no jump at noon', () => {
+  for (const orbit of Object.values(LAYOUTS)) {
+    const steps = 4800;
+    let previous = sampleSun(orbit, 0).direction;
+    let maxStep = 0;
+    for (let i = 1; i <= steps; i++) {
+      const next = sampleSun(orbit, i / steps).direction;
+      assert.ok(Math.abs(Math.hypot(...next) - 1) < 1e-9);
+      maxStep = Math.max(maxStep, angleBetween(previous, next));
+      previous = next;
+    }
+    assert.ok(maxStep < 0.5, `largest step ${maxStep}`);
+    const nearLimb = Math.abs(sunAngle(orbit, 0.39) - sunAngle(orbit, 0.38));
+    const nearNoon = Math.abs(sunAngle(orbit, 0.01) - sunAngle(orbit, 0));
+    assert.ok(nearLimb < nearNoon / 2);
+  }
+});
+
+test('the light warms as the Sun grazes the limb and fades out behind Earth', () => {
+  const orbit = LAYOUTS.wide;
+  const day = sampleSun(orbit, 0.2);
+  const dusk = sampleSun(orbit, 0.395);
+  const night = sampleSun(orbit, 0.45);
+  assert.ok(day.warmth < dusk.warmth);
+  assert.ok(dusk.daylight > 0.5 && dusk.warmth > 0.5);
+  assert.equal(night.daylight, 0);
+});
+
+test('room light keeps the Sun azimuth but never shines from below the floor', () => {
+  const below = roomLightDirection([-0.69, -0.31, -0.65]);
+  assert.ok(Math.abs(Math.hypot(...below) - 1) < 1e-9);
+  assert.ok(Math.abs(below[1] - ROOM_LIGHT_MIN_ELEVATION) < 1e-9);
+  assert.ok(Math.abs(Math.atan2(below[2], below[0]) - Math.atan2(-0.65, -0.69)) < 1e-9);
+  const above = roomLightDirection(BASE_SUN_DIRECTION);
+  assert.ok(angleBetween(above, BASE_SUN_DIRECTION) < 0.05);
+  assert.deepEqual([...roomLightDirection([0, -1, 0])], [0, 1, 0]);
+});
+
+test('debug query parameters pin the phase or change the speed', () => {
+  assert.deepEqual({ ...readSunOverrides('') }, { phase: null, speed: 1 });
+  assert.deepEqual({ ...readSunOverrides('?sun=0.4') }, { phase: 0.4, speed: 1 });
+  assert.deepEqual({ ...readSunOverrides('?sun=1.25&sunSpeed=30') }, { phase: 0.25, speed: 30 });
+  assert.deepEqual({ ...readSunOverrides('?sun=abc&sunSpeed=-3') }, { phase: null, speed: 0 });
+  assert.equal(readSunOverrides('?sunSpeed=9999').speed, 240);
+});

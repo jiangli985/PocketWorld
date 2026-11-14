@@ -69,7 +69,7 @@ export interface RoomAudioSnapshot {
 export interface FootstepAudioOptions {
   foot?: 0 | 1;
   surface?: 'wood' | 'rug';
-  variant?: 'walk' | 'land' | 'push';
+  variant?: 'walk' | 'push';
   intensity?: number;
 }
 
@@ -81,7 +81,7 @@ class RoomAudioEngine {
   private synthTimer: number | null = null;
   private stepIndex = 0;
   private footstepCount = 0;
-  private lastFootstepTime = { walk: -Infinity, land: -Infinity, push: -Infinity };
+  private lastFootstepTime = { walk: -Infinity, push: -Infinity };
   private noiseBuffer: AudioBuffer | null = null;
   private noiseBufferCtx: AudioContext | null = null;
   private htmlAudio: HTMLAudioElement | null = null;
@@ -261,21 +261,14 @@ class RoomAudioEngine {
 
     const now = ctx.currentTime;
     const variant = options.variant ?? 'walk';
-    const minGap = variant === 'land' ? 0.04 : 0.085;
     const lastTime = variant === 'walk'
-      ? Math.max(this.lastFootstepTime.walk, this.lastFootstepTime.land, this.lastFootstepTime.push)
+      ? Math.max(this.lastFootstepTime.walk, this.lastFootstepTime.push)
       : this.lastFootstepTime[variant];
-    if (now - lastTime < minGap) return;
+    if (now - lastTime < 0.085) return;
     this.lastFootstepTime[variant] = now;
 
     const surface = options.surface ?? 'wood';
     const baseIntensity = Math.min(Math.max(options.intensity ?? 1, 0.3), 1.6);
-
-    if (variant === 'land') {
-      this.triggerBarefootStep(ctx, now, 0, surface, 'land', baseIntensity * 1.12);
-      this.triggerBarefootStep(ctx, now + 0.024, 1, surface, 'land', baseIntensity * 0.94);
-      return;
-    }
 
     const foot = options.foot ?? ((this.footstepCount++ & 1) as 0 | 1);
     this.triggerBarefootStep(ctx, now, foot, surface, variant, baseIntensity);
@@ -306,7 +299,7 @@ class RoomAudioEngine {
     startTime: number,
     foot: 0 | 1,
     surface: 'wood' | 'rug',
-    variant: 'walk' | 'land' | 'push',
+    variant: 'walk' | 'push',
     intensity: number
   ) {
     const out = this.musicGain ?? ctx.destination;

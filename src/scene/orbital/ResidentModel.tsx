@@ -4,6 +4,7 @@ import { useLoader, type ThreeElements } from '@react-three/fiber';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as THREE from 'three';
 import { createResidentRig } from './residentRig';
+import { applyResidentSkin } from './residentSkin';
 import { createChairAnimation, readSeatContactCache } from './chairAnimation';
 
 export { HIP_HEIGHT } from './residentRig';
@@ -48,17 +49,17 @@ function LoadedResident({ rig }: { rig: MutableRefObject<ResidentRig | null> }) 
   }, [scene, animations, contact]);
   useLayoutEffect(() => {
     const group = container.current!;
+    const restoreSkin = applyResidentSkin(resident.mesh);
     group.add(resident.mesh);
     rig.current = resident;
     return () => {
       rig.current = null;
       group.remove(resident.mesh);
+      restoreSkin();
       resident.dispose();
     };
   }, [resident, rig]);
-  return <group ref={container}>
-    <mesh name="ResidentHitArea" position={[0, 0.725, 0.02]} visible={false}><capsuleGeometry args={[0.2, 1.05, 4, 8]} /></mesh>
-  </group>;
+  return <group ref={container} />;
 }
 
 function ModelStatus({ failed = false }: { failed?: boolean }) {
