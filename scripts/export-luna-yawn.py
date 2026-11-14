@@ -1,6 +1,7 @@
-"""Bake the user-supplied Mixamo Yawn onto Luna's upper-body rest basis.
+"""Bake a confirmed Mixamo idle onto Luna's upper-body rest basis.
 
 Run with Blender --background --python scripts/export-luna-yawn.py -- <Yawn.fbx>.
+For Looking Around (Idle Stand Looking Around), append looking-around after its FBX path.
 The planted lower body remains owned by the runtime neutral pose.
 """
 import json
