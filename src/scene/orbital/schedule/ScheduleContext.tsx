@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { WorldFeatureAdapters } from '../../../types/world';
-import { flattenSchedule, isScheduleEntry, isScheduleNotebook, migrateSchedule, SCHEDULE_KEY, type ScheduleNotebook } from './schedule';
+import { flattenSchedule, isScheduleEntry, readScheduleNotebook, migrateSchedule, SCHEDULE_KEY, type ScheduleNotebook } from './schedule';
 
 interface ScheduleContextValue {
   state: ScheduleNotebook;
@@ -57,10 +57,8 @@ export function ScheduleProvider({ adapters, children }: { adapters?: WorldFeatu
     setError('');
     void (async () => {
       try {
-        const raw = localStorage.getItem(SCHEDULE_KEY);
-        const saved: unknown = raw ? JSON.parse(raw) : null;
-        if (raw && !isScheduleNotebook(saved)) throw new Error('日程存档格式无法读取，原始存档已保留。');
-        let next = loaded.current ? latest.current : (saved as ScheduleNotebook | null);
+        const saved = readScheduleNotebook(localStorage);
+        let next = loaded.current ? latest.current : saved;
         const legacyRaw = !next && !remote ? localStorage.getItem('pocketworld:schedule') : null;
         let entries: unknown = [];
         let offline = false;
