@@ -26,25 +26,25 @@ export function paperGeometry(crumpled = false) {
   geometry.computeVertexNormals();
   return { geometry, flat, folded };
 }
-export function pageTexture(page: SchedulePage) {
+export function pageTexture(page: SchedulePage, bound = false) {
   const canvas = document.createElement('canvas');
   canvas.width = 560; canvas.height = 872;
   const ctx = canvas.getContext('2d')!;
-  const oat = '#e7dcc6', sage = '#d8dfcf', paper = '#f7f1e2', ink = '#435043';
+  const oat = '#e7dcc6', wheat = '#e4d9c3', paper = '#f7f1e2', ink = '#57483e';
   const box = (x: number, y: number, w: number, h: number, color: string, radius = 4) => {
     ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(x, y, w, h, radius); ctx.fill();
   };
-  ctx.fillStyle = '#d2c4a8'; ctx.fillRect(0, 0, 560, 872);
-  box(16, 16, 528, 840, paper, 26);
+  ctx.fillStyle = bound ? '#f5f0e1' : '#d2c4a8'; ctx.fillRect(0, 0, 560, 872);
+  if (!bound) box(16, 16, 528, 840, paper, 26);
   ctx.fillStyle = '#806b50'; ctx.font = 'bold italic 48px "Segoe Script", cursive'; ctx.textAlign = 'center'; ctx.fillText('Daily Planner', 280, 92);
   ctx.textAlign = 'left'; ctx.fillStyle = ink; ctx.font = 'bold 17px "Segoe Print", serif'; ctx.fillText('Date:', 40, 137);
-  box(92, 116, 181, 27, oat, 14); ctx.font = '16px Georgia, serif'; ctx.fillText(page.date, 109, 135);
+  box(92, 116, 181, 27, oat, 14); ctx.fillStyle = ink; ctx.font = '16px Georgia, serif'; ctx.fillText(page.date, 109, 135);
   const weekday = (new Date(`${page.date}T12:00:00`).getDay() + 6) % 7;
   ['M', 'T', 'W', 'T', 'F', 'S', 'S'].forEach((day, i) => {
-    if (i === weekday) box(298 + i * 30, 115, 24, 27, sage, 14);
+    if (i === weekday) box(298 + i * 30, 115, 24, 27, wheat, 14);
     ctx.fillStyle = ink; ctx.font = 'bold 14px "Segoe Print", serif'; ctx.fillText(day, 304 + i * 30, 135);
   });
-  box(40, 165, 230, 634, sage);
+  box(40, 165, 230, 634, wheat);
   box(284, 165, 236, 190, oat);
   box(284, 380, 236, 35, oat);
   box(284, 551, 236, 35, oat);
@@ -60,19 +60,20 @@ export function pageTexture(page: SchedulePage) {
   page.entries.forEach((entry, index) => {
     const y = 240 + index * 73;
     ctx.font = '16px Georgia, serif'; text(entry.time, 50, y, 48);
-    ctx.font = '19px "KaiTi", serif'; text(entry.title, 104, y, 151);
+    ctx.font = '19px "KaiTi", serif'; text(entry.title, 104, y, bound ? 127 : 151);
+    if (bound) { ctx.fillStyle = '#a08a71'; ctx.font = '15px Georgia, serif'; ctx.fillText('···', 242, y); }
     ctx.strokeStyle = '#f7f1e2aa'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(50, y + 22); ctx.lineTo(258, y + 22); ctx.stroke();
   });
   page.todos.forEach((item, i) => {
     const y = 236 + i * 45;
-    ctx.strokeStyle = '#81937c'; ctx.lineWidth = 2; ctx.strokeRect(296, y - 12, 16, 16);
-    if (item.completed) box(299, y - 9, 10, 10, '#72846b', 0);
+    ctx.strokeStyle = '#a18b6f'; ctx.lineWidth = 2; ctx.strokeRect(296, y - 12, 16, 16);
+    if (item.completed) box(299, y - 9, 10, 10, '#9b7b58', 0);
     ctx.font = '19px "KaiTi", serif'; text(item.text, 322, y, 184);
     ctx.strokeStyle = '#aa9a7d80'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(322, y + 8); ctx.lineTo(506, y + 8); ctx.stroke();
   });
   page.tomorrow.forEach((item, i) => {
     const y = 447 + i * 53;
-    box(298, y - 10, 11, 11, sage, 6);
+    box(298, y - 10, 11, 11, wheat, 6);
     ctx.font = '19px "KaiTi", serif'; text(item, 320, y, 186);
   });
   ctx.font = '17px "KaiTi", serif';
@@ -85,7 +86,8 @@ export function pageTexture(page: SchedulePage) {
     if (char !== '\n') line += char;
   }
   if (row < 8) text(line, 297, 610 + row * 24, 210);
-  ctx.font = '14px serif'; ctx.fillStyle = '#8c8e7c'; ctx.textAlign = 'center'; ctx.fillText(`第 ${page.number} 页`, 280, 830);
+  ctx.font = '14px serif'; ctx.fillStyle = '#968671'; ctx.textAlign = 'center'; ctx.fillText(`第 ${page.number} 页`, 280, 830);
+  if (bound) { ctx.font = '25px Georgia, serif'; ctx.fillText('‹', 54, 832); ctx.fillText('›', 507, 832); }
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }

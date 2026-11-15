@@ -7,6 +7,7 @@ export interface BoundBookControl {
   revision: number;
   textures: Map<number, Texture>;
   onSettled?: () => void;
+  onTurn?: (direction: -1 | 1) => void;
   onPaperPointer?: (page: number, u: number, v: number, kind: 'down' | 'move' | 'up' | 'wheel', shift: boolean, delta?: number, pointer?: PointerEvent) => boolean | void;
 }
 
