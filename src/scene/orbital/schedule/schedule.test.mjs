@@ -9,8 +9,29 @@ const source = fs.readFileSync(new URL('./schedule.ts', import.meta.url), 'utf8'
 const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const context = { exports: {}, crypto: webcrypto };
 vm.runInNewContext(output, context);
-const { migrateSchedule, turnSchedulePage, postSchedulePage, discardSchedulePage, schedulePageError, isScheduleNotebook, flattenSchedule, readScheduleNotebook, SCHEDULE_KEY, MAX_POSTED_SCHEDULES } = context.exports;
+const { migrateSchedule, openSchedulePage, turnSchedulePage, postSchedulePage, discardSchedulePage, schedulePageError, isScheduleNotebook, flattenSchedule, readScheduleNotebook, SCHEDULE_KEY, MAX_POSTED_SCHEDULES } = context.exports;
 const entry = (id, time = '09:00') => ({ id, title: `任务 ${id}`, time, completed: false, content: `正文 ${id}` });
+
+test('reopening selects the first available sheet and retains later drafts without recreating posted pages', () => {
+  let state = migrateSchedule([entry('first')]);
+  const firstId = state.current.id;
+  state = turnSchedulePage(state, 1);
+  state.current.notes = '第二页的正文';
+  const secondId = state.current.id;
+  state = turnSchedulePage(state, 1);
+  state.current.todos[2].text = '第三页待办';
+  const lastId = state.current.id;
+  const opened = openSchedulePage(state);
+  assert.equal(opened.current.id, firstId);
+  assert.equal(opened.queued.find(page => page.id === secondId).notes, '第二页的正文');
+  assert.equal(opened.queued.find(page => page.id === lastId).todos[2].text, '第三页待办');
+  assert.equal(openSchedulePage(opened), opened);
+  const posted = postSchedulePage(opened);
+  const after = openSchedulePage(turnSchedulePage(posted, 1));
+  assert.equal(after.current.id, secondId);
+  assert.equal(after.posted[0].id, firstId);
+  assert.equal([after.current, ...after.queued].some(page => page.id === firstId), false);
+});
 
 test('turning forward and back preserves drafts and revisits the same next page', () => {
   const first = migrateSchedule([entry('first')]);

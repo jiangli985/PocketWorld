@@ -125,6 +125,10 @@ export function BoundJournal({ opened, control, reducedMotion, leafCount, coverT
   useFrame((_, delta) => {
     const current = state.current;
     const book = control.current;
+    if (book.resetToStart) {
+      current.opening = 0; current.cursor = 0;
+      book.spread = 0; book.resetToStart = false;
+    }
     const targetCursor = opened ? book.spread : 0;
     if (textureRevision.current !== book.revision || drawn.current.leafCount !== leafCount) {
       textureRevision.current = book.revision;

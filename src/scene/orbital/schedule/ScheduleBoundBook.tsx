@@ -9,6 +9,7 @@ import { BOOK } from '../journal/bookModel';
 import { useSchedule } from './ScheduleContext';
 import { pageTexture } from './SchedulePaper';
 import { SchedulePageEditor } from './SchedulePageEditor';
+import { openSchedulePage } from './schedule';
 
 export function ScheduleBoundBook({ world, position, rotation = [0, 0, 0], color, scale = 1 }: {
   world: WorldModelProps; position: FurnitureVector; rotation?: FurnitureVector; color: string; scale?: number;
@@ -19,6 +20,7 @@ export function ScheduleBoundBook({ world, position, rotation = [0, 0, 0], color
   const pages = useMemo(() => [notebook.state.current, ...notebook.state.queued].sort((a, b) => a.number - b.number), [notebook.state.current, notebook.state.queued]);
   const index = pages.findIndex(page => page.id === notebook.state.current.id);
   const opened = world.focusedObject === 'schedule' && !!world.objects.schedule?.open;
+  const wasOpened = useRef(false);
   const [editing, setEditing] = useState(false);
   const leafCount = Math.max(BOOK.leaves, pages.length + 1);
   useFrame(() => {
@@ -26,6 +28,14 @@ export function ScheduleBoundBook({ world, position, rotation = [0, 0, 0], color
     if (next !== editing) setEditing(next);
   });
   useEffect(() => { control.current.spread = index; control.current.ready = false; }, [control, index]);
+  useEffect(() => {
+    if (!opened) { wasOpened.current = false; return; }
+    if (world.sceneId !== 'habitat' || !notebook.ready || wasOpened.current) return;
+    wasOpened.current = true;
+    control.current.spread = 0; control.current.ready = false; control.current.resetToStart = true;
+    const next = openSchedulePage(notebook.state);
+    if (next !== notebook.state) notebook.commit(next, { retainDraftOnError: true });
+  }, [control, notebook.ready, notebook.state, notebook.commit, opened, world.sceneId]);
   useEffect(() => {
     if (world.sceneId !== 'habitat') return;
     const book = control.current;

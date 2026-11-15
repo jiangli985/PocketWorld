@@ -4,6 +4,7 @@ export interface BoundBookControl {
   spread: number;
   cursor: number;
   ready: boolean;
+  resetToStart?: boolean;
   revision: number;
   textures: Map<number, Texture>;
   onSettled?: () => void;

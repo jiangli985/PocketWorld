@@ -111,6 +111,11 @@ export function postSchedulePage(state: ScheduleNotebook): ScheduleNotebook {
   const nextNumber = Math.max(state.current.number, ...state.posted.map(p => p.number), ...state.queued.map(p => p.number)) + 1;
   return { ...state, current: state.queued[0] ?? createSchedulePage(nextNumber), posted: [...state.posted, state.current], queued: state.queued.slice(1) };
 }
+export function openSchedulePage(state: ScheduleNotebook): ScheduleNotebook {
+  const pages = [state.current, ...state.queued].sort((a, b) => a.number - b.number);
+  if (pages[0].id === state.current.id) return state;
+  return { ...state, current: pages[0], queued: pages.slice(1) };
+}
 export function turnSchedulePage(state: ScheduleNotebook, direction: -1 | 1): ScheduleNotebook {
   const pages = [state.current, ...state.queued].sort((a, b) => a.number - b.number);
   const index = pages.findIndex(page => page.id === state.current.id) + direction;
