@@ -51,6 +51,6 @@ export function ScheduleBoundBook({ world, position, rotation = [0, 0, 0], color
     <ObjectHandle id="schedule" action="plan" hint="翻开日程 · 安排今天" world={opened ? { ...world, onApproach: () => false } : world}>
       <BoundJournal opened={opened} control={control} reducedMotion={world.reducedMotion} leafCount={leafCount} coverTitle="Daily Planner" coverSubtitle="D A I L Y  P L A N N E R" coverColor={color} coverStyle="daily" />
     </ObjectHandle>
-    {opened && editing && <SchedulePageEditor page={notebook.state.current} book={control} leafCount={leafCount} onChange={page => notebook.commit({ ...notebook.state, current: page }, { retainDraftOnError: true })} onGesture={world.onGesture} previousDisabled={index === 0} nextDisabled={index === pages.length - 1 && pages.length >= 32} />}
+    {opened && editing && <SchedulePageEditor key={notebook.state.current.id} page={notebook.state.current} book={control} leafCount={leafCount} onChange={page => notebook.commit({ ...notebook.state, current: page }, { retainDraftOnError: true })} onGesture={world.onGesture} previousDisabled={index === 0} nextDisabled={index === pages.length - 1 && pages.length >= 32} />}
   </group>;
 }
