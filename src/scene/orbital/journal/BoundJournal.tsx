@@ -52,8 +52,8 @@ function paperEdges(geometry: THREE.BufferGeometry, leaves: ReturnType<typeof le
   geometry.computeVertexNormals(); geometry.computeBoundingSphere();
 }
 
-export function BoundJournal({ opened, control, reducedMotion, leafCount }: {
-  opened: boolean; control: MutableRefObject<BoundBookControl>; reducedMotion: boolean; leafCount: number;
+export function BoundJournal({ opened, control, reducedMotion, leafCount, coverTitle = '日  记', coverSubtitle = 'M O M E N T S', coverColor = '#45534a' }: {
+  opened: boolean; control: MutableRefObject<BoundBookControl>; reducedMotion: boolean; leafCount: number; coverTitle?: string; coverSubtitle?: string; coverColor?: string;
 }) {
   const cover = useRef<THREE.Group>(null);
   const bookmark = useMemo(() => {
@@ -69,8 +69,8 @@ export function BoundJournal({ opened, control, reducedMotion, leafCount }: {
   const state = useRef({ opening: 0, cursor: 0 });
   const drawn = useRef({ opening: -1, cursor: -1, leafCount: 0 });
   const textureRevision = useRef(-1);
-  const cloth = useMemo(() => clothTexture(), []);
-  const title = useMemo(() => clothTexture(true), []);
+  const cloth = useMemo(() => clothTexture(false, coverColor), [coverColor]);
+  const title = useMemo(() => clothTexture(true, coverColor, coverTitle, coverSubtitle), [coverColor, coverTitle, coverSubtitle]);
   useEffect(() => () => { cloth.dispose(); title.dispose(); }, [cloth, title]);
   const data = useMemo(() => {
     const geometry = leafGeometry(leafCount);

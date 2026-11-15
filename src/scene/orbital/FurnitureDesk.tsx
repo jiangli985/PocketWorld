@@ -59,6 +59,6 @@ export function FurnitureDesk({ world }: { world: WorldModelProps }) {
       </FurnitureMotion>
     </ObjectHandle>
     <FurnitureComputer world={world} />
-    <ScheduleBook world={world} position={[0.55, 1.121, -2.14]} color="#7b9184" scale={0.76} rotation={[0, 0.08, 0]} />
+    <ScheduleBook world={world} position={[0.55, 1.121, -2.14]} color="#56634d" scale={0.76} rotation={[0, 0.08, 0]} />
   </group>;
 }

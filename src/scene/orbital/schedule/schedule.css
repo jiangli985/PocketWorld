@@ -1,88 +1,89 @@
 .schedule-sheet {
-  --planner-ink: #35473f; --planner-peach: #f4c7b6; --planner-mint: #d0e1d9; --planner-paper: #faf9f0;
+  --planner-ink: #435043; --planner-oat: #e7dcc6; --planner-sage: #d8dfcf; --planner-paper: #f7f1e2;
   position: relative; box-sizing: border-box; width: 360px; height: 560px; padding: 11px 12px 8px;
-  display: flex; flex-direction: column; color: var(--planner-ink); border: 10px solid transparent;
-  background: linear-gradient(var(--planner-paper), var(--planner-paper)) padding-box, linear-gradient(100deg, #f4c7b6, #c8dfe1) border-box;
-  border-radius: 24px; box-shadow: 2px 4px 8px #372b1b24; outline: none; overflow: hidden;
-  font: 11px/1.45 'Segoe Print', 'KaiTi', 'STKaiti', Georgia, serif; user-select: text;
+  display: flex; flex-direction: column; color: var(--planner-ink); border: 7px solid #d2c4a8;
+  background: var(--planner-paper);
+  border-radius: 17px; box-shadow: 2px 4px 8px #372b1b24; outline: none; overflow: hidden;
+  font: 12px/1.5 'Segoe Print', 'KaiTi', 'STKaiti', Georgia, serif; user-select: text;
 }
 .planner-page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .planner-heading { flex-shrink: 0; text-align: center; padding: 0 0 9px; }
-.planner-heading h2 { margin: 0; color: #a37c71; font: 700 italic 31px/1.45 'Segoe Script', 'Brush Script MT', cursive; letter-spacing: -.9px; }
+.planner-heading h2 { margin: 0; color: #806b50; font: 700 italic 31px/1.45 'Segoe Script', 'Brush Script MT', cursive; letter-spacing: -.9px; }
 .planner-date-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-shrink: 0; padding: 0 3px 12px; }
 .planner-date { display: flex; align-items: center; gap: 6px; font-weight: 600; min-width: 0; }
-.schedule-sheet .planner-date input { width: 112px; height: 20px; padding: 1px 7px; border-radius: 20px; background: var(--planner-peach); font: 10px/1.5 Georgia, serif; color: #655c4c; }
+.schedule-sheet .planner-date input { width: 112px; height: 20px; padding: 1px 7px; border-radius: 20px; background: var(--planner-oat); font: 10px/1.5 Georgia, serif; color: #75664f; }
 .planner-date input::-webkit-calendar-picker-indicator { width: 10px; margin-left: 0; padding: 0; opacity: .55; }
 .planner-week { display: flex; justify-content: space-between; gap: 4px; }
 .planner-week span { display: grid; place-items: center; width: 14px; height: 19px; font: 600 9px/1 'Segoe Print', serif; }
-.planner-week .is-today { border-radius: 50%; background: var(--planner-mint); color: #38584c; }
+.planner-week .is-today { border-radius: 50%; background: var(--planner-sage); color: #4f654c; }
 .planner-columns { display: grid; grid-template-columns: 1fr 1.04fr; gap: 9px; flex: 1; min-height: 0; }
 .planner-columns fieldset { box-sizing: border-box; margin: 0; padding: 0 8px 8px; min-width: 0; min-height: 0; border: 0; }
-.planner-columns legend { float: left; box-sizing: border-box; width: 100%; height: 25px; padding: 5px 0 4px; font-size: 11px; font-weight: 700; letter-spacing: .1px; }
-.planner-schedule { background: var(--planner-mint); border-radius: 3px; }
-.planner-hours { clear: both; display: grid; grid-template-rows: repeat(17, minmax(0, 1fr)); height: calc(100% - 25px); }
-.planner-hour { position: relative; display: flex; align-items: center; gap: 5px; min-height: 0; border-bottom: 1px solid #faf9f0a6; }
-.schedule-sheet input, .schedule-sheet textarea { box-sizing: border-box; min-width: 0; width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--planner-ink); font: inherit; caret-color: #8d6556; }
+.planner-columns legend { float: left; box-sizing: border-box; width: 100%; height: 30px; padding: 5px 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .1px; }
+.planner-schedule { background: var(--planner-sage); border-radius: 3px; }
+.planner-hours { clear: both; display: grid; grid-template-rows: repeat(8, minmax(0, 1fr)); height: calc(100% - 30px); }
+.planner-hour { position: relative; display: flex; align-items: center; gap: 5px; min-height: 0; border-bottom: 1px solid #f7f1e2a6; }
+.schedule-sheet input, .schedule-sheet textarea { box-sizing: border-box; min-width: 0; width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--planner-ink); font: inherit; caret-color: #806b50; }
 .schedule-sheet input { height: 100%; }
 .schedule-sheet input:disabled, .schedule-sheet textarea:disabled { opacity: 1; -webkit-text-fill-color: var(--planner-ink); }
-.schedule-sheet input:focus-visible, .schedule-sheet textarea:focus-visible, .schedule-sheet button:focus-visible, .planner-detail summary:focus-visible { outline: 1px solid #8bafa5; outline-offset: 2px; }
-.schedule-sheet .planner-hour-time { flex: 0 0 31px; width: 31px; font: 9px/1.3 Georgia, serif; font-variant-numeric: tabular-nums; }
+.schedule-sheet input:focus-visible, .schedule-sheet textarea:focus-visible, .schedule-sheet button:focus-visible, .planner-detail summary:focus-visible { outline: 1px solid #98a78a; outline-offset: 2px; }
+.schedule-sheet .planner-hour-time { flex: 0 0 35px; width: 35px; font: 10px/1.3 Georgia, serif; font-variant-numeric: tabular-nums; }
 .planner-hour-title { flex: 1; }
-.planner-hour:focus-within { background: #faf9f066; }
+.planner-hour:focus-within { background: #f7f1e266; }
 .planner-detail { position: relative; flex: 0 0 10px; }
 .planner-detail summary { width: 10px; cursor: pointer; list-style: none; color: #5f7c70; font: 11px/1 Georgia, serif; opacity: .35; }
 .planner-detail summary::-webkit-details-marker { display: none; }
 .planner-hour:hover .planner-detail summary, .planner-hour:focus-within .planner-detail summary { opacity: 1; }
 .planner-detail[open] { z-index: 3; }
-.schedule-sheet .planner-detail textarea { position: absolute; right: -7px; top: 14px; width: 145px; height: 85px; padding: 8px; border: 1px solid #a9c4b8; border-radius: 3px; background: var(--planner-paper); box-shadow: 0 3px 8px #35473f20; resize: none; line-height: 1.6; }
+.schedule-sheet .planner-detail textarea { position: absolute; right: -7px; top: 14px; width: 145px; height: 85px; padding: 8px; border: 1px solid #bcc8b1; border-radius: 3px; background: var(--planner-paper); box-shadow: 0 3px 8px #43504320; resize: none; line-height: 1.6; }
 .planner-hour:nth-last-child(-n+4) .planner-detail textarea { top: auto; bottom: 14px; }
-.planner-right { display: grid; grid-template-rows: 1.65fr 1fr 1.13fr; min-height: 0; gap: 12px; }
-.planner-todos { display: flex; flex-direction: column; background: var(--planner-peach); border-radius: 3px; }
+.planner-right { display: grid; grid-template-rows: 0.95fr 0.8fr 1.55fr; min-height: 0; gap: 17px; }
+.planner-todos { display: flex; flex-direction: column; background: var(--planner-oat); border-radius: 3px; }
 .planner-todo { clear: both; display: flex; align-items: center; flex: 1; min-height: 0; gap: 5px; }
-.schedule-sheet .planner-todo input[type='checkbox'] { appearance: none; flex-shrink: 0; width: 11px; height: 11px; margin: 0; border: 1.5px solid var(--planner-paper); cursor: pointer; }
-.schedule-sheet .planner-todo input[type='checkbox']:checked { background: #6a8d7d; border-color: #6a8d7d; box-shadow: inset 0 0 0 2px var(--planner-peach); }
-.planner-todo > input:last-child { border-bottom: 1px solid #a9806c99; height: 85%; }
+.schedule-sheet .planner-todo input[type='checkbox'] { appearance: none; flex-shrink: 0; width: 13px; height: 13px; margin: 0; border: 1.5px solid #81937c; cursor: pointer; }
+.schedule-sheet .planner-todo input[type='checkbox']:checked { background: #72846b; border-color: #72846b; box-shadow: inset 0 0 0 2px var(--planner-oat); }
+.planner-todo > input:last-child { border-bottom: 1px solid #aa9a7d80; height: 85%; }
 .planner-todo.is-complete > input:last-child { text-decoration: line-through; color: #7d7c6c; }
 .planner-columns .planner-tomorrow { padding: 0; }
-.planner-tomorrow legend, .planner-notes legend { border-radius: 3px; background: var(--planner-peach); padding-left: 7px; }
-.planner-tomorrow label { clear: both; display: flex; align-items: center; gap: 7px; height: calc((100% - 25px) / 4); padding: 0 6px; }
-.planner-tomorrow label > span { width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; background: var(--planner-mint); }
-.planner-columns .planner-notes { padding: 0; border: 1px solid var(--planner-peach); border-radius: 3px; }
+.planner-tomorrow legend, .planner-notes legend { border-radius: 3px; background: var(--planner-oat); padding-left: 7px; }
+.planner-tomorrow label { clear: both; display: flex; align-items: center; gap: 7px; height: calc((100% - 30px) / 2); padding: 0 6px; }
+.planner-tomorrow label > span { width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; background: var(--planner-sage); }
+.planner-columns .planner-notes { padding: 0; border: 1px solid var(--planner-oat); border-radius: 3px; }
 .planner-notes legend { margin: -1px -1px 0; width: calc(100% + 2px); }
-.schedule-sheet .planner-notes textarea { clear: both; display: block; height: calc(100% - 25px); padding: 5px 7px; resize: none; line-height: 1.7; }
+.schedule-sheet .planner-notes textarea { clear: both; display: block; height: calc(100% - 30px); padding: 5px 7px; resize: none; line-height: 1.7; }
 .schedule-sheet button { border: 0; padding: 4px 0; background: transparent; color: #78695c; font: inherit; cursor: pointer; text-underline-offset: 3px; }
 .schedule-sheet button:hover:not(:disabled) { text-decoration: underline; }
 .schedule-sheet button:disabled { opacity: .45; cursor: default; }
-.schedule-page-number { flex-shrink: 0; margin-top: 7px; text-align: center; color: #8c8e7c; font-size: 9px; }
+.schedule-page-number { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; margin-top: 5px; color: #8c8e7c; font-size: 9px; }
+.schedule-page-number button { width: 24px; padding: 0; font: 20px/1 Georgia, serif; }
 .schedule-actions { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 7px; }
 .schedule-actions nav { display: flex; align-items: center; gap: 8px; }
 .schedule-actions nav > span { font-size: 10px; color: #7e8576; }
-.schedule-sheet .schedule-discard { color: #a17664; }
+.schedule-sheet .schedule-discard { color: #8a6b47; }
 .schedule-sheet footer { flex-shrink: 0; margin-top: 5px; font-size: 10px; color: #7e6857; }
 .schedule-empty { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; line-height: 1.9; }
-.schedule-empty h2 { color: #a37c71; font: italic 30px 'Segoe Script', cursive; }
+.schedule-empty h2 { color: #806b50; font: italic 30px 'Segoe Script', cursive; }
 .schedule-empty p { margin: 0 0 14px; }
 .schedule-empty button { text-decoration: underline; }
 .schedule-error { flex-shrink: 0; color: #863f30; margin: 5px 0 0; font-size: 10px; }
 .schedule-error button { margin-left: 6px; text-decoration: underline; }
-.schedule-sheet ::selection { background: #b2d1c7; color: #303c31; }
+.schedule-sheet ::selection { background: #c5d1b9; color: #303c31; }
 .schedule-paper-drag { position: absolute; inset: 0; touch-action: none; cursor: grab; }
 .schedule-sheet.is-book > :not(.schedule-paper-drag) { position: relative; pointer-events: none; }
 .schedule-sheet.is-book input, .schedule-sheet.is-book textarea, .schedule-sheet.is-book button, .schedule-sheet.is-book summary { pointer-events: auto; }
 .schedule-sheet.is-dragging { cursor: grabbing; user-select: none; will-change: transform; box-shadow: 4px 12px 18px #372b1b40; }
 .schedule-sheet.is-dragging .schedule-paper-drag { cursor: grabbing; }
 @media (max-width: 719px) {
-  .schedule-sheet { width: min(430px, calc(100vw - 24px)); height: min(680px, calc(100svh - 132px)); min-height: 420px; padding: 10px 10px 8px; border-width: 9px; font-size: 12px; }
+  .schedule-sheet { width: min(430px, calc(100vw - 24px)); height: min(680px, calc(100svh - 132px)); min-height: 420px; padding: 10px 10px 8px; border-width: 7px; font-size: 13px; }
   .planner-heading h2 { font-size: 32px; }
   .planner-date-row { padding-bottom: 12px; gap: 7px; }
   .planner-week { gap: 2px; }
   .planner-columns { gap: 9px; }
-  .planner-columns legend { height: 27px; font-size: 12px; }
-  .planner-hours { height: calc(100% - 27px); }
-  .schedule-sheet .planner-hour-time { flex-basis: 32px; width: 32px; font-size: 10px; }
-  .planner-tomorrow label { height: calc((100% - 27px) / 4); }
-  .schedule-sheet .planner-notes textarea { height: calc(100% - 27px); }
-  .schedule-sheet .planner-todo input[type='checkbox'] { width: 14px; height: 14px; }
+  .planner-columns legend { height: 32px; font-size: 13px; }
+  .planner-hours { height: calc(100% - 32px); }
+  .schedule-sheet .planner-hour-time { flex-basis: 36px; width: 36px; font-size: 11px; }
+  .planner-tomorrow label { height: calc((100% - 32px) / 2); }
+  .schedule-sheet .planner-notes textarea { height: calc(100% - 32px); }
+  .schedule-sheet .planner-todo input[type='checkbox'] { width: 16px; height: 16px; }
   .schedule-page-number { font-size: 10px; }
   .schedule-actions button { min-height: 32px; }
 }

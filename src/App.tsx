@@ -86,7 +86,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
   }, []);
   const onToggleMute = useCallback(() => { roomAudio.setMuted(!roomAudio.getSnapshot().isMuted); }, []);
   const focusGuide = world.focusedObject === 'journal' ? '点击书页书写 · ← / → 翻页 · 自动保存 · Esc 返回'
-    : world.focusedObject === 'schedule' ? '上拖纸页贴出 · V 切换视角 · Esc 返回'
+    : world.focusedObject === 'schedule' ? '← / → 翻页 · 上拖纸页贴出 · V 切换视角 · Esc 返回'
     : world.focusedObject === 'schedule-glass' ? '左右键浏览 · V 切换视角 · Esc 返回' : '';
   const status = announcement || world.error || audio.error || focusGuide || world.hover?.hint || (world.focusedObject ? '操作物品继续探索 · Esc / 双指轻触退回' : '靠近物品后按 E 互动');
   const travelling = world.transition.action?.kind === 'travel' && !['active', 'idle', 'error'].includes(world.transition.phase);

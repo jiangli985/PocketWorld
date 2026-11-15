@@ -1,8 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { WorldFeatureAdapters } from '../../../types/world';
+import { createBookControl, type BoundBookControl } from '../journal/bookControl';
 import { flattenSchedule, isScheduleEntry, readScheduleNotebook, migrateSchedule, SCHEDULE_KEY, type ScheduleNotebook } from './schedule';
 
 interface ScheduleContextValue {
+  book: React.MutableRefObject<BoundBookControl>;
   state: ScheduleNotebook;
   ready: boolean;
   error: string;
@@ -16,6 +18,7 @@ export function useSchedule() {
   return value;
 }
 export function ScheduleProvider({ adapters, children }: { adapters?: WorldFeatureAdapters; children: React.ReactNode }) {
+  const book = useRef(createBookControl());
   const [state, setState] = useState(migrateSchedule);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
@@ -117,5 +120,5 @@ export function ScheduleProvider({ adapters, children }: { adapters?: WorldFeatu
     return true;
   }, [ready, sync]);
   const retry = () => ready && !remote ? commit(latest.current) : setAttempt(value => value + 1);
-  return <ScheduleContext.Provider value={{ state, ready, error, commit, retry }}>{children}</ScheduleContext.Provider>;
+  return <ScheduleContext.Provider value={{ book, state, ready, error, commit, retry }}>{children}</ScheduleContext.Provider>;
 }

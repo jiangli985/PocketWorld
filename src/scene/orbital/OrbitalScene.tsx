@@ -12,6 +12,7 @@ import { MediaObjects } from './media/MediaObjects';
 import { FeatureSurfaces } from './FeatureSurfaces';
 import { ScheduleProvider } from './schedule/ScheduleContext';
 import { ScheduleSurfaces } from './schedule/ScheduleSurfaces';
+import { BOOK_POSITION } from './schedule/SchedulePaper';
 import { OrbitalResidents } from './OrbitalResidents';
 import type { DrawerInteraction } from './drawerInteraction';
 import { shelfOrigin } from './library/catalog';
@@ -74,7 +75,7 @@ function CameraRig(props: OrbitalSceneProps) {
       }
       if (props.focusedObject?.startsWith('schedule')) {
         offset.multiplyScalar(Math.max(1, 0.62 / (size.width / size.height)));
-        if (narrow && props.focusedObject === 'schedule') target.current.x = origin.x + 0.69;
+        if (narrow && props.focusedObject === 'schedule') target.current.x = origin.x + BOOK_POSITION[0];
       }
       if (props.focusedObject === 'book-01' && narrow) { const close = props.library?.cameraView === 'close'; offset.multiplyScalar(close ? 1.9 : 1.6); target.current.y -= close ? .40 : .55; }
       if (props.focusedObject === 'book-01' && !narrow) target.current.x += .45;
