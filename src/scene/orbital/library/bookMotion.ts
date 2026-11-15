@@ -25,7 +25,7 @@ export const shelfQuaternion = new THREE.Quaternion().setFromRotationMatrix(
   new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0)),
 );
 
-const HELD_TILT = -0.26;
+const HELD_TILT = -0.32;
 export const heldQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(HELD_TILT, Math.PI, 0));
 
 export function bookStand(scene: string, book: LibraryBook, near = false): Vec3 {
@@ -63,19 +63,21 @@ export function coverOpenCurve(flow: LibraryFlow): number {
 export function bookCoverGripPose(openVal: number): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
   const theta = Math.PI * openVal;
   const hingeY = 0.058 * (1 - openVal);
-  // Contact point near outer lower-front edge of cover so fingers cradle/lift cleanly into supportOrientation.
-  const cx = 0.195;
-  const cy = 0.004;
-  const cz = -0.068;
+  // Hook fingertips/palm cleanly at the lower-outer edge of the cover without twisting the wrist backwards.
+  const cx = 0.18;
+  const cy = -0.004;
+  const cz = -0.088;
   const position = new THREE.Vector3(
     cx * Math.cos(theta) - cy * Math.sin(theta),
     hingeY + cx * Math.sin(theta) + cy * Math.cos(theta),
     cz,
   );
-  // Palm normal rotates cleanly with the cover: from (0,-1,0) at closed to (0,+1,0) at open (matching supportOrientation!).
-  const palmZ = new THREE.Vector3(Math.sin(theta), -Math.cos(theta), 0).normalize();
-  const palmY = new THREE.Vector3(0, 0, -1);
+  // Smoothly stay palm-up/inward: (0,+1,0) at closed -> (-0.85,+0.52,0) lifting right -> (0,+1,0) supporting open!
+  const palmZ = new THREE.Vector3(-0.85 * Math.sin(theta), 0.35 + 0.65 * Math.cos(theta) ** 2, 0).normalize();
+  const fingerDir = new THREE.Vector3(0.36 * (1 - openVal), 0.18 * Math.sin(theta), 0.92).normalize();
+  const palmY = fingerDir.negate();
   const palmX = new THREE.Vector3().crossVectors(palmY, palmZ).normalize();
+  palmZ.crossVectors(palmX, palmY).normalize();
   const quaternion = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(palmX, palmY, palmZ));
   return { position, quaternion };
 }
@@ -111,7 +113,7 @@ export function turningPageCurve(progress: number, direction: number) {
   return { leafRatio, bendAmp, handContact, liftPhase, forwardRatio };
 }
 
-export function turningPagePoint(leafRatio: number, bendAmp: number, rx = 0.175, rz = -0.082) {
+export function turningPagePoint(leafRatio: number, bendAmp: number, rx = 0.185, rz = -0.085) {
   const theta = Math.PI * leafRatio;
   const by = Math.sin((rx / 0.235) * Math.PI) * bendAmp;
   const position = new THREE.Vector3(
@@ -141,7 +143,7 @@ export function bookPose(scene: string, book: LibraryBook, flow: LibraryFlow) {
   const root = bookStand(scene, book);
   const open = coverOpenCurve({ ...flow, phase });
   // Keep closed book centered in front of chest, shifting seamlessly as cover unfolds rightward.
-  const heldBase = new THREE.Vector3(root[0] + 0.11 * (1 - open), 0.915, root[2] - 0.26);
+  const heldBase = new THREE.Vector3(root[0] + 0.11 * (1 - open), 0.93, root[2] - 0.285);
   const position = shelf.clone();
   const quaternion = shelfQuaternion.clone();
 

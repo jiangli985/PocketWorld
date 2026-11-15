@@ -104,7 +104,7 @@ test('开书、合书与双向翻页手部轨迹紧贴封面边缘和弯曲纸�
         const pose = stepPose(rig, root, book, 'turn', p, dir);
         const curve = bookMotion.turningPageCurve(p, dir);
         const pt = bookMotion.turningPagePoint(curve.leafRatio, curve.bendAmp);
-        const expected = pt.position.clone().addScaledVector(pt.normal, dir > 0 ? 0.002 : -0.002).applyQuaternion(pose.quaternion).add(pose.position);
+        const expected = pt.position.clone().addScaledVector(pt.normal, dir > 0 ? -0.002 : 0.002).applyQuaternion(pose.quaternion).add(pose.position);
         const arm = rig.arms[dir > 0 ? 1 : 0];
         const actual = arm.fingerTipOffset.clone().applyQuaternion(arm.hand.getWorldQuaternion(new THREE.Quaternion())).add(arm.hand.getWorldPosition(new THREE.Vector3()));
         assert.ok(actual.distanceTo(expected) < 0.002, `turn(${dir})@${p} 纸页指尖误差`);

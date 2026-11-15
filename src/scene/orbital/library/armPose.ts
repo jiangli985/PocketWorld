@@ -68,8 +68,8 @@ export function reachArm(
   else target.set(0, -1, 0);
 
   const meshQuat = rig.mesh.getWorldQuaternion(rotation);
-  // Anatomical elbow pole: outward, downward, and slightly backward (never forward!).
-  bend.set(side ? 0.62 : -0.62, -0.56, -0.42).applyQuaternion(meshQuat);
+  // Anatomical elbow pole: comfortably outward, downward, and slightly backward.
+  bend.set(side ? 0.78 : -0.78, -0.52, -0.36).applyQuaternion(meshQuat);
   if (poleHint && poleHint.lengthSq() > 1e-6) {
     bend.addScaledVector(poleHint.clone().normalize(), 0.35);
   }
@@ -137,12 +137,39 @@ export function reachPalm(
   const palmBasisInv = arm.palmBasis ? arm.palmBasis.clone().invert() : new THREE.Quaternion();
   const wrist = contact.clone();
 
+  const elbowPos = new THREE.Vector3();
+  const wristPos = new THREE.Vector3();
+  const forearmAxis = new THREE.Vector3();
+  const forearmWorldQuat = new THREE.Quaternion();
+  const twistQuat = new THREE.Quaternion();
+
   for (let i = 0; i < 4; i++) {
     reachArm(rig, arm, wrist, side, opts.poleHint);
     arm.hand.updateWorldMatrix(true, false);
     if (opts.quaternion && arm.palmBasis) {
       const blend = opts.blend ?? 1;
-      const base = arm.hand.getWorldQuaternion(handWorldQuat).multiply(arm.palmBasis).slerp(opts.quaternion, blend);
+      const restPalm = arm.hand.getWorldQuaternion(handWorldQuat).multiply(arm.palmBasis);
+      const base = restPalm.clone().slerp(opts.quaternion, blend);
+
+      // Share pronation/supination twist along the forearm so the wrist never pinches ("拧麻花").
+      arm.forearm.getWorldPosition(elbowPos);
+      arm.hand.getWorldPosition(wristPos);
+      forearmAxis.copy(wristPos).sub(elbowPos);
+      if (forearmAxis.lengthSq() > 1e-8) {
+        forearmAxis.normalize();
+        const delta = base.clone().multiply(restPalm.clone().invert());
+        const dot = delta.x * forearmAxis.x + delta.y * forearmAxis.y + delta.z * forearmAxis.z;
+        let twistAngle = 2 * Math.atan2(dot, delta.w);
+        if (twistAngle > Math.PI) twistAngle -= 2 * Math.PI;
+        if (twistAngle < -Math.PI) twistAngle += 2 * Math.PI;
+        const share = THREE.MathUtils.clamp(twistAngle * 0.78, -1.75, 1.75);
+        twistQuat.setFromAxisAngle(forearmAxis, share);
+        arm.forearm.parent!.getWorldQuaternion(invParent).invert();
+        arm.forearm.getWorldQuaternion(forearmWorldQuat);
+        arm.forearm.quaternion.copy(invParent).multiply(twistQuat).multiply(forearmWorldQuat);
+        arm.forearm.updateWorldMatrix(false, true);
+      }
+
       arm.hand.parent!.getWorldQuaternion(invParent).invert();
       arm.hand.quaternion.copy(invParent).multiply(base).multiply(palmBasisInv);
       arm.hand.updateWorldMatrix(false, false);
