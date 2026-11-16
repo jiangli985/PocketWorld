@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PAGE_TURN_AUTHORED } from './pageTurnFrames';
 import type { ResidentRig } from '../ResidentModel';
 import type { LibraryFlow } from './useLibrary';
 import {
@@ -272,7 +273,7 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
     const support = (1 - side) as 0 | 1;
     const supportPose = bookSupportPose(support);
     // A small eye follow keeps the head down and torso quiet while the page passes the spine.
-    const gazeTurn = contact(0, 0.05, -0.01).lerp(contactVec(hand.position), 0.16 * Math.sin(p * Math.PI));
+    const gazeTurn = contact(0, 0.05, -0.01).lerp(contactVec(hand.position), PAGE_TURN_AUTHORED.GazeFollow * Math.sin(p * Math.PI));
     applyTorsoAndGazeIK(rig, gazeTurn, -0.04, 0, 0, 1, dt);
     reachPalm(rig, rig.arms[support], contactVec(supportPose.position), support, {
       quaternion: supportPose.quaternion.premultiply(book.quaternion),
@@ -286,6 +287,10 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
       blend: 1,
       tipWeight: hand.tipWeight,
       shoulderWeight: hand.shoulderWeight,
+      poleHint: new THREE.Vector3(side ? .72 : -.72,
+        THREE.MathUtils.lerp(-.82, PAGE_TURN_AUTHORED.ElbowHeight, Math.sin(Math.PI * p) ** 2),
+        THREE.MathUtils.lerp(-.12, PAGE_TURN_AUTHORED.ElbowForward, Math.sin(Math.PI * p) ** 2))
+        .applyQuaternion(rig.mesh.getWorldQuaternion(new THREE.Quaternion())),
       fingerCurl: hand.fingerCurl,
       thumbOppose: hand.thumbOppose,
     });

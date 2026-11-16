@@ -14,7 +14,7 @@ function load(path, dependencies = {}) {
 }
 
 const catalog = load('./catalog.ts');
-const { bookPose } = load('./bookMotion.ts', { './catalog': catalog, three: THREE });
+const { bookPose } = load('./bookMotion.ts', { './catalog': catalog, './pageTurnFrames': load('./pageTurnFrames.ts'), three: THREE });
 const { sideLibraryCamera } = load('./sideCamera.ts', { './catalog': catalog });
 
 const displays = [

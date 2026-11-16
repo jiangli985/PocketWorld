@@ -16,9 +16,10 @@ function loadTS(relativePath, deps = {}) {
 }
 
 const catalog = loadTS('./catalog.ts');
-const bookMotion = loadTS('./bookMotion.ts', { './catalog': catalog });
+const authored = loadTS('./pageTurnFrames.ts');
+const bookMotion = loadTS('./bookMotion.ts', { './catalog': catalog, './pageTurnFrames': authored });
 const armPose = loadTS('./armPose.ts');
-const residentPose = loadTS('./residentPose.ts', { './bookMotion': bookMotion, './catalog': catalog, './armPose': armPose });
+const residentPose = loadTS('./residentPose.ts', { './bookMotion': bookMotion, './catalog': catalog, './armPose': armPose, './pageTurnFrames': authored });
 const rigMod = loadTS('../residentRig.ts');
 const libraryMotion = loadTS('./libraryMotion.ts', { './bookMotion': bookMotion, './catalog': catalog, '../residentRig': rigMod });
 const { gltf } = await load(new URL('../../../../assets/public/models/resident/luna-walk-room.glb', import.meta.url));
@@ -152,7 +153,7 @@ test('开书、合书与双向翻页手部轨迹紧贴封面边缘和弯曲纸�
       }
     }
     for (const dir of [1, -1]) {
-      for (let i = 30; i <= 66; i += 3) {
+      for (let i = Math.round(bookMotion.PAGE_CONTACT_START * 100); i <= Math.round(bookMotion.PAGE_CONTACT_END * 100); i += 3) {
         const p = i / 100;
         const pose = stepPose(rig, root, book, 'turn', p, dir);
         const curve = bookMotion.turningPageCurve(p, dir);
@@ -283,7 +284,7 @@ test('翻页手先跨页再接触：双向掌心朝纸页，页过书脊后释�
         assert.ok(hand.fingerCurl <= 0.15 && hand.thumbOppose <= 0.2, 'pinch stays soft');
       }
     }
-    for (const boundary of [0.08, 0.16, bookMotion.PAGE_CONTACT_START, bookMotion.PAGE_CONTACT_END, 0.82, 0.91]) {
+    for (const boundary of [0.08, 0.16, bookMotion.PAGE_CONTACT_START, bookMotion.PAGE_CONTACT_END, 0.78, 0.86]) {
       const epsilon = 1e-5;
       const a = bookMotion.turningHandPose(boundary - epsilon, direction);
       const b = bookMotion.turningHandPose(boundary + epsilon, direction);
@@ -318,7 +319,7 @@ test('正向翻页左手持续托在书脊下，双向手臂保持可达且不�
       assert.ok(fingertip.distanceTo(expected) < 0.002, `turning contact ${direction}@${p}`);
       if (direction > 0) {
         const wrist = support.hand.getWorldPosition(new THREE.Vector3()).sub(pose.position).applyQuaternion(pose.quaternion.clone().invert());
-        assert.ok(wrist.z > 0.02, 'left wrist stays in the front half of the book');
+        assert.ok(Math.abs(wrist.z) < 0.1075 && wrist.z < local.z, 'support wrist stays beneath the book footprint behind its contacting palm');
       }
       for (const arm of rig.arms) {
         const extension = arm.upper.getWorldPosition(new THREE.Vector3()).distanceTo(arm.hand.getWorldPosition(new THREE.Vector3())) / (arm.upperLength + arm.lowerLength);
@@ -326,7 +327,8 @@ test('正向翻页左手持续托在书脊下，双向手臂保持可达且不�
       }
       // The crossing contact clears the top face; lowering happens only beyond the cover edge.
       if (p >= 0.16 && p <= bookMotion.PAGE_CONTACT_START) assert.ok(hand.position.y >= 0.049, 'reach travels above the page stack');
-      if (p > 0.82 && p < 0.91) assert.ok(Math.abs(hand.position.x) > 0.24, 'lower hand outside the cover');
+      if (p > bookMotion.PAGE_CONTACT_END && p < 0.78) assert.ok(hand.position.y > 0.12, 'released palm returns above the falling sheet and page stacks');
+      if (p > 0.78 && p < 0.86) assert.ok(Math.abs(hand.position.x) > 0.24, 'lower hand beyond the cover with room for the palm width');
     }
   } finally {
     rig.dispose();
@@ -340,7 +342,7 @@ test('浅 V 的封面、正文和活动页在两端共面，合书保持原厚�
   assert.equal(bookMotion.bookWingPose(0, 0).widthScale, 0);
   for (const side of [0, 1]) {
     const wing = bookMotion.bookWingPose(side);
-    assert.ok(Math.abs(wing.thickness - 0.0205) < 1e-12, 'split the page block instead of doubling its thickness');
+    assert.ok(Math.abs(wing.thickness - 0.011) < 1e-12, 'opened page stacks relax to the Blender-authored thin book profile');
     const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(wing.quaternion);
     assert.ok(Math.abs(normal.y - Math.cos(angle)) < 1e-12);
     for (let i = 0; i <= 18; i++) {
@@ -366,7 +368,7 @@ test('浅 V 的封面、正文和活动页在两端共面，合书保持原厚�
     assert.ok(underside.x > 0 && underside.x <= 0.12 + 1e-12, 'left support moves continuously toward the spine');
   }
   const left = bookMotion.bookSupportPose(1).position;
-  assert.ok(left.x < 0.05 && left.z > 0.11, 'left palm is under the spine at the +Z front edge');
+  assert.ok(left.x < 0.05 && left.z > 0.02 && left.z < 0.07, 'left palm supports inside the book footprint near the spine');
 });
 
 test('阅读降高八厘米，开合和烘焙交接端点连续，抬页低于面部', () => {
@@ -451,4 +453,43 @@ test('双向翻页的前臂旋转有界，重复播放、倒序跳进度和四�
   } finally {
     rig.dispose();
   }
+});
+
+
+test('Blender low curling sweep preserves paper length and mirrors the reverse sheet', () => {
+  let maxTipHeight = 0;
+  for (let frame = 0; frame <= 300; frame++) {
+    const p = frame / 300;
+    const forward = bookMotion.turningPageCurve(p, 1);
+    const reverse = bookMotion.turningPageCurve(p, -1);
+    let previous, length = 0;
+    for (let i = 0; i <= 96; i++) {
+      const radius = bookMotion.BOOK_PAGE_WIDTH * i / 96;
+      const a = bookMotion.turningPagePoint(forward.leafRatio, forward.bendAmp, radius, .085);
+      const b = bookMotion.turningPagePoint(reverse.leafRatio, reverse.bendAmp, radius, .085);
+      assert.ok(Math.abs(a.position.x + b.position.x) < 1e-10, 'reverse curl mirrors x');
+      assert.ok(Math.abs(a.position.y - b.position.y) < 1e-10, 'both directions use the same low sweep');
+      if (previous) length += a.position.distanceTo(previous);
+      previous = a.position;
+      if (i === 96) maxTipHeight = Math.max(maxTipHeight, a.position.y);
+    }
+    assert.ok(Math.abs(length - bookMotion.BOOK_PAGE_WIDTH) < .004, 'sheet length does not shrink into a rigid paddle');
+  }
+  assert.ok(maxTipHeight < .16, 'tip stays within 16 cm of the book plane throughout the curling sweep');
+});
+
+test('actual curled skin fingertip meets the sheet, instead of a neutral shortened proxy', () => {
+  const { asset, rig, root } = makeRig();
+  const book = catalog.freshLibrary().books[0];
+  try {
+    for (const direction of [1, -1]) for (let i = Math.round(bookMotion.PAGE_CONTACT_START * 100); i <= Math.round(bookMotion.PAGE_CONTACT_END * 100); i++) {
+      const p = i / 100;
+      const pose = stepPose(rig, root, book, 'turn', p, direction);
+      const hand = bookMotion.turningHandPose(p, direction);
+      const target = hand.position.clone().applyQuaternion(pose.quaternion).add(pose.position);
+      const tip = asset.getObjectByName('mixamorig' + (direction > 0 ? 'Right' : 'Left') + 'HandMiddle4');
+      const actual = tip.getWorldPosition(new THREE.Vector3());
+      assert.ok(actual.distanceTo(target) < .002, direction + '@' + p + ': real finger contact error ' + actual.distanceTo(target));
+    }
+  } finally { rig.dispose(); }
 });

@@ -24,13 +24,14 @@ function load(path, dependencies, globals = {}) {
 
 function libraryDependencies(residentRig) {
   const catalog = load('./orbital/library/catalog.ts', {});
-  const bookMotion = load('./orbital/library/bookMotion.ts', { three: THREE, './catalog': catalog });
+  const authored = load('./orbital/library/pageTurnFrames.ts', {});
+  const bookMotion = load('./orbital/library/bookMotion.ts', { three: THREE, './catalog': catalog, './pageTurnFrames': authored });
   const armPose = load('./orbital/library/armPose.ts', { three: THREE });
   return {
     './library/catalog': catalog,
     './library/bookMotion': bookMotion,
     './library/armPose': armPose,
-    './library/residentPose': load('./orbital/library/residentPose.ts', { three: THREE, './bookMotion': bookMotion, './catalog': catalog, './armPose': armPose }),
+    './library/residentPose': load('./orbital/library/residentPose.ts', { three: THREE, './bookMotion': bookMotion, './catalog': catalog, './armPose': armPose, './pageTurnFrames': authored }),
     './library/libraryMotion': load('./orbital/library/libraryMotion.ts', { three: THREE, './bookMotion': bookMotion, './catalog': catalog, '../residentRig': residentRig }),
   };
 }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PAGE_TURN_AUTHORED } from './pageTurnFrames';
 import { readingStand, shelfOrigin, slotFor, type LibraryBook, type Vec3 } from './catalog';
 import type { LibraryFlow } from './useLibrary';
 
@@ -79,7 +80,8 @@ export function bookWingPose(side: 0 | 1, openVal = 1) {
   const open = THREE.MathUtils.clamp(openVal, 0, 1);
   const spread = Math.sin(open * Math.PI / 2) ** 2;
   const angle = side === 0 ? (Math.PI - BOOK_WING_ANGLE) * open - Math.PI : BOOK_WING_ANGLE * open;
-  const thickness = CLOSED_PAGE_THICKNESS * (side === 0 ? spread / 2 : 1 - spread / 2);
+  const thickness = side === 0 ? PAGE_TURN_AUTHORED.OpenStackThickness * spread
+    : THREE.MathUtils.lerp(CLOSED_PAGE_THICKNESS, PAGE_TURN_AUTHORED.OpenStackThickness, spread);
   return {
     position: new THREE.Vector3(0, side === 0 ? 0.058 * (1 - open) : 0, 0),
     quaternion: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), angle),
@@ -115,15 +117,15 @@ export function bookCoverGripPose(openVal: number): { position: THREE.Vector3; q
 
 export const PAGE_TURN_SECONDS = 3;
 export const PAGE_CONTACT_START = 0.30;
-export const PAGE_CONTACT_END = 0.66;
+export const PAGE_CONTACT_END = PAGE_TURN_AUTHORED.ContactEnd;
 
 export function turningPageCurve(progress: number, direction: number) {
   const p = THREE.MathUtils.clamp(progress, 0, 1);
   // The sheet waits for the crossing hand, peels slowly, then falls onto the other stack.
   // One continuous curve keeps its velocity unchanged when the fingers release it.
-  const forwardRatio = smooth((p - PAGE_CONTACT_START) / 0.60);
+  const forwardRatio = authoredPageRatio(p);
   const leafRatio = direction >= 0 ? forwardRatio : 1 - forwardRatio;
-  const bendAmp = Math.sin(leafRatio * Math.PI) * 0.022;
+  const bendAmp = Math.sin(leafRatio * Math.PI) * 0.008 * (direction >= 0 ? 1 : -1);
   const handContact = smooth((p - 0.16) / 0.14) * (1 - smooth((p - PAGE_CONTACT_END) / 0.10));
   return { leafRatio, bendAmp, handContact, liftPhase: forwardRatio, forwardRatio };
 }
@@ -141,7 +143,7 @@ export function bookSupportPose(side: 0 | 1, openVal = 1) {
   // +Z is the reader's front edge after the held book's PI yaw.
   const radius = side === 0 ? 0.125 : THREE.MathUtils.lerp(0.12, 0.035, open) + Math.sin(open * Math.PI) * 0.012;
   const y = THREE.MathUtils.lerp(-0.009, -0.014, open);
-  const z = THREE.MathUtils.lerp(-0.072, 0.112, open);
+  const z = THREE.MathUtils.lerp(-0.072, PAGE_TURN_AUTHORED.SupportFront, open);
   return {
     position: bookWingPoint(side, open, radius, y, z),
     quaternion: palmQuaternion(new THREE.Vector3(side === 0 ? 0.36 : -0.36, 0, 0.93),
@@ -167,45 +169,49 @@ export function turningHandPose(progress: number, direction: number) {
   const side: 0 | 1 = direction >= 0 ? 0 : 1;
   const support = bookSupportPose(side);
   const sign = side === 0 ? -1 : 1;
-  const outside = new THREE.Vector3(sign * 0.255, -0.012, 0.045);
-  const lifted = new THREE.Vector3(sign * 0.255, 0.085, 0.045);
+  const outside = new THREE.Vector3(sign * PAGE_TURN_AUTHORED.OutsideRadius, -0.012, 0.045);
+  const depart = new THREE.Vector3(sign * PAGE_TURN_AUTHORED.DepartRadius, outside.y, outside.z);
+  const lowerStart = PAGE_TURN_AUTHORED.LowerStart, supportReturn = PAGE_TURN_AUTHORED.SupportReturn;
+  const lifted = new THREE.Vector3(outside.x, PAGE_TURN_AUTHORED.ReachHeight, outside.z);
+  const returnHigh = new THREE.Vector3(outside.x, PAGE_TURN_AUTHORED.ReturnHeight, outside.z);
   const edgeOn = palmQuaternion(new THREE.Vector3(-sign * 0.36, 0, 0.93), new THREE.Vector3(sign, 0.18, 0));
   const catchPose = pageGrip(PAGE_CONTACT_START, direction);
   let position: THREE.Vector3, quaternion: THREE.Quaternion;
   let tipWeight = 0;
   if (p < 0.08) {
     const u = smooth(p / 0.08);
-    position = support.position.clone().lerp(outside, u);
+    position = support.position.clone().lerp(depart, u);
     quaternion = support.quaternion.clone();
   } else if (p < 0.16) {
     const u = smooth((p - 0.08) / 0.08);
-    position = outside.clone().lerp(lifted, u);
+    position = depart.clone().lerp(lifted, u);
     quaternion = support.quaternion.clone().slerp(edgeOn, u);
   } else if (p < PAGE_CONTACT_START) {
     const u = smooth((p - 0.16) / (PAGE_CONTACT_START - 0.16));
     position = lifted.clone().lerp(catchPose.position, u);
-    position.y += Math.sin(u * Math.PI) * 0.055;
+    position.y += Math.sin(u * Math.PI) * PAGE_TURN_AUTHORED.CrossArc;
     quaternion = edgeOn.clone().slerp(catchPose.quaternion, u);
     tipWeight = u;
   } else if (p <= PAGE_CONTACT_END) {
     ({ position, quaternion } = pageGrip(p, direction));
     tipWeight = 1;
-  } else if (p < 0.82) {
-    const u = (p - PAGE_CONTACT_END) / (0.82 - PAGE_CONTACT_END);
+  } else if (p < lowerStart) {
+    const u = (p - PAGE_CONTACT_END) / (lowerStart - PAGE_CONTACT_END);
     const release = pageGrip(PAGE_CONTACT_END, direction);
     const epsilon = 0.0001;
     const velocity = pageGrip(PAGE_CONTACT_END + epsilon, direction).position
-      .sub(pageGrip(PAGE_CONTACT_END - epsilon, direction).position).multiplyScalar((0.82 - PAGE_CONTACT_END) / (2 * epsilon));
-    // Keep the page's tangent at release, then clear the outer edge before lowering the hand.
-    position = hermite(release.position, velocity, lifted, new THREE.Vector3(), u);
+      .sub(pageGrip(PAGE_CONTACT_END - epsilon, direction).position).multiplyScalar((lowerStart - PAGE_CONTACT_END) / (2 * epsilon));
+    // Release just beyond the spine, before the falling sheet pulls the palm into the stack.
+    // Keep its tangent at release, then recover above the book and clear the outer edge.
+    position = hermite(release.position, velocity, returnHigh, new THREE.Vector3(), u);
     quaternion = release.quaternion.clone().slerp(support.quaternion, smooth(u));
     tipWeight = 1 - smooth(u);
-  } else if (p < 0.91) {
-    const u = smooth((p - 0.82) / 0.09);
-    position = lifted.clone().lerp(outside, u);
+  } else if (p < supportReturn) {
+    const u = smooth((p - lowerStart) / (supportReturn - lowerStart));
+    position = returnHigh.clone().lerp(outside, u);
     quaternion = support.quaternion.clone();
   } else {
-    const u = smooth((p - 0.91) / 0.09);
+    const u = smooth((p - supportReturn) / (1 - supportReturn));
     position = outside.clone().lerp(support.position, u);
     quaternion = support.quaternion.clone();
   }
@@ -216,26 +222,47 @@ export function turningHandPose(progress: number, direction: number) {
     shoulderWeight: 0.1 + 0.20 * Math.sin(Math.PI * p) ** 2 };
 }
 
+/** Blender Bezier handles are evaluated directly: continuous velocity, no frame history. */
+export function authoredPageRatio(progress: number) {
+  const keys = PAGE_TURN_AUTHORED.page;
+  const p = THREE.MathUtils.clamp(progress, 0, 1);
+  const i = keys.findIndex(key => key[0] >= p);
+  if (i <= 0) return keys[0][1];
+  const a = keys[i - 1], b = keys[i];
+  const cubic = (x: number, y: number, z: number, w: number, t: number) =>
+    (1 - t) ** 3 * x + 3 * (1 - t) ** 2 * t * y + 3 * (1 - t) * t * t * z + t ** 3 * w;
+  let lo = 0, hi = 1;
+  for (let n = 0; n < 36; n++) {
+    const t = (lo + hi) / 2;
+    if (cubic(a[0], a[4], b[2], b[0], t) < p) lo = t; else hi = t;
+  }
+  return cubic(a[1], a[5], b[3], b[1], (lo + hi) / 2);
+}
+
 export function turningPagePoint(leafRatio: number, bendAmp: number, rx = 0.185, rz = -0.085) {
-  const ratio = THREE.MathUtils.clamp(leafRatio, 0, 1);
-  const theta = BOOK_WING_ANGLE + (Math.PI - 2 * BOOK_WING_ANGLE) * ratio;
+  const reverse = bendAmp < 0;
+  const ratio = THREE.MathUtils.clamp(reverse ? 1 - leafRatio : leafRatio, 0, 1);
+  bendAmp = Math.abs(bendAmp);
   const surface = bookWingPose(1).surfaceY;
-  const by = Math.sin((rx / BOOK_PAGE_WIDTH) * Math.PI) * bendAmp;
-  // The sheet bridges the small gutter between the two tilted top faces. At both
-  // endpoints every vertex coincides with its static page wing, including the normal.
+  // A bending wave travels from the free edge towards the binding. Integrating its
+  // tangent preserves the paper's arc length while the fingertip sweeps low.
+  // The old single pivot made an almost rigid board rise to the character's face.
+  const width = PAGE_TURN_AUTHORED.CurlWaveWidth;
+  const angleAt = (radius: number) => BOOK_WING_ANGLE + (Math.PI - 2 * BOOK_WING_ANGLE)
+    * smooth((ratio - (1 - width) * (1 - radius / BOOK_PAGE_WIDTH)) / width)
+    + Math.sin(radius / BOOK_PAGE_WIDTH * Math.PI) * bendAmp;
   const gutterX = THREE.MathUtils.lerp(-1, 1, ratio) * surface * Math.sin(BOOK_WING_ANGLE);
-  const position = new THREE.Vector3(
-    gutterX + rx * Math.cos(theta) - by * Math.sin(theta),
-    surface * Math.cos(BOOK_WING_ANGLE) + rx * Math.sin(theta) + by * Math.cos(theta),
-    rz,
-  );
-  const slope = (Math.PI / BOOK_PAGE_WIDTH) * Math.cos((rx / BOOK_PAGE_WIDTH) * Math.PI) * bendAmp;
-  const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), theta);
-  return {
-    position,
-    tangent: new THREE.Vector3(1, slope, 0).normalize().applyQuaternion(rot),
-    normal: new THREE.Vector3(-slope, 1, 0).normalize().applyQuaternion(rot),
-  };
+  const position = new THREE.Vector3(gutterX, surface * Math.cos(BOOK_WING_ANGLE), rz);
+  const steps = 48, ds = rx / steps;
+  for (let i = 0; i < steps; i++) {
+    const theta = angleAt((i + 0.5) * ds);
+    position.x += ds * Math.cos(theta);
+    position.y += ds * Math.sin(theta);
+  }
+  const theta = angleAt(rx);
+  const tangent = new THREE.Vector3(Math.cos(theta), Math.sin(theta), 0);
+  if (reverse) { position.x *= -1; tangent.x *= -1; }
+  return { position, tangent, normal: new THREE.Vector3(-tangent.y, tangent.x, 0) };
 }
 
 export function bookPose(scene: string, book: LibraryBook, flow: LibraryFlow, authored = false) {
@@ -248,9 +275,9 @@ export function bookPose(scene: string, book: LibraryBook, flow: LibraryFlow, au
   const outside = shelf.clone().add(new THREE.Vector3(0, 0, 0.31));
   const root = authored ? authoredBookStand(scene, book, true) : bookStand(scene, book);
   const open = coverOpenCurve({ ...flow, phase });
-  // Preserve the baked closed handoff; lower and draw the open book 6 cm nearer
-  // so the visible front-edge grips remain comfortably inside the arm's reach.
-  const heldBase = new THREE.Vector3(root[0] + 0.11 * (1 - open), THREE.MathUtils.lerp(0.93, 0.85, open), root[2] - 0.285 + 0.06 * open);
+  // Preserve the baked closed handoff; the open book leaves room for the crossing
+  // forearm in front of the torso, with the supporting palms beneath its footprint.
+  const heldBase = new THREE.Vector3(root[0] + 0.11 * (1 - open), THREE.MathUtils.lerp(0.93, 0.85, open), root[2] - 0.285 + PAGE_TURN_AUTHORED.BookNear * open);
   const position = shelf.clone();
   const quaternion = shelfQuaternion.clone();
 

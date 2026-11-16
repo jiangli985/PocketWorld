@@ -82,7 +82,7 @@ export function reachArm(
   // Anatomical elbow pole: comfortably outward, downward, and slightly backward.
   bend.set(side ? 0.72 : -0.72, -0.82, -0.12).applyQuaternion(meshQuat);
   if (poleHint && poleHint.lengthSq() > 1e-6) {
-    bend.addScaledVector(poleHint.clone().normalize(), 0.35);
+    bend.copy(poleHint);
   }
   bend.addScaledVector(target, -bend.dot(target));
   if (bend.lengthSq() < 1e-6) {
@@ -136,6 +136,7 @@ export function reachPalm(
   orientationOrOptions?: { quaternion: THREE.Quaternion; blend: number } | ReachPalmOptions,
 ) {
   const opts: ReachPalmOptions = orientationOrOptions ?? {};
+  if (opts.fingerCurl !== undefined) arm.setFingers?.(opts.fingerCurl, opts.thumbOppose);
   const shoulderWeight = opts.shoulderWeight ?? 0;
   solveShoulder(rig, arm, contact, side, shoulderWeight);
 
@@ -178,7 +179,7 @@ export function reachPalm(
         // back as the palm returns. This shares up to 100° without frame history.
         // Damping also removes the undefined twist of an exactly opposite swing.
         const twistSq = dot * dot;
-        const share = (side ? -1 : 1) * 1.75 * twistSq / (twistSq + delta.w * delta.w + 0.0001);
+        const share = (side ? -1 : 1) * 1.75 * twistSq / (twistSq + delta.w * delta.w + 0.16);
         twistQuat.setFromAxisAngle(forearmAxis, share);
         arm.forearm.parent!.getWorldQuaternion(invParent).invert();
         arm.forearm.getWorldQuaternion(forearmWorldQuat);
@@ -201,7 +202,6 @@ export function reachPalm(
     arm.forearm.quaternion.copy(id.clone().slerp(arm.forearm.quaternion, ab));
     arm.hand.quaternion.copy(id.clone().slerp(arm.hand.quaternion, ab));
   }
-  if (opts.fingerCurl !== undefined) arm.setFingers?.(opts.fingerCurl, opts.thumbOppose);
 }
 
 export function applyTorsoAndGazeIK(
