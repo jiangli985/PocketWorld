@@ -154,11 +154,15 @@ export function bookSupportPose(side: 0 | 1, openVal = 1) {
 function pageGrip(progress: number, direction: number) {
   const curve = turningPageCurve(progress, direction);
   const page = turningPagePoint(curve.leafRatio, curve.bendAmp, 0.205, 0.085);
-  // Approach the visible face palm-down. As the sheet rises, the palm follows its normal.
-  const palmNormal = page.normal.clone().multiplyScalar(direction >= 0 ? -1 : 1);
-  const fingerDirection = page.tangent.clone().multiplyScalar(0.42).add(new THREE.Vector3(0, 0, 0.9075));
+  // The fingertip follows the curling sheet, but the palm sweeps above it.
+  // A sheet normal reverses after the spine; using it as a hand frame turns
+  // the whole palm face-up and folds the wrist back instead of sweeping.
+  const tilt = PAGE_TURN_AUTHORED.SweepPalmTilt;
+  const forward = PAGE_TURN_AUTHORED.SweepFingerForward;
+  const palmNormal = new THREE.Vector3(0, -1, -tilt).normalize();
+  const fingerDirection = new THREE.Vector3((direction >= 0 ? 1 : -1) * PAGE_TURN_AUTHORED.SweepFingerAcross, -tilt * forward, forward);
   return {
-    position: page.position.clone().addScaledVector(palmNormal, -0.002),
+    position: page.position.clone().addScaledVector(page.normal, direction >= 0 ? 0.002 : -0.002),
     quaternion: palmQuaternion(fingerDirection, palmNormal),
   };
 }
@@ -174,7 +178,7 @@ export function turningHandPose(progress: number, direction: number) {
   const lowerStart = PAGE_TURN_AUTHORED.LowerStart, supportReturn = PAGE_TURN_AUTHORED.SupportReturn;
   const lifted = new THREE.Vector3(outside.x, PAGE_TURN_AUTHORED.ReachHeight, outside.z);
   const returnHigh = new THREE.Vector3(outside.x, PAGE_TURN_AUTHORED.ReturnHeight, outside.z);
-  const edgeOn = palmQuaternion(new THREE.Vector3(-sign * 0.36, 0, 0.93), new THREE.Vector3(sign, 0.18, 0));
+  const edgeOn = palmQuaternion(new THREE.Vector3(-sign * 0.36, 0, 0.93), new THREE.Vector3(-sign, 0.18, 0));
   const catchPose = pageGrip(PAGE_CONTACT_START, direction);
   let position: THREE.Vector3, quaternion: THREE.Quaternion;
   let tipWeight = 0;
@@ -204,12 +208,14 @@ export function turningHandPose(progress: number, direction: number) {
     // Release just beyond the spine, before the falling sheet pulls the palm into the stack.
     // Keep its tangent at release, then recover above the book and clear the outer edge.
     position = hermite(release.position, velocity, returnHigh, new THREE.Vector3(), u);
-    quaternion = release.quaternion.clone().slerp(support.quaternion, smooth(u));
+    // Keep the sweep palm-down until it clears the book; turn edge-on before
+    // supinating outside the cover for the supporting return.
+    quaternion = release.quaternion.clone().slerp(edgeOn, smooth(u));
     tipWeight = 1 - smooth(u);
   } else if (p < supportReturn) {
     const u = smooth((p - lowerStart) / (supportReturn - lowerStart));
     position = returnHigh.clone().lerp(outside, u);
-    quaternion = support.quaternion.clone();
+    quaternion = edgeOn.clone().slerp(support.quaternion, u);
   } else {
     const u = smooth((p - supportReturn) / (1 - supportReturn));
     position = outside.clone().lerp(support.position, u);

@@ -174,12 +174,13 @@ export function reachPalm(
         forearmAxis.normalize();
         const delta = base.clone().multiply(restPalm.clone().invert());
         const dot = delta.x * forearmAxis.x + delta.y * forearmAxis.y + delta.z * forearmAxis.z;
-        // sin²(twist / 2) is invariant to q/-q and has no branch at a half turn.
-        // Choose each arm's anatomical pronation direction, then smoothly supinate
-        // back as the palm returns. This shares up to 100° without frame history.
-        // Damping also removes the undefined twist of an exactly opposite swing.
-        const twistSq = dot * dot;
-        const share = (side ? -1 : 1) * 1.75 * twistSq / (twistSq + delta.w * delta.w + 0.16);
+        // Preserve the signed swing/twist decomposition. Squaring the projected
+        // quaternion discarded pronation direction and could turn the forearm
+        // away from the requested palm, leaving a half turn at the wrist.
+        // The signed sine is invariant to q/-q and continuous at a half turn.
+        // Fade out at the undefined opposite swing instead of selecting a
+        // discontinuous atan2 branch; retain the existing 100° upper bound.
+        const share = 1.75 * (2 * dot * delta.w) / (dot * dot + delta.w * delta.w + 0.16);
         twistQuat.setFromAxisAngle(forearmAxis, share);
         arm.forearm.parent!.getWorldQuaternion(invParent).invert();
         arm.forearm.getWorldQuaternion(forearmWorldQuat);

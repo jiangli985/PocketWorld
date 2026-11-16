@@ -268,7 +268,7 @@ test('翻页手先跨页再接触：双向掌心朝纸页，页过书脊后释�
     }
     const caught = bookMotion.turningHandPose(bookMotion.PAGE_CONTACT_START, direction);
     assert.ok(caught.position.x * rest.position.x < 0, 'cross the spine to the opposite page corner before lifting');
-    assert.ok(new THREE.Vector3(0, 0, 1).applyQuaternion(caught.quaternion).y < -Math.cos(bookMotion.BOOK_WING_ANGLE) + 0.001, 'palm faces the tilted page on approach');
+    assert.ok(new THREE.Vector3(0, 0, 1).applyQuaternion(caught.quaternion).y < -0.8, 'palm approaches from above with fingers angled down');
     assert.equal(bookMotion.turningPageCurve(bookMotion.PAGE_CONTACT_START, direction).forwardRatio, 0);
     assert.ok(bookMotion.turningPageCurve(bookMotion.PAGE_CONTACT_END, direction).forwardRatio > 0.5, 'carry the page beyond the spine before release');
     for (let frame = 0; frame <= 720; frame++) {
@@ -278,7 +278,7 @@ test('翻页手先跨页再接触：双向掌心朝纸页，页过书脊后释�
         const curve = bookMotion.turningPageCurve(p, direction);
         const page = bookMotion.turningPagePoint(curve.leafRatio, curve.bendAmp, 0.205, 0.085);
         const palmNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(hand.quaternion);
-        assert.ok(palmNormal.dot(page.normal) * direction < -0.999, 'palm normal follows the visible face');
+        assert.ok(palmNormal.y < -0.8, 'palm stays down even when the sheet normal turns upwards');
         assert.ok(Math.abs(hand.position.distanceTo(page.position) - 0.002) < 1e-9);
         assert.equal(hand.tipWeight, 1);
         assert.ok(hand.fingerCurl <= 0.15 && hand.thumbOppose <= 0.2, 'pinch stays soft');
@@ -490,6 +490,80 @@ test('actual curled skin fingertip meets the sheet, instead of a neutral shorten
       const tip = asset.getObjectByName('mixamorig' + (direction > 0 ? 'Right' : 'Left') + 'HandMiddle4');
       const actual = tip.getWorldPosition(new THREE.Vector3());
       assert.ok(actual.distanceTo(target) < .002, direction + '@' + p + ': real finger contact error ' + actual.distanceTo(target));
+    }
+  } finally { rig.dispose(); }
+});
+
+test('双向扫页的真实掌面保持向下，手腕相对前臂不过折，回托后掌面向上', () => {
+  const { asset, rig, root } = makeRig();
+  const book = catalog.freshLibrary().books[0];
+  root.position.fromArray(bookMotion.authoredBookStand('habitat', book, true));
+  const skin = ['Right', 'Left'].map(side => {
+    const joint = name => asset.getObjectByName(`mixamorig${side}${name}`);
+    return { hand: joint('Hand'), forearm: joint('ForeArm'), middle: joint('HandMiddle1'),
+      index: joint('HandIndex1'), pinky: joint('HandPinky1'), neutral: joint('Hand').quaternion.clone() };
+  });
+  const at = joint => joint.getWorldPosition(new THREE.Vector3());
+  try {
+    for (const direction of [1, -1]) {
+      let previous;
+      for (let frame = 0; frame <= 240; frame++) {
+        const p = frame / 240, flow = { book, phase: 'turn', direction, progress: p };
+        const pose = bookMotion.bookPose('habitat', book, flow, true);
+        residentPose.applyLibraryPose(rig, root, 'habitat', flow, 1 / 80, true);
+        rig.applyPose(0, 0);
+        root.updateMatrixWorld(true);
+        const palms = skin.map((s, side) => {
+          const fingers = at(s.middle).sub(at(s.hand)).normalize();
+          const across = at(s.index).sub(at(s.pinky)).normalize();
+          // Reconstruct the signed real skin palm from the finger roots. Do not
+          // reuse the IK palmBasis: a mirrored basis would mask an inverted hand.
+          const normal = (side === 0 ? across.cross(fingers) : fingers.clone().cross(across)).normalize()
+            .applyQuaternion(pose.quaternion.clone().invert());
+          const forearm = at(s.hand).sub(at(s.forearm)).normalize();
+          const flex = forearm.angleTo(fingers);
+          const relativeWrist = s.hand.quaternion.clone().multiply(s.neutral.clone().invert());
+          assert.ok(flex < THREE.MathUtils.degToRad(65), `${direction}@${p} arm ${side}: finger/forearm flex ${THREE.MathUtils.radToDeg(flex)}°`);
+          assert.ok(relativeWrist.angleTo(new THREE.Quaternion()) < THREE.MathUtils.degToRad(70),
+            `${direction}@${p} arm ${side}: static wrist reversal`);
+          return normal;
+        });
+        const active = direction > 0 ? 0 : 1;
+        assert.ok(palms[1 - active].y > 0.95, `${direction}@${p}: supporting palm faces the cover underside`);
+        if (p >= bookMotion.PAGE_CONTACT_START && p <= bookMotion.PAGE_CONTACT_END) {
+          assert.ok(palms[active].y < -0.8, `${direction}@${p}: actual sweep palm must face down, even after the page flips`);
+        }
+        if (p > bookMotion.PAGE_CONTACT_END && p <= 0.62) {
+          assert.ok(palms[active].y < -0.5, `${direction}@${p}: release keeps the palm above the sheet`);
+        }
+        if (p <= 0.08 || p >= 0.86) assert.ok(palms[active].y > 0.9, `${direction}@${p}: palm-up support restored`);
+        if (previous) palms.forEach((palm, side) => assert.ok(palm.angleTo(previous[side]) < 0.15,
+          `${direction}@${p} arm ${side}: palm orientation discontinuity`));
+        previous = palms;
+      }
+    }
+  } finally { rig.dispose(); }
+});
+
+test('前臂分担扭转保留请求正负号，左右手都能旋前与旋后', () => {
+  const { rig } = makeRig();
+  try {
+    for (const side of [0, 1]) for (const angle of [-0.8, 0.8]) {
+      const arm = rig.arms[side];
+      const wrist = rig.mesh.localToWorld(arm.restWrist.clone()).add(new THREE.Vector3(0, 0.05, 0.14));
+      armPose.reachArm(rig, arm, wrist, side);
+      const axis = arm.hand.getWorldPosition(new THREE.Vector3()).sub(arm.forearm.getWorldPosition(new THREE.Vector3())).normalize();
+      const target = arm.hand.getWorldQuaternion(new THREE.Quaternion()).multiply(arm.palmBasis)
+        .premultiply(new THREE.Quaternion().setFromAxisAngle(axis, angle));
+      const contact = arm.palmOffset.clone().applyQuaternion(target.clone().multiply(arm.palmBasis.clone().invert())).add(wrist);
+      armPose.reachPalm(rig, arm, contact, side, { quaternion: target, mode: 'palm', blend: 1 });
+      const solved = arm.forearm.getWorldQuaternion(new THREE.Quaternion());
+      const solvedWrist = arm.hand.getWorldPosition(new THREE.Vector3());
+      armPose.reachArm(rig, arm, solvedWrist, side);
+      const delta = solved.multiply(arm.forearm.getWorldQuaternion(new THREE.Quaternion()).invert());
+      const projection = new THREE.Vector3(delta.x, delta.y, delta.z).dot(axis) * delta.w;
+      assert.ok(projection * angle > 0.01, `arm ${side}, requested twist ${angle}: forearm turned away from palm`);
+      assert.ok(delta.angleTo(new THREE.Quaternion()) <= 1.75, 'existing forearm rotation bound');
     }
   } finally { rig.dispose(); }
 });

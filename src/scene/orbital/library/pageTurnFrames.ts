@@ -16,6 +16,9 @@ export const PAGE_TURN_AUTHORED = {
   "DepartRadius": 0.23,
   "LowerStart": 0.78,
   "SupportReturn": 0.86,
+  "SweepPalmTilt": 0.6,
+  "SweepFingerAcross": 0.75,
+  "SweepFingerForward": 0.65,
   "page": [
     [
       0.0,

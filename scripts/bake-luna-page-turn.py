@@ -30,6 +30,9 @@ DEFAULTS = {
     'DepartRadius': .23,
     'LowerStart': .78,
     'SupportReturn': .86,
+    'SweepPalmTilt': .6,
+    'SweepFingerAcross': .75,
+    'SweepFingerForward': .65,
 }
 PAGE_KEYS = ((0, 0), (30, 0), (43, .20), (52, .50), (62, .83), (76, .97), (90, 1), (100, 1))
 
