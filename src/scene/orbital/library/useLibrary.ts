@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WorldAction, WorldSceneId } from '../../../types/world';
 import { BOOK_SLOTS, CAPACITY, freshLibrary, LIBRARY_KEY, makeUserBook, mutateLibrary, readLibrary, type LibraryBook, type TextPage } from './catalog';
+import { libraryMotionDuration, type LibraryMotion } from './libraryMotion';
+import { PAGE_TURN_SECONDS } from './bookMotion';
 export type LibraryPhase = 'idle' | 'prepare' | 'approach' | 'catalog' | 'align' | 'reach' | 'extract' | 'carry' | 'open' | 'reading' | 'turn' | 'close' | 'return-carry' | 'insert' | 'release' | 'recenter' | 'form' | 'shelving';
 export interface LibraryFlow { phase: LibraryPhase; book: LibraryBook | null; page: number; direction: number; targetPage: number; progress: number; pages: TextPage[]; nextId: string | null; closeRequested: boolean; exit: boolean; pending: WorldAction | null }
 const initialFlow = (): LibraryFlow => ({ phase: 'idle', book: null, page: 0, targetPage: 0, direction: 1, progress: 0, pages: [], nextId: null, closeRequested: false, exit: false, pending: null });
-const times: Partial<Record<LibraryPhase, number>> = { prepare: .9, reach: .74, extract: .62, carry: .96, open: .90, turn: .94, close: .86, 'return-carry': .96, insert: .62, release: .58, shelving: .6 };
+const times: Partial<Record<LibraryPhase, number>> = { prepare: .9, reach: .74, extract: .62, carry: .96, open: .90, turn: PAGE_TURN_SECONDS, close: .86, 'return-carry': .96, insert: .62, release: .58, shelving: .6 };
 export function useLibrary(options: { sceneId: WorldSceneId; reducedMotion: boolean; onAction: (action: WorldAction) => void; onReturn: () => void; error: (message: string) => void }) {
   const [cameraView, setCameraView] = useState<'shelf' | 'close' | 'side'>('shelf');
   const [data, setData] = useState(() => { try { return readLibrary(localStorage); } catch { return freshLibrary(); } });
   const [view, setView] = useState(initialFlow);
+  const motion = useRef<LibraryMotion | null>();
   const flow = useRef(view), live = useRef(options), dataRef = useRef(data), saving = useRef(false), mounted = useRef(true), pendingData = useRef<typeof data | null>(null), deferred = useRef<number>();
   live.current = options; dataRef.current = data;
   const update = useCallback((patch: Partial<LibraryFlow>) => { flow.current = { ...flow.current, ...patch, progress: 0 }; setView({ ...flow.current }); }, []);
@@ -84,9 +87,13 @@ export function useLibrary(options: { sceneId: WorldSceneId; reducedMotion: bool
     setView({ ...s });
   }, []);
   const tick = useCallback((dt: number) => {
-    const s = flow.current, duration = times[s.phase];
+    const s = flow.current, clips = motion.current;
+    const duration = (clips && libraryMotionDuration(clips, s)) ?? times[s.phase];
     if (!duration) return;
-    s.progress = Math.min(1, s.progress + Math.min(dt, .04) / (live.current.reducedMotion ? Math.max(.28, duration * .5) : duration));
+    // Compress the authored interaction modestly so reduced motion does not skip its foot plants and handoff.
+    const rate = clips && s.book && s.phase !== 'shelving' ? .8 : .5;
+    const seconds = live.current.reducedMotion ? Math.max(.28, duration * rate) : duration;
+    s.progress = Math.min(1, s.progress + Math.min(dt, .04) / seconds);
     if (s.progress < 1) return;
     switch (s.phase) {
       case 'prepare': if (s.exit) finishExit(); else update({ phase: 'approach' }); break;
@@ -132,6 +139,6 @@ export function useLibrary(options: { sceneId: WorldSceneId; reducedMotion: bool
   }, []);
   const openForm = useCallback(() => { if (flow.current.phase === 'catalog' && dataRef.current.books.length < CAPACITY && !saving.current) update({ phase: 'form' }); }, [update]);
   const fail = useCallback(() => { live.current.error('人物加载失败，已将书籍恢复在架；请重试人物加载或刷新页面。'); update(initialFlow()); live.current.onReturn(); }, [update]);
-  return { fail, cameraView, setCameraView, data, view, flow, tick, arrived, choose, turn, setPages, add, remove, openForm, closeForm: () => { if (!saving.current && flow.current.phase === 'form') update({ phase: 'catalog' }); }, back, dispatch, slots: BOOK_SLOTS };
+  return { fail, cameraView, setCameraView, data, view, flow, motion, tick, arrived, choose, turn, setPages, add, remove, openForm, closeForm: () => { if (!saving.current && flow.current.phase === 'form') update({ phase: 'catalog' }); }, back, dispatch, slots: BOOK_SLOTS };
 }
 export type LibraryController = ReturnType<typeof useLibrary>;

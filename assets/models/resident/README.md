@@ -74,3 +74,14 @@ Mixamo 页面按描述 `Idle Stand Looking Around` 确认的 `Looking Around`，
 复用 `scripts/export-luna-yawn.py` 的绑定姿态与肩臂方向修正：`blender --background --python scripts/export-luna-yawn.py -- "<Looking Around.fbx路径>" looking-around`。生成 `luna-looking-around.glb`：180,012 bytes，54 条上身旋转轨道，6.33 秒；无网格、纹理和根位移。骨盆、腿及脚由原中立姿态负责，环顾期间保持原地。源 FBX 留在仓库外，SHA-256 与许可入口见来源清单。
 
 两种偶发动作独立按需加载；某一资源失败不阻塞另一动作或普通待机。时序与打断由 `standingIdle.ts` 统一管理，数值参数及产品行为见 SPEC.md。
+
+## 书柜取书与归还
+
+用 Blender 5.2.3 在 Luna 原骨架上制作底、中、顶三条取书动作。0–100 帧、30 fps，第 32 帧抓书，第 59 帧完成直线抽出。退步分别由右脚、左脚完成；书离架后由另一只手接住。归还倒播对应阶段。骨骼与书本标记在同一 GLB 中，场景按书位平移，两者按同一时刻采样。
+
+```powershell
+blender --background --factory-startup --python-exit-code 1 --python scripts/bake-luna-library.py
+blender --background --factory-startup --python-exit-code 1 --python scripts/bake-luna-library.py -- --row 2 --blend "<仓库外目录>/Luna-书柜.blend"
+```
+
+脚本需要项目的 Node.js 依赖，用来读取运行时同款中立站姿。可选的 `--row` 为 0（底层）、1（中层）或 2（顶层），用于选择 Blender 文件中默认显示的书层。文件内保留三层的动作、书本标记、书柜尺寸参考和独立相机；在 Blender 修改关键帧后可用 `--from-blend` 从已编辑文件重新导出。运行时 `luna-library.glb` 仅包含动作、骨架和书本标记，大小 463,840 bytes，首次书柜互动时按需加载。打开、阅读和翻页继续由 `src/scene/orbital/library/` 的程序姿态驱动：展开时从闭合交接姿态连续降低、收近并调整书面倾角；封面、浅 V 纸页与手部接触点共用变换。正向翻页为左手托书、右手带页，反向交换分工。

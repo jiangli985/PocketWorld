@@ -22,6 +22,19 @@ function load(path, dependencies, globals = {}) {
   return context.exports;
 }
 
+function libraryDependencies(residentRig) {
+  const catalog = load('./orbital/library/catalog.ts', {});
+  const bookMotion = load('./orbital/library/bookMotion.ts', { three: THREE, './catalog': catalog });
+  const armPose = load('./orbital/library/armPose.ts', { three: THREE });
+  return {
+    './library/catalog': catalog,
+    './library/bookMotion': bookMotion,
+    './library/armPose': armPose,
+    './library/residentPose': load('./orbital/library/residentPose.ts', { three: THREE, './bookMotion': bookMotion, './catalog': catalog, './armPose': armPose }),
+    './library/libraryMotion': load('./orbital/library/libraryMotion.ts', { three: THREE, './bookMotion': bookMotion, './catalog': catalog, '../residentRig': residentRig }),
+  };
+}
+
 function mount(kind, overrides = {}, idleLibrary) {
   const effects = [], cleanups = [], frames = [], sounds = [], actions = [];
   const target = Object.assign(new EventTarget(), { location: { search: '' }, clearTimeout });
@@ -65,9 +78,11 @@ function mount(kind, overrides = {}, idleLibrary) {
     './drawerInteraction': load('./orbital/drawerInteraction.ts', {}),
     './scene/audioEngine': { roomAudio: audio, PRESET_MUSIC_DISCS: [] },
     './scene/orbital/OrbitalScene': { OrbitalScene: 'OrbitalScene' },
-    './scene/orbital/library/useLibrary': { useLibrary: options => ({ dispatch: options.onAction, back: options.onReturn, data: { books: [] }, flow: { current: { phase: 'idle' } } }) },
+    './scene/orbital/library/useLibrary': { useLibrary: options => ({ dispatch: options.onAction, back: options.onReturn, data: { books: [] }, flow: { current: { phase: 'idle' } }, view: { phase: 'idle' }, motion: { current: null } }) },
     './scene/orbital/library/LibrarySurface': { LibrarySurface: 'LibrarySurface' },
     './library/residentPose': { applyLibraryPose() {}, carryResident() {}, libraryCrouch: () => 0 },
+    './library/armPose': { resetArms() {} },
+    './library/libraryMotion': { libraryCoverFlow: flow => flow },
     './library/bookMotion': { residentLibraryTarget: () => [0, 0, 0] },
     './library/catalog': { readingStand: () => [-3.28, 0, -1.92], shelfOrigin: () => [-3.28, 0, -2.79] },
     './scene/orbital/useWorldController': { useWorldController: () => world },
@@ -76,6 +91,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     } } }),
     './scene/orbital/orbital.css': {},
   };
+  if (overrides.library) Object.assign(dependencies, libraryDependencies(residentRig));
   const files = { orbital: './orbital/OrbitalResidents.tsx', app: '../App.tsx' };
   const names = { orbital: 'OrbitalResidents', app: 'App' };
   const props = {
@@ -123,6 +139,54 @@ function mount(kind, overrides = {}, idleLibrary) {
     dispose() { cleanups.forEach(cleanup => cleanup?.()); },
   };
 }
+
+test('书柜站位等待动画绑定，成功保持烘焙站位，失败平滑退回原有站位', async () => {
+  const { gltf } = await loadModel(new URL('../../assets/public/models/resident/luna-library.glb', import.meta.url));
+  const modules = libraryDependencies(load('./orbital/residentRig.ts', { three: THREE }));
+  const motion = modules['./library/libraryMotion'].readLibraryMotion(gltf.animations);
+  for (const [slotId, source] of [['s0-0', motion], ['s2-5', null]]) {
+    const flow = { phase: 'align', progress: 0, direction: 1, book: { id: 'b', slotId } };
+    const arrivals = [];
+    const library = {
+      view: { phase: 'idle' }, flow: { current: flow }, motion: { current: undefined }, tick() {},
+      arrived(success = true) { arrivals.push(success); flow.phase = 'reach'; },
+    };
+    const view = mount('orbital', { enabled: false, focusedObject: 'book-01', library });
+    try {
+      view.root.position.set(-3.28, 0, -1.92);
+      view.root.rotation.y = Math.PI;
+      const bookMotion = modules['./library/bookMotion'];
+      const authored = new THREE.Vector3(...bookMotion.authoredBookStand('habitat', flow.book));
+      for (let i = 0; i < 180; i++) view.frame(1 / 60);
+      assert.deepEqual(arrivals, [], 'Luna does not reach before the animation resolves');
+      assert.ok(view.root.position.distanceTo(authored) < .001);
+
+      library.motion.current = source;
+      const target = source ? authored : new THREE.Vector3(...bookMotion.bookStand('habitat', flow.book, true));
+      for (let i = 0; i < 120 && !arrivals.length; i++) {
+        const before = view.root.position.clone();
+        view.frame(1 / 60);
+        assert.ok(view.root.position.distanceTo(before) < .025, 'source selection cannot teleport Luna');
+      }
+      assert.deepEqual(arrivals, [true]);
+      assert.ok(view.root.position.distanceTo(target) < .001);
+      if (!source) continue;
+
+      view.sounds.length = 0;
+      for (const phase of ['reach', 'extract', 'carry']) {
+        flow.phase = phase;
+        for (let i = 0; i <= 20; i++) {
+          flow.progress = i / 20;
+          view.frame(1 / 60);
+          assert.ok(view.root.position.distanceTo(authored) < .001, 'the clip owns pelvis travel inside its fixed scene anchor');
+        }
+      }
+      assert.deepEqual(view.sounds, [], 'controller does not add procedural walking over baked footwork');
+    } finally {
+      view.dispose();
+    }
+  }
+});
 
 for (const sceneId of ['habitat', 'observatory']) {
   test(`${sceneId}: Space leaves Luna on the floor without consuming the key or playing a sound`, () => {

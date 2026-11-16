@@ -8,7 +8,9 @@ import { JOURNAL_POSITION } from './journalLayout';
 import { Cat } from './Cat';
 import { CHAIR_POSES, SEAT_DROP, SEAT_SWIVEL, chairFacing, chairFront, type ChairPose } from './chairPose';
 import { applyLibraryPose, carryResident, libraryCrouch } from './library/residentPose';
-import { residentLibraryTarget } from './library/bookMotion';
+import { resetArms } from './library/armPose';
+import { authoredBookStand, residentLibraryTarget } from './library/bookMotion';
+import { createLibraryPlayer, libraryCoverFlow, libraryMotionSample, loadLibraryMotion, type LibraryMotion } from './library/libraryMotion';
 import { readingStand, shelfOrigin } from './library/catalog';
 import { HIP_HEIGHT as HIP, ResidentModel, type ResidentLeg, type ResidentRig } from './ResidentModel';
 import { WALK_SPEED } from './residentRig';
@@ -232,6 +234,21 @@ export function OrbitalResidents(props: ResidentsProps) {
   const approach = useRef<Approach | null>(null);
   const walkWeight = useRef(0);
   const libraryNav = useRef('');
+  const libraryAsset = props.library?.motion;
+  const libraryOpen = props.library ? props.library.view.phase !== 'idle' : false;
+  const libraryPlayer = useRef<{ motion: LibraryMotion; rig: ResidentRig; apply: ReturnType<typeof createLibraryPlayer> }>();
+  useEffect(() => {
+    if (!libraryOpen || !libraryAsset || libraryAsset.current) return;
+    let live = true;
+    libraryAsset.current = undefined;
+    void loadLibraryMotion().then(motion => {
+      if (live) libraryAsset.current = motion;
+    }).catch(error => {
+      if (live) libraryAsset.current = null;
+      console.warn('Luna book animation could not be loaded; using the existing pose.', error);
+    });
+    return () => { live = false; };
+  }, [libraryAsset, libraryOpen]);
   const state = useRef({ posture: 'standing' as Posture, wanted: 'standing' as Posture, path: [] as Point[], external: false, exiting: false, blend: 0, sit: 0, lie: 0, walkTime: 0, nearby: null as NearbyAction | null, nearbyHint: '', dismissedBed: false, dismissedChair: false,
     perch: 0, idle: Infinity, kick: 0, planted: false, plant: SOLE_NEAR, sole: SOLE_NEAR, soleLift: SOLE_LIFT });
   const bedMotion = useRef({ clip: null as THREE.AnimationClip | null, player: null as ReturnType<typeof createBedPlayer> | null, rig: null as ResidentRig | null, time: 0 });
@@ -491,9 +508,22 @@ export function OrbitalResidents(props: ResidentsProps) {
     const library = p.library, flow = library?.flow.current;
     const libraryActive = !!flow && flow.phase !== 'idle';
     const libraryWalking = !!flow && ['approach', 'align', 'recenter'].includes(flow.phase);
-    const libraryTarget = flow ? residentLibraryTarget(p.sceneId, flow) : null;
+    const motion = library?.motion.current;
+    if (motion && rig.current && (libraryPlayer.current?.motion !== motion || libraryPlayer.current.rig !== rig.current)) {
+      try {
+        libraryPlayer.current = { motion, rig: rig.current, apply: createLibraryPlayer(rig.current.mesh, motion) };
+      } catch (error) {
+        library!.motion.current = null;
+        libraryPlayer.current = undefined;
+        console.warn('Luna book animation does not match the resident rig; using the existing pose.', error);
+      }
+    }
+    const authored = !!library?.motion.current && !!libraryPlayer.current;
+    const authoredTarget = library?.motion.current !== null;
+    const librarySample = authored && flow ? libraryMotionSample(flow) : null;
+    const libraryTarget = flow ? residentLibraryTarget(p.sceneId, flow, authoredTarget) : null;
     if (libraryWalking && libraryTarget) {
-      const key = `${flow!.phase}/${flow!.book?.id ?? ''}`;
+      const key = `${flow!.phase}/${libraryTarget[0]}/${libraryTarget[2]}`;
       if (libraryNav.current !== key) {
         libraryNav.current = key; keys.current.clear(); stand();
         const end: Point = [libraryTarget[0], libraryTarget[2]], boxes = obstacles(room, CHAIR_POSES[p.sceneId]);
@@ -763,13 +793,24 @@ export function OrbitalResidents(props: ResidentsProps) {
       s.sit = 0; s.lie = 0;
       if (libraryWalking && libraryTarget && !s.path.length && Math.hypot(root.position.x - libraryTarget[0], root.position.z - libraryTarget[2]) < .055) {
         root.rotation.y = angle(root.rotation.y, Math.PI, 1 - Math.exp(-dt * 10));
-        if (Math.abs(Math.atan2(Math.sin(root.rotation.y - Math.PI), Math.cos(root.rotation.y - Math.PI))) < .025) library!.arrived();
+        const aligning = flow!.phase === 'align';
+        const ready = !aligning || authored || library!.motion.current === null;
+        if (ready && Math.abs(Math.atan2(Math.sin(root.rotation.y - Math.PI), Math.cos(root.rotation.y - Math.PI))) < (aligning && authored ? .006 : .025)) {
+          if (aligning && authored) root.rotation.y = Math.PI;
+          library!.arrived();
+        }
       }
       if (libraryActive && !libraryWalking && flow) {
         root.rotation.y = angle(root.rotation.y, Math.PI, 1 - Math.exp(-dt * 10));
-        carryResident(root, p.sceneId, flow); root.position.y -= libraryCrouch(flow);
-        if ((['carry', 'return-carry'].includes(flow.phase) && flow.progress > .08 && flow.progress < .92)
-          || Math.hypot(root.position.x - frameX, root.position.z - frameZ) > .0004) walking = true;
+        if (authored && flow.book && (librarySample || flow.phase === 'reading' || flow.phase === 'turn')) {
+          const held = !librarySample || librarySample.coverProgress !== undefined;
+          root.position.fromArray(authoredBookStand(p.sceneId, flow.book, held));
+          root.rotation.y = Math.PI;
+        } else {
+          carryResident(root, p.sceneId, flow); root.position.y -= libraryCrouch(flow);
+          if ((['carry', 'return-carry'].includes(flow.phase) && flow.progress > .08 && flow.progress < .92)
+            || Math.hypot(root.position.x - frameX, root.position.z - frameZ) > .0004) walking = true;
+        }
       }
     }
     if (p.sceneId !== 'habitat') pose.drop = s.perch;
@@ -816,7 +857,10 @@ export function OrbitalResidents(props: ResidentsProps) {
         leg.foot.rotation.x = -(leg.thigh.rotation.x + leg.shin.rotation.x);
       });
     }
-    if (rig.current && library && flow) applyLibraryPose(rig.current, root, p.sceneId, flow, dt);
+    if (rig.current && flow) {
+      if (librarySample && librarySample.coverProgress === undefined) resetArms(rig.current, 1);
+      else applyLibraryPose(rig.current, root, p.sceneId, libraryCoverFlow(flow, librarySample), dt, authored);
+    }
     const idleEligible = !!rig.current && p.enabled && !p.focusedObject && !p.reducedMotion
       && !document.hidden && s.posture === 'standing' && wanted === 'standing' && !s.exiting
       && !walking && distance < .00001 && walkWeight.current === 0
@@ -845,6 +889,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       const playingBed = s.posture === 'bed' && bed.player;
       const playingChair = p.sceneId === 'habitat' && s.posture === 'chair';
       if (!playingBed) rig.current.applyPose(s.walkTime, ease(walkWeight.current));
+      if (!playingBed && !playingChair && flow?.book && librarySample) libraryPlayer.current!.apply(flow.book, librarySample);
       if (!playingBed && !playingChair && !libraryActive && !p.reducedMotion) im.player?.(idle.current);
       rig.current.applyChairPose?.(
         playingChair ? chairMotion.current.time : 0,

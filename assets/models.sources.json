@@ -80,6 +80,15 @@
       "bytes": 232092,
       "sha256": "bbd25137132498d2140a0b2b24d0a657efea9aa25d741361dbb0999024af8aad",
       "processing": "scripts/export-luna-yawn.py retargets upper-body rotations into Luna rest coordinates. Runtime retains planted neutral pelvis/legs; 54 tracks, 8.333333 seconds, no mesh or textures."
+    },
+    {
+      "file": "resident/luna-library.glb",
+      "source": "PocketWorld-authored Blender pickup motions on the existing user-supplied Luna rig; no new external mesh or texture.",
+      "license": "Original Luna source terms remain unchanged; no separate upstream license declaration supplied.",
+      "used": true,
+      "bytes": 463840,
+      "sha256": "80c798f60f52248c8fa9ef1cdebf913046d1d7512fb930fac7ff8767953a12b7",
+      "processing": "scripts/bake-luna-library.py builds three shelf-row pickup clips and synchronized book marker tracks. Animation-only GLB, reverse sampling for return. Neutral pose from scripts/luna-library-neutral.mjs; see assets/models/resident/README.md."
     }
   ]
 }

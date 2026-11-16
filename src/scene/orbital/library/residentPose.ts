@@ -8,10 +8,11 @@ import {
   bookHalfStepOffset,
   bookPose,
   bookStand,
+  bookWingPoint,
   coverOpenCurve,
   smooth,
-  turningPageCurve,
-  turningPagePoint,
+  bookSupportPose,
+  turningHandPose,
 } from './bookMotion';
 import { slotFor } from './catalog';
 import { applyTorsoAndGazeIK, reachPalm, resetArms } from './armPose';
@@ -41,7 +42,11 @@ function arcLerp(a: THREE.Vector3, b: THREE.Vector3, lift: THREE.Vector3, t: num
   return new THREE.Vector3().lerpVectors(a, b, s).addScaledVector(lift, Math.sin(s * Math.PI));
 }
 
-export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: string, flow: LibraryFlow, dt: number) {
+function guidedArc(from: THREE.Vector3, guide: THREE.Vector3, to: THREE.Vector3, t: number) {
+  return from.clone().lerp(guide, t).lerp(guide.clone().lerp(to, t), t);
+}
+
+export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: string, flow: LibraryFlow, dt: number, authored = false) {
   const phase = flow.phase;
   const p = THREE.MathUtils.clamp(flow.progress, 0, 1);
   const t = smooth(p);
@@ -54,7 +59,7 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
   }
 
   const slot = slotFor(flow.book);
-  const book = bookPose(scene, flow.book, flow);
+  const book = bookPose(scene, flow.book, flow, authored);
   const grabSide = bookGrabSide(flow.book);
   const otherSide = (1 - grabSide) as 0 | 1;
   const grabLocal = bookGrabLocal(flow.book);
@@ -64,16 +69,10 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
   const contactVec = (v: THREE.Vector3) => contact(v.x, v.y, v.z);
 
   // Natural angled palm-up support aligned with each forearm (fingers point slightly inward toward spine).
-  const supportOrientationFor = (side: 0 | 1) => {
-    const fingerDir = new THREE.Vector3(side === 0 ? 0.36 : -0.36, 0, 0.93).normalize();
-    const palmY = fingerDir.negate();
-    const palmZ = new THREE.Vector3(side === 0 ? -0.10 : 0.10, 0.995, 0).normalize();
-    const palmX = new THREE.Vector3().crossVectors(palmY, palmZ).normalize();
-    return makePalmQuat(palmX, palmY, palmZ, book.quaternion);
-  };
+  const supportOrientationFor = (side: 0 | 1) => bookSupportPose(side).quaternion.premultiply(book.quaternion);
   const rightSupportOrientation = supportOrientationFor(0);
   const leftSupportOrientation = supportOrientationFor(1);
-  const supportOrientation = leftSupportOrientation;
+  const supportOrientation = bookSupportPose(1, 0).quaternion.premultiply(book.quaternion);
   const grabQuat = shelfGrabOrientation(grabSide, book.quaternion);
   const grabWorld = contactVec(grabLocal);
   const bookCenterWorld = contact(0.11 * book.open, 0.03, 0);
@@ -155,9 +154,10 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
     return;
   }
 
-  const leftSupportClosed = contact(0.12, -0.009, -0.072);
-  const leftSupportOpen = contact(0.125, -0.009, -0.072);
-  const rightSupportOpen = contact(-0.125, -0.009, -0.072);
+  const leftSupportClosed = contactVec(bookSupportPose(1, 0).position);
+  const leftSupportOpen = contactVec(bookSupportPose(1).position);
+  const rightSupportOpen = contactVec(bookSupportPose(0).position);
+  const coverSlipGuide = contactVec(bookWingPoint(0, 1, 0.25, -0.025, -0.142));
   const coverClosedPose = bookCoverGripPose(0);
   const coverClosedWorld = contactVec(coverClosedPose.position);
   const coverClosedQuat = coverClosedPose.quaternion.clone().premultiply(book.quaternion);
@@ -222,15 +222,14 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
     const gazeOpen = new THREE.Vector3().lerpVectors(contactVec(bookCoverGripPose(openVal).position), contact(0, 0.05, -0.01), settleT);
     applyTorsoAndGazeIK(rig, gazeOpen, -0.04, 0, 0, 1, dt);
 
-    // Left hand adjusts slightly with shifting cover weight.
-    const weightShiftX = THREE.MathUtils.lerp(0.12, 0.125, openVal) + Math.sin(openVal * Math.PI) * 0.012;
-    const weightDipY = -0.007 - Math.sin(openVal * Math.PI) * 0.004;
-    reachPalm(rig, rig.arms[1], contact(weightShiftX, weightDipY - 0.002, -0.072), 1, {
-      quaternion: supportOrientation,
+    // Follow the same tilted underside frame as the page wing while its weight moves to the spine.
+    const supportPose = bookSupportPose(1, openVal);
+    reachPalm(rig, rig.arms[1], contactVec(supportPose.position), 1, {
+      quaternion: supportPose.quaternion.premultiply(book.quaternion),
       blend: 1,
       mode: 'palm',
       shoulderWeight: 0.1,
-      fingerCurl: 0.14,
+      fingerCurl: THREE.MathUtils.lerp(0.14, 0.04, settleT),
     });
 
     // Right hand rides the actual front cover edge, then slips beneath the opened cover as book settles.
@@ -247,17 +246,14 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
       });
     } else {
       const slip = smooth((p - 0.78) / 0.22);
-      const viaEdge = contact(-0.215, -0.010, -0.085);
-      const rightPos = slip < 0.45
-        ? new THREE.Vector3().lerpVectors(coverEdgeWorld, viaEdge, smooth(slip / 0.45))
-        : new THREE.Vector3().lerpVectors(viaEdge, rightSupportOpen, smooth((slip - 0.45) / 0.55));
+      const rightPos = guidedArc(coverEdgeWorld, coverSlipGuide, rightSupportOpen, slip);
       const rightQuat = coverQuatWorld.clone().slerp(rightSupportOrientation, slip);
       reachPalm(rig, rig.arms[0], rightPos, 0, {
         quaternion: rightQuat,
         blend: 1,
         mode: 'palm',
-        shoulderWeight: 0.1,
-        fingerCurl: THREE.MathUtils.lerp(0.22, 0.14, slip),
+        shoulderWeight: THREE.MathUtils.lerp(0.15, 0.1, slip),
+        fingerCurl: THREE.MathUtils.lerp(0.22, 0.04, slip),
       });
     }
     return;
@@ -271,99 +267,27 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
   }
 
   if (phase === 'turn') {
-    const dir = flow.direction >= 0 ? 1 : -1;
-    const side = (dir > 0 ? 1 : 0) as 0 | 1;
+    const hand = turningHandPose(p, flow.direction);
+    const side = hand.side;
     const support = (1 - side) as 0 | 1;
-    const curve = turningPageCurve(p, dir);
-    const pagePt = turningPagePoint(curve.leafRatio, curve.bendAmp);
-    // Outward push face: +normal for forward (0->PI, pushing rightward -X_book), -normal for backward (PI->0, pushing leftward +X_book).
-    const pushNormal = dir > 0 ? pagePt.normal : pagePt.normal.clone().negate();
-    const pageWorld = contactVec(pagePt.position.clone().addScaledVector(pushNormal, -0.002));
-
-    const gazeTurn = new THREE.Vector3().lerpVectors(contact(0, 0.05, -0.01), pageWorld, 0.45 * Math.sin(p * Math.PI));
+    const supportPose = bookSupportPose(support);
+    // A small eye follow keeps the head down and torso quiet while the page passes the spine.
+    const gazeTurn = contact(0, 0.05, -0.01).lerp(contactVec(hand.position), 0.16 * Math.sin(p * Math.PI));
     applyTorsoAndGazeIK(rig, gazeTurn, -0.04, 0, 0, 1, dt);
-
-    const shiftSupport = p < 0.20 ? smooth(p / 0.20) : p > 0.78 ? 1 - smooth((p - 0.78) / 0.22) : 1;
-    const supportX = (support ? 1 : -1) * THREE.MathUtils.lerp(0.125, 0.088, shiftSupport);
-    const sideSupportQuat = supportOrientationFor(side);
-    const otherSupportQuat = supportOrientationFor(support);
-    reachPalm(rig, rig.arms[support], contact(supportX, -0.009, -0.072), support, {
-      quaternion: otherSupportQuat,
+    reachPalm(rig, rig.arms[support], contactVec(supportPose.position), support, {
+      quaternion: supportPose.quaternion.premultiply(book.quaternion),
       blend: 1,
       mode: 'palm',
       shoulderWeight: 0.1,
-      fingerCurl: 0.12,
+      fingerCurl: 0.04,
     });
-
-    // Natural lifting/guiding hand orientation: palm stays UP-and-INWARD along +pushNormal (zero 180° wrist flip!).
-    const fingerAim = new THREE.Vector3(side ? -0.46 : 0.46, 0.25 * Math.sin(curve.leafRatio * Math.PI), 0.85).normalize();
-    const palmZ = pushNormal.clone().add(new THREE.Vector3(0, 0.35, 0)).normalize();
-    const palmY = fingerAim.clone().negate();
-    const palmX = new THREE.Vector3().crossVectors(palmY, palmZ).normalize();
-    palmZ.crossVectors(palmX, palmY).normalize();
-    const pageQuat = makePalmQuat(palmX, palmY, palmZ, book.quaternion);
-
-    const startUnder = contact(side ? 0.125 : -0.125, -0.007, -0.072);
-    const outerClear = contact(side ? 0.225 : -0.225, 0.016, -0.098);
-    const returnOuter = contact(side ? 0.225 : -0.225, 0.014, -0.095);
-
-    let turnPos: THREE.Vector3;
-    let turnQuat: THREE.Quaternion;
-    let turnMode: 'palm' | 'tip' = 'tip';
-    let curl = 0.16;
-
-    if (p < 0.22) {
-      const u = p / 0.22;
-      if (u < 0.5) {
-        const s = smooth(u / 0.5);
-        turnPos = new THREE.Vector3().lerpVectors(startUnder, outerClear, s);
-        turnQuat = sideSupportQuat.clone().slerp(pageQuat, s * 0.45);
-        turnMode = 'palm';
-        curl = 0.08;
-      } else {
-        const s = smooth((u - 0.5) / 0.5);
-        turnPos = new THREE.Vector3().lerpVectors(outerClear, pageWorld, s);
-        turnQuat = sideSupportQuat.clone().slerp(pageQuat, 0.45 + 0.55 * s);
-        turnMode = 'tip';
-        curl = THREE.MathUtils.lerp(0.08, 0.18, s);
-      }
-    } else if (p <= 0.66) {
-      turnPos = pageWorld;
-      turnQuat = pageQuat;
-      turnMode = 'tip';
-      curl = 0.10;
-    } else {
-      const u = (p - 0.66) / 0.34;
-      const releasePoint = turningPagePoint(dir > 0 ? 0.56 : 0.44, Math.sin((dir > 0 ? 0.56 : 0.44) * Math.PI) * 0.022);
-      const releasePushNormal = dir > 0 ? releasePoint.normal : releasePoint.normal.clone().negate();
-      const liftOff = contactVec(releasePoint.position.clone().addScaledVector(releasePushNormal, -0.032));
-      if (u < 0.28) {
-        const s = smooth(u / 0.28);
-        turnPos = new THREE.Vector3().lerpVectors(pageWorld, liftOff, s);
-        turnQuat = pageQuat.clone().slerp(sideSupportQuat, s * 0.25);
-        turnMode = 'tip';
-        curl = THREE.MathUtils.lerp(0.20, 0.10, s);
-      } else if (u < 0.65) {
-        const s = smooth((u - 0.28) / 0.37);
-        turnPos = new THREE.Vector3().lerpVectors(liftOff, returnOuter, s);
-        turnQuat = pageQuat.clone().slerp(sideSupportQuat, 0.25 + 0.55 * s);
-        turnMode = 'palm';
-        curl = 0.08;
-      } else {
-        const s = smooth((u - 0.65) / 0.35);
-        turnPos = new THREE.Vector3().lerpVectors(returnOuter, startUnder, s);
-        turnQuat = pageQuat.clone().slerp(sideSupportQuat, 0.80 + 0.20 * s);
-        turnMode = 'palm';
-        curl = 0.08;
-      }
-    }
-
-    reachPalm(rig, rig.arms[side], turnPos, side, {
-      quaternion: turnQuat,
+    reachPalm(rig, rig.arms[side], contactVec(hand.position), side, {
+      quaternion: hand.quaternion.premultiply(book.quaternion),
       blend: 1,
-      mode: turnMode,
-      shoulderWeight: 0.40,
-      fingerCurl: curl,
+      tipWeight: hand.tipWeight,
+      shoulderWeight: hand.shoulderWeight,
+      fingerCurl: hand.fingerCurl,
+      thumbOppose: hand.thumbOppose,
     });
     return;
   }
@@ -375,29 +299,25 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
     const coverQuatWorld = coverPose.quaternion.clone().premultiply(book.quaternion);
     applyTorsoAndGazeIK(rig, bookCenterWorld, -0.04, 0, 0, 1, dt);
 
-    const weightShiftX = THREE.MathUtils.lerp(0.12, 0.125, openVal) + Math.sin(openVal * Math.PI) * 0.012;
-    const weightDipY = -0.007 - Math.sin(openVal * Math.PI) * 0.004;
-    reachPalm(rig, rig.arms[1], contact(weightShiftX, weightDipY - 0.002, -0.072), 1, {
-      quaternion: supportOrientation,
+    const supportPose = bookSupportPose(1, openVal);
+    reachPalm(rig, rig.arms[1], contactVec(supportPose.position), 1, {
+      quaternion: supportPose.quaternion.premultiply(book.quaternion),
       blend: 1,
       mode: 'palm',
       shoulderWeight: 0.1,
-      fingerCurl: 0.14,
+      fingerCurl: THREE.MathUtils.lerp(0.04, 0.14, smooth(p / 0.22)),
     });
 
     if (p < 0.22) {
       const s = smooth(p / 0.22);
-      const viaEdge = contact(-0.215, -0.010, -0.085);
-      const rightPos = s < 0.55
-        ? new THREE.Vector3().lerpVectors(rightSupportOpen, viaEdge, smooth(s / 0.55))
-        : new THREE.Vector3().lerpVectors(viaEdge, coverEdgeWorld, smooth((s - 0.55) / 0.45));
+      const rightPos = guidedArc(rightSupportOpen, coverSlipGuide, coverEdgeWorld, s);
       const rightQuat = rightSupportOrientation.clone().slerp(coverQuatWorld, s);
       reachPalm(rig, rig.arms[0], rightPos, 0, {
         quaternion: rightQuat,
         blend: 1,
         mode: 'palm',
-        shoulderWeight: 0.12,
-        fingerCurl: THREE.MathUtils.lerp(0.14, 0.22, s),
+        shoulderWeight: THREE.MathUtils.lerp(0.1, 0.15, s),
+        fingerCurl: THREE.MathUtils.lerp(0.04, 0.22, s),
       });
     } else {
       reachPalm(rig, rig.arms[0], coverEdgeWorld, 0, {

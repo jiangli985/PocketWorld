@@ -3,7 +3,6 @@ import type { ResidentArm, ResidentRig } from '../ResidentModel';
 
 const origin = new THREE.Vector3();
 const target = new THREE.Vector3();
-const axis = new THREE.Vector3();
 const bend = new THREE.Vector3();
 const elbow = new THREE.Vector3();
 const local = new THREE.Vector3();
@@ -12,14 +11,26 @@ const invParent = new THREE.Quaternion();
 const tempMat = new THREE.Matrix4();
 const tempEuler = new THREE.Euler();
 
-function aim(bone: THREE.Bone, rest: THREE.Vector3, point: THREE.Vector3) {
+function aim(bone: THREE.Bone, rest: THREE.Vector3, point: THREE.Vector3, planeNormal: THREE.Vector3) {
   bone.parent!.updateWorldMatrix(true, false);
   local.copy(point);
   bone.parent!.worldToLocal(local);
   local.sub(bone.position);
   if (local.lengthSq() < 1e-10) return;
   local.normalize();
-  bone.quaternion.setFromUnitVectors(axis.copy(rest).normalize(), local);
+  // A direction alone leaves roll undefined and its shortest arc flips near -rest.
+  // The elbow plane supplies the second axis for a deterministic anatomical frame.
+  const restForward = rest.clone().normalize();
+  const restUp = new THREE.Vector3(0, 0, Math.abs(restForward.z) > 0.98 ? 0 : 1);
+  if (restUp.lengthSq() === 0) restUp.set(0, 1, 0);
+  restUp.addScaledVector(restForward, -restUp.dot(restForward)).normalize();
+  const up = planeNormal.clone().applyQuaternion(bone.parent!.getWorldQuaternion(new THREE.Quaternion()).invert());
+  up.addScaledVector(local, -up.dot(local)).normalize();
+  const bindFrame = new THREE.Quaternion().setFromRotationMatrix(
+    new THREE.Matrix4().makeBasis(restForward, restUp, restForward.clone().cross(restUp)),
+  );
+  bone.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(local, up, local.clone().cross(up)))
+    .multiply(bindFrame.invert());
   bone.updateWorldMatrix(false, true);
 }
 
@@ -69,7 +80,7 @@ export function reachArm(
 
   const meshQuat = rig.mesh.getWorldQuaternion(rotation);
   // Anatomical elbow pole: comfortably outward, downward, and slightly backward.
-  bend.set(side ? 0.78 : -0.78, -0.52, -0.36).applyQuaternion(meshQuat);
+  bend.set(side ? 0.72 : -0.72, -0.82, -0.12).applyQuaternion(meshQuat);
   if (poleHint && poleHint.lengthSq() > 1e-6) {
     bend.addScaledVector(poleHint.clone().normalize(), 0.35);
   }
@@ -85,8 +96,9 @@ export function reachArm(
     .copy(origin)
     .addScaledVector(target, along)
     .addScaledVector(bend, Math.sqrt(Math.max(0, arm.upperLength ** 2 - along ** 2)));
-  aim(arm.upper, arm.restUpper, elbow);
-  aim(arm.forearm, arm.restLower, destination);
+  const planeNormal = new THREE.Vector3().crossVectors(target, bend).multiplyScalar(side ? 1 : -1).normalize();
+  aim(arm.upper, arm.restUpper, elbow, planeNormal);
+  aim(arm.forearm, arm.restLower, destination, planeNormal);
   arm.hand.quaternion.identity();
 }
 
@@ -109,6 +121,7 @@ export interface ReachPalmOptions {
   blend?: number;
   armBlend?: number;
   mode?: 'palm' | 'tip' | 'pinch';
+  tipWeight?: number;
   shoulderWeight?: number;
   poleHint?: THREE.Vector3;
   fingerCurl?: number;
@@ -129,7 +142,8 @@ export function reachPalm(
   const localOffset = new THREE.Vector3();
   const palm = arm.palmOffset?.clone() ?? (side ? new THREE.Vector3(-0.025, -0.004, 0.014) : new THREE.Vector3(-0.008, -0.025, -0.004));
   const tip = arm.fingerTipOffset?.clone() ?? palm.clone().multiplyScalar(1.55);
-  if (opts.mode === 'tip') localOffset.copy(tip);
+  if (opts.tipWeight !== undefined) localOffset.lerpVectors(palm, tip, opts.tipWeight);
+  else if (opts.mode === 'tip') localOffset.copy(tip);
   else if (opts.mode === 'pinch') localOffset.lerpVectors(palm, tip, 0.48);
   else localOffset.copy(palm);
 
@@ -159,10 +173,12 @@ export function reachPalm(
         forearmAxis.normalize();
         const delta = base.clone().multiply(restPalm.clone().invert());
         const dot = delta.x * forearmAxis.x + delta.y * forearmAxis.y + delta.z * forearmAxis.z;
-        let twistAngle = 2 * Math.atan2(dot, delta.w);
-        if (twistAngle > Math.PI) twistAngle -= 2 * Math.PI;
-        if (twistAngle < -Math.PI) twistAngle += 2 * Math.PI;
-        const share = THREE.MathUtils.clamp(twistAngle * 0.78, -1.75, 1.75);
+        // sin²(twist / 2) is invariant to q/-q and has no branch at a half turn.
+        // Choose each arm's anatomical pronation direction, then smoothly supinate
+        // back as the palm returns. This shares up to 100° without frame history.
+        // Damping also removes the undefined twist of an exactly opposite swing.
+        const twistSq = dot * dot;
+        const share = (side ? -1 : 1) * 1.75 * twistSq / (twistSq + delta.w * delta.w + 0.0001);
         twistQuat.setFromAxisAngle(forearmAxis, share);
         arm.forearm.parent!.getWorldQuaternion(invParent).invert();
         arm.forearm.getWorldQuaternion(forearmWorldQuat);
