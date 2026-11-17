@@ -6,9 +6,10 @@ import type { LibraryFlow, LibraryPhase } from './useLibrary';
 
 const ASSET = './models/resident/luna-library.glb';
 const BOOK = 'LibraryBook';
-const REACH_END = .32;
-const EXTRACT_END = .59;
-const COVER_HANDOFF = .36;
+// Authored frames from scripts/bake-luna-library.py (30 fps).
+const REACH_END = 72 / 180;
+const EXTRACT_END = 108 / 180;
+const COVER_HANDOFF = .20;
 const sections: Partial<Record<LibraryPhase, readonly [number, number]>> = {
   reach: [0, REACH_END],
   extract: [REACH_END, EXTRACT_END],

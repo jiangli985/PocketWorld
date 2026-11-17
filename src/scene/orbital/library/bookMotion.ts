@@ -111,7 +111,11 @@ export function bookCoverGripPose(openVal: number): { position: THREE.Vector3; q
   const theta = Math.PI * open;
   const wingTilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -BOOK_WING_ANGLE * open);
   const normal = new THREE.Vector3(-0.85 * Math.sin(theta), 0.35 + 0.65 * Math.cos(theta) ** 2, 0).applyQuaternion(wingTilt);
-  const fingers = new THREE.Vector3(0.36 * (1 - open), 0.18 * Math.sin(theta), 0.92).applyQuaternion(wingTilt);
+  // At the closed cover the fingers lead inward from the reader's edge,
+  // following the forearm instead of folding back toward the wrist.
+  const prepare = 1 - smooth(open / .55);
+  const fingers = new THREE.Vector3(0.36 * (1 - open) + .49 * prepare,
+    0.18 * Math.sin(theta) + .22 * prepare, .92 - 1.32 * prepare).applyQuaternion(wingTilt);
   return { position, quaternion: palmQuaternion(fingers, normal) };
 }
 
@@ -146,7 +150,8 @@ export function bookSupportPose(side: 0 | 1, openVal = 1) {
   const z = THREE.MathUtils.lerp(-0.072, PAGE_TURN_AUTHORED.SupportFront, open);
   return {
     position: bookWingPoint(side, open, radius, y, z),
-    quaternion: palmQuaternion(new THREE.Vector3(side === 0 ? 0.36 : -0.36, 0, 0.93),
+    quaternion: palmQuaternion(side === 0 ? new THREE.Vector3(.36, 0, .93)
+      : new THREE.Vector3(THREE.MathUtils.lerp(-.75, -.36, open), .20 * (1 - open), THREE.MathUtils.lerp(.55, .93, open)),
       new THREE.Vector3(side === 0 ? -0.10 : 0.10, 0.995, 0)).premultiply(wing.quaternion),
   };
 }

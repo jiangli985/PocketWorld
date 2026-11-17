@@ -567,3 +567,154 @@ test('前臂分担扭转保留请求正负号，左右手都能旋前与旋后',
     }
   } finally { rig.dispose(); }
 });
+
+test('three-row pickup locks the spine before moving, catches upright, and hands off the real skin without a wrist jump', async () => {
+  const { gltf: baked } = await load(new URL('../../../../assets/public/models/resident/luna-library.glb', import.meta.url));
+  const motion = libraryMotion.readLibraryMotion(baked.animations);
+  const { rig, root, asset } = makeRig();
+  const play = libraryMotion.createLibraryPlayer(rig.mesh, motion);
+  const joint = name => asset.getObjectByName('mixamorig' + name);
+  const at = name => joint(name).getWorldPosition(new THREE.Vector3());
+  const armNames = ['RightArm', 'RightForeArm', 'RightHand', 'LeftArm', 'LeftForeArm', 'LeftHand'];
+  // Measure the skin palm in its neutral hand-local frame, independent of the bake's targets.
+  root.rotation.y = 0;
+  const skinPalm = rig.arms[1].palmOffset.clone()
+    .applyQuaternion(joint('LeftHand').getWorldQuaternion(new THREE.Quaternion()).invert())
+    .divideScalar(rigMod.RESIDENT_SCALE);
+  root.rotation.y = Math.PI;
+  const sample = (book, phase, progress) => {
+    const flow = { book, phase, progress };
+    const frame = libraryMotion.libraryMotionSample(flow);
+    const coverFlow = libraryMotion.libraryCoverFlow(flow, frame);
+    root.position.fromArray(bookMotion.authoredBookStand('habitat', book, frame?.coverProgress !== undefined));
+    root.updateMatrixWorld(true);
+    armPose.resetArms(rig, 1);
+    if (frame?.coverProgress !== undefined) {
+      for (let n = 0; n < 40; n++) residentPose.applyLibraryPose(rig, root, 'habitat', coverFlow, .03, true);
+    }
+    rig.applyPose(0, 0);
+    play(book, frame);
+    root.updateMatrixWorld(true);
+    const pose = bookMotion.bookPose('habitat', book, coverFlow, true);
+    libraryMotion.applyLibraryBookMotion(motion, 'habitat', book, frame, pose.position, pose.quaternion);
+    const joints = armNames.map(name => ({ position: at(name), quaternion: joint(name).getWorldQuaternion(new THREE.Quaternion()).normalize() }));
+    return { pose, joints };
+  };
+  const byFrame = (book, frame) => frame <= 36 ? sample(book, 'reach', frame / 36)
+    : frame <= 72 ? sample(book, 'extract', (frame - 36) / 36) : sample(book, 'carry', (frame - 72) / 72);
+  try {
+    for (let row = 0; row < 3; row++) {
+      const book = { ...catalog.freshLibrary().books[0], slotId: `s${row}-2` };
+      const shelf = byFrame(book, 0).pose;
+      const spine = new THREE.Vector3(.006, [-.001, -.011, -.004][row], [.042, .020, -.095][row]);
+      for (const fps of [30, 60, 120]) {
+        let previous;
+        for (let i = 0; i <= 6 * fps; i++) {
+          const timeFrame = i * 30 / fps;
+          const frame = timeFrame <= 72 ? timeFrame * .5 : timeFrame - 36;
+          const { pose, joints } = byFrame(book, frame);
+          const world = local => local.clone().applyQuaternion(pose.quaternion).add(pose.position);
+          if (frame <= 36) assert.ok(pose.position.distanceTo(shelf.position) < .00001, 'book waits for the grip');
+          if (frame <= 96) assert.ok(pose.quaternion.angleTo(bookMotion.shelfQuaternion) < .001, 'book stays upright through the bottom catch');
+          if (frame >= 30 && frame <= 108) assert.ok(at('RightHandMiddle4').distanceTo(world(spine)) < .002, `${row}@${frame}: leading skin fingertip remains on spine`);
+          if (frame >= 96) {
+            const underside = new THREE.Vector3(.08, .026, -.118).lerp(new THREE.Vector3(.12, -.009, -.072), bookMotion.smooth((frame - (row === 2 ? 104 : 96)) / 24));
+            const actual = skinPalm.clone().applyMatrix4(joint('LeftHand').matrixWorld);
+            assert.ok(actual.distanceTo(world(underside)) < .002, `${row}@${frame}: supporting skin palm remains at book bottom`);
+          }
+          if (frame >= 96) for (const x of [0, .24]) for (const y of [0, .064]) for (const z of [-.11, .11]) {
+            assert.ok(world(new THREE.Vector3(x, y, z)).y < 1.19, 'lower the book before turning its corner toward the face');
+          }
+          if (previous) joints.forEach((j, n) => {
+            assert.ok(j.quaternion.angleTo(previous[n].quaternion) < .4 * 30 / fps, `${row}@${frame}: ${armNames[n]} orientation discontinuity`);
+            assert.ok(j.position.distanceTo(previous[n].position) < .04 * 30 / fps, `${row}@${frame}: ${armNames[n]} position discontinuity`);
+          });
+          previous = joints;
+        }
+      }
+      const held = byFrame(book, 144);
+      const procedural = sample(book, 'open', .2);
+      held.joints.forEach((j, i) => {
+        assert.ok(j.position.distanceTo(procedural.joints[i].position) < .002, `${row}: closed-to-open ${armNames[i]} position`);
+        assert.ok(j.quaternion.angleTo(procedural.joints[i].quaternion) < .004, `${row}: closed-to-open ${armNames[i]} rotation`);
+      });
+      for (const frame of [36, 54, 72, 84, 96, 108, 120, 132, 144]) {
+        const forward = byFrame(book, frame);
+        const reverse = frame <= 36 ? sample(book, 'release', 1 - frame / 36)
+          : frame <= 72 ? sample(book, 'insert', 1 - (frame - 36) / 36)
+          : sample(book, 'return-carry', 1 - (frame - 72) / 72);
+        forward.joints.forEach((j, i) => {
+          assert.ok(j.position.distanceTo(reverse.joints[i].position) < .00001, 'return reverses the same contact path');
+          assert.ok(j.quaternion.angleTo(reverse.joints[i].quaternion) < .001, 'return reverses the same wrist and elbow frames');
+        });
+      }
+    }
+  } finally { rig.dispose(); }
+});
+
+// Same bounded skin-triangle test used by the independent browser runner.
+// Bone centerlines cannot detect a palm or thumb cutting through a hair strand.
+test('top-shelf skin clears the head and side hair during late extraction and its carry neighbors', async () => {
+  const { gltf: baked } = await load(new URL('../../../../assets/public/models/resident/luna-library.glb', import.meta.url));
+  const motion = libraryMotion.readLibraryMotion(baked.animations);
+  const { rig, root, asset } = makeRig();
+  const play = libraryMotion.createLibraryPlayer(rig.mesh, motion);
+  const book = { ...catalog.freshLibrary().books[0], slotId: 's2-1' };
+  const mesh = asset.getObjectByName('Luna_Surface');
+  const geometry = mesh.geometry, index = geometry.index;
+  const skinIndex = geometry.getAttribute('skinIndex'), skinWeight = geometry.getAttribute('skinWeight');
+  const groups = Array.from({ length: geometry.getAttribute('position').count }, (_, vertex) => {
+    let head = 0, arm = 0;
+    for (let k = 0; k < 4; k++) {
+      const name = mesh.skeleton.bones[skinIndex.getComponent(vertex, k)].name;
+      const weight = skinWeight.getComponent(vertex, k);
+      if (/Head|Neck/.test(name)) head += weight;
+      if (/RightForeArm|RightHand/.test(name)) arm += weight;
+    }
+    return [head, arm];
+  });
+  const heads = [], arms = [];
+  for (let i = 0; i < index.count; i += 3) {
+    const ids = [index.getX(i), index.getX(i + 1), index.getX(i + 2)];
+    const head = ids.reduce((sum, v) => sum + groups[v][0], 0) / 3;
+    const arm = ids.reduce((sum, v) => sum + groups[v][1], 0) / 3;
+    if (head < .65 && arm < .65) continue;
+    (head > .65 ? heads : arms).push({ ids, points: [], box: new THREE.Box3() });
+  }
+  assert.ok(heads.length && arms.length, 'actual head/hair and right-arm skin triangles must be present');
+  const ray = new THREE.Ray(), hit = new THREE.Vector3();
+  const edgesHit = (a, b) => {
+    for (let edge = 0; edge < 3; edge++) {
+      const start = a.points[edge], end = a.points[(edge + 1) % 3];
+      const length = start.distanceTo(end);
+      ray.set(start, end.clone().sub(start).normalize());
+      if (ray.intersectTriangle(...b.points, false, hit) && start.distanceTo(hit) <= length + 1e-7) return true;
+    }
+    return false;
+  };
+  const samples = [
+    ...[.5, .6, .65, .7, .775, .85, .925, 1].map(p => ['extract', p]),
+    ...[0, .05, .1, .2].map(p => ['carry', p]),
+  ];
+  try {
+    for (const [phase, progress] of samples) {
+      const frame = libraryMotion.libraryMotionSample({ book, phase, progress });
+      root.position.fromArray(bookMotion.authoredBookStand('habitat', book));
+      armPose.resetArms(rig, 1);
+      rig.applyPose(0, 0);
+      play(book, frame);
+      root.updateMatrixWorld(true);
+      mesh.skeleton.update();
+      const vertices = groups.map((_, v) => mesh.getVertexPosition(v, new THREE.Vector3()).applyMatrix4(mesh.matrixWorld));
+      for (const triangle of [...heads, ...arms]) {
+        triangle.points = triangle.ids.map(v => vertices[v]);
+        triangle.box.setFromPoints(triangle.points);
+      }
+      let intersections = 0;
+      for (const arm of arms) for (const head of heads) {
+        if (arm.box.intersectsBox(head.box) && (edgesHit(arm, head) || edgesHit(head, arm))) intersections++;
+      }
+      assert.equal(intersections, 0, `${phase}@${progress}: right hand/thumb skin intersects head or side hair`);
+    }
+  } finally { rig.dispose(); }
+});

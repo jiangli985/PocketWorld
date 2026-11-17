@@ -86,9 +86,9 @@
       "source": "PocketWorld-authored Blender pickup motions on the existing user-supplied Luna rig; no new external mesh or texture.",
       "license": "Original Luna source terms remain unchanged; no separate upstream license declaration supplied.",
       "used": true,
-      "bytes": 463840,
-      "sha256": "80c798f60f52248c8fa9ef1cdebf913046d1d7512fb930fac7ff8767953a12b7",
-      "processing": "scripts/bake-luna-library.py builds three shelf-row pickup clips and synchronized book marker tracks. Animation-only GLB, reverse sampling for return. Neutral pose from scripts/luna-library-neutral.mjs; see assets/models/resident/README.md."
+      "bytes": 748056,
+      "sha256": "1e645ec76f172b06bfaef670c65f65244f1d02916b3460d533abbeb2f02f93fc",
+      "processing": "scripts/bake-luna-library.py builds three shelf-row pickup clips and synchronized book marker tracks. Animation-only GLB, reverse sampling for return. Neutral and closed-book handoff poses from scripts/luna-library-neutral.mjs; 0-180 frames at 30 fps, grip before extraction, upright bottom catch before tilt. See assets/models/resident/README.md."
     }
   ]
 }

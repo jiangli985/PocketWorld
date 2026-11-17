@@ -5,19 +5,44 @@ import ts from 'typescript';
 import * as THREE from 'three';
 import { load } from '../src/scene/orbital/load-for-validation.mjs';
 
-const source = fs.readFileSync(new URL('../src/scene/orbital/residentRig.ts', import.meta.url), 'utf8');
-const { outputText } = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-});
-const exports = {};
-vm.runInNewContext(outputText, { exports, require: () => THREE });
+const cache = new Map();
+function loadTS(path) {
+  if (cache.has(path.href)) return cache.get(path.href);
+  const mod = { exports: {} };
+  const source = fs.readFileSync(path, 'utf8');
+  const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } });
+  vm.runInNewContext(outputText, { exports: mod.exports, require: id => {
+    if (id === 'three') return THREE;
+    if (id.startsWith('.')) return loadTS(new URL(id + '.ts', path));
+    throw new Error('Unexpected handoff dependency ' + id);
+  } });
+  cache.set(path.href, mod.exports);
+  return mod.exports;
+}
 const path = new URL('../assets/public/models/resident/luna-walk-room.glb', import.meta.url);
 const { gltf } = await load(path);
-const rig = exports.createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'));
+const rig = loadTS(new URL('../src/scene/orbital/residentRig.ts', import.meta.url)).createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'));
 rig.applyPose(0, 0);
+let centered = new THREE.Matrix4();
+if (process.argv.includes('--handoff')) {
+  const dir = new URL('../src/scene/orbital/library/', import.meta.url);
+  const b = loadTS(new URL('bookMotion.ts', dir));
+  const r = loadTS(new URL('residentPose.ts', dir));
+  const book = loadTS(new URL('catalog.ts', dir)).freshLibrary().books[0];
+  const actor = new THREE.Group(); actor.add(rig.mesh); actor.rotation.y = Math.PI;
+  actor.position.fromArray(b.authoredBookStand('habitat', book, true));
+  actor.updateMatrixWorld(true);
+  for (let i = 0; i < 100; i++) {
+    r.applyLibraryPose(rig, actor, 'habitat', { book, phase: 'open', progress: 0 }, .03, true);
+    rig.applyPose(0, 0);
+  }
+  actor.updateMatrixWorld(true);
+  // The baked hip owns the retreat until the runtime parent takes it over.
+  centered.makeTranslation(0, 0, -b.AUTHORED_BOOK_RETREAT).multiply(actor.matrixWorld.clone().invert());
+}
 gltf.scene.updateMatrixWorld(true);
 const pose = {};
 gltf.scene.traverse(joint => {
-  if (joint.isBone) pose[joint.name] = joint.matrixWorld.toArray();
+  if (joint.isBone) pose[joint.name] = joint.matrixWorld.clone().premultiply(centered).toArray();
 });
 process.stdout.write(JSON.stringify(pose));
