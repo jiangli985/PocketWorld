@@ -26,7 +26,7 @@ export const shelfQuaternion = new THREE.Quaternion().setFromRotationMatrix(
   new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0)),
 );
 
-const HELD_TILT = -0.32;
+const HELD_TILT = 0.08;
 const READING_TILT = 0.08;
 export const heldQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(HELD_TILT, Math.PI, 0));
 
@@ -42,6 +42,12 @@ export const AUTHORED_BOOK_RETREAT = .30;
 export function authoredBookStand(scene: string, book: LibraryBook, held = false): Vec3 {
   const [x, y, z] = shelfOrigin(scene);
   return [x + slotFor(book).position[0], y, z + .58 + (held ? AUTHORED_BOOK_RETREAT : 0)];
+}
+
+/** A planted weight shift leaves the book and reading/turn hand endpoints fixed. */
+export function libraryHeldBalance(flow: LibraryFlow) {
+  const weight = smooth(coverOpenCurve(flow) / .35);
+  return { back: .07 * weight, drop: .06 * weight };
 }
 
 export function bookHalfStepOffset(book: LibraryBook): number {
@@ -107,15 +113,14 @@ export function bookCoverPose(openVal: number) {
 export function bookCoverGripPose(openVal: number): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
   const open = THREE.MathUtils.clamp(openVal, 0, 1);
   const cover = bookCoverPose(open);
-  const position = new THREE.Vector3(0.18, -0.004, -0.088).applyQuaternion(cover.quaternion).add(cover.position);
-  const theta = Math.PI * open;
-  const wingTilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -BOOK_WING_ANGLE * open);
-  const normal = new THREE.Vector3(-0.85 * Math.sin(theta), 0.35 + 0.65 * Math.cos(theta) ** 2, 0).applyQuaternion(wingTilt);
+  // Grip beside the spine while closed; the hand travels to the free edge as the cover opens.
+  const prepare = 1 - smooth(open / .55);
+  const position = new THREE.Vector3(0.18 - .135 * prepare, 0.0185, -0.088 + .06 * Math.sin(Math.PI * open)).applyQuaternion(cover.quaternion).add(cover.position);
+  const normal = new THREE.Vector3(0, -1, 0).applyQuaternion(cover.quaternion);
+  // Rest palm-down on the closed cover, then roll around its exposed edge.
   // At the closed cover the fingers lead inward from the reader's edge,
   // following the forearm instead of folding back toward the wrist.
-  const prepare = 1 - smooth(open / .55);
-  const fingers = new THREE.Vector3(0.36 * (1 - open) + .49 * prepare,
-    0.18 * Math.sin(theta) + .22 * prepare, .92 - 1.32 * prepare).applyQuaternion(wingTilt);
+  const fingers = new THREE.Vector3(0.36 * (1 - open), 0, .92).applyQuaternion(cover.quaternion);
   return { position, quaternion: palmQuaternion(fingers, normal) };
 }
 
@@ -145,13 +150,17 @@ export function bookSupportPose(side: 0 | 1, openVal = 1) {
   const open = THREE.MathUtils.clamp(openVal, 0, 1);
   const wing = bookWingPose(side, open);
   // +Z is the reader's front edge after the held book's PI yaw.
-  const radius = side === 0 ? 0.125 : THREE.MathUtils.lerp(0.12, 0.035, open) + Math.sin(open * Math.PI) * 0.012;
-  const y = THREE.MathUtils.lerp(-0.009, -0.014, open);
-  const z = THREE.MathUtils.lerp(-0.072, PAGE_TURN_AUTHORED.SupportFront, open);
+  const radius = side === 0 ? 0.125 : THREE.MathUtils.lerp(0.19, 0.035, open) + Math.sin(open * Math.PI) * 0.012;
+  // The support fingers relax during the first 40% of the spread. Raise the
+  // skin contact with that hand shape, rather than lagging until the cover is flat.
+  const relax = smooth(open / .4);
+  const rise = Math.pow(relax, .6) * smooth(relax / .15);
+  const y = THREE.MathUtils.lerp(-0.0265, -0.014, side === 1 ? rise : open);
+  const z = THREE.MathUtils.lerp(-0.04, PAGE_TURN_AUTHORED.SupportFront, open);
   return {
     position: bookWingPoint(side, open, radius, y, z),
     quaternion: palmQuaternion(side === 0 ? new THREE.Vector3(.36, 0, .93)
-      : new THREE.Vector3(THREE.MathUtils.lerp(-.75, -.36, open), .20 * (1 - open), THREE.MathUtils.lerp(.55, .93, open)),
+      : new THREE.Vector3(-.36, 0, .93),
       new THREE.Vector3(side === 0 ? -0.10 : 0.10, 0.995, 0)).premultiply(wing.quaternion),
   };
 }
@@ -288,7 +297,9 @@ export function bookPose(scene: string, book: LibraryBook, flow: LibraryFlow, au
   const open = coverOpenCurve({ ...flow, phase });
   // Preserve the baked closed handoff; the open book leaves room for the crossing
   // forearm in front of the torso, with the supporting palms beneath its footprint.
-  const heldBase = new THREE.Vector3(root[0] + 0.11 * (1 - open), THREE.MathUtils.lerp(0.93, 0.85, open), root[2] - 0.285 + PAGE_TURN_AUTHORED.BookNear * open);
+  const heldBase = new THREE.Vector3(root[0] + 0.11 * (1 - open), THREE.MathUtils.lerp(0.84, 0.85, open) + .09 * smooth(open / .3) * (1 - open), root[2] - 0.32 + .035 * smooth(open / .3) + PAGE_TURN_AUTHORED.BookNear * open);
+  heldBase.z -= .075 * Math.sin(Math.PI * open) - .004 * Math.sin(Math.PI * smooth((open - .35) / .55));
+  heldBase.y -= .03 * Math.sin(Math.PI * open);
   const position = shelf.clone();
   const quaternion = shelfQuaternion.clone();
 
@@ -319,7 +330,7 @@ export function bookPose(scene: string, book: LibraryBook, flow: LibraryFlow, au
       const roll = Math.sin(open * Math.PI) * 0.032;
       quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), roll));
     } else if (phase === 'close') {
-      const lift = smooth(p / 0.22) * (1 - smooth((p - 0.85) / 0.15)) * 0.015;
+      const lift = smooth(p / 0.22) * (1 - smooth((p - 0.85) / 0.15)) * 0.015 * smooth(open / .1);
       const weightDip = -Math.sin(open * Math.PI) * 0.005;
       position.y += lift + weightDip;
       const roll = Math.sin(open * Math.PI) * 0.025;

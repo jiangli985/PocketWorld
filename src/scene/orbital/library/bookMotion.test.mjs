@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import * as THREE from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { load } from '../load-for-validation.mjs';
 
 function loadTS(relativePath, deps = {}) {
@@ -46,6 +47,59 @@ function stepPose(rig, root, book, phase, progress, direction = 1) {
   rig.applyPose(0, 0);
   root.updateMatrixWorld(true);
   return bookMotion.bookPose('habitat', book, flow);
+}
+
+// Same rounded solids and moving frames as LibraryBooks/SoftBox. Contact is
+// measured against triangle surfaces, independently of the IK palm target.
+function roundedBookSolids(open) {
+  const parts = [], identity = new THREE.Quaternion();
+  const frameMatrix = frame => new THREE.Matrix4().compose(frame.position, frame.quaternion,
+    new THREE.Vector3(frame.widthScale ?? 1, 1, 1));
+  const wings = [0, 1].map(side => bookMotion.bookWingPose(side, open));
+  const matrices = wings.map(frameMatrix);
+  function add(dims, radius, center, parent, scale = [1, 1, 1]) {
+    const matrix = parent.clone().multiply(new THREE.Matrix4().compose(new THREE.Vector3(...center), identity, new THREE.Vector3(...scale)));
+    if (Math.abs(matrix.determinant()) < 1e-9) return;
+    const geometry = new RoundedBoxGeometry(...dims, 2, Math.max(.0001, Math.min(radius, ...dims.map(d => d * .45))));
+    geometry.applyMatrix4(matrix); geometry.computeBoundingBox();
+    const box = geometry.boundingBox.clone(), centerPoint = box.getCenter(new THREE.Vector3());
+    const positions = geometry.getAttribute('position'), index = geometry.index, triangles = [], planes = [];
+    for (let i = 0; i < (index ? index.count : positions.count); i += 3) {
+      const triangle = new THREE.Triangle(...[0, 1, 2].map(k => new THREE.Vector3().fromBufferAttribute(positions, index ? index.getX(i + k) : i + k)));
+      const normal = triangle.getNormal(new THREE.Vector3());
+      if (normal.lengthSq() < .5) continue;
+      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, triangle.a);
+      if (plane.distanceToPoint(centerPoint) > 0) plane.negate();
+      triangles.push(triangle); planes.push(plane);
+    }
+    geometry.dispose(); parts.push({ box, triangles, planes });
+  }
+  add([.24, .012, .22], .003, [.12, 0, 0], matrices[1]);
+  for (const side of [0, 1]) {
+    const thickness = wings[side].thickness;
+    add([.226, .041, .209], .002, [side ? .12 : -.12, .0065 + thickness / 2, 0], matrices[side], [1, thickness / .041, 1]);
+  }
+  const spine = new THREE.Matrix4().makeScale(1, (.012 + wings[1].thickness) / .053, 1);
+  add([.011, .065, .22], .003, [0, .026, 0], spine);
+  add([.005, .035, .09], .001, [-.006, .026, 0], spine);
+  const cover = frameMatrix(bookMotion.bookCoverPose(open));
+  add([.24, .012, .22], .003, [.12, 0, 0], cover);
+  add([.12, .002, .09], .001, [.12, .007, 0], cover);
+  return parts;
+}
+
+function skinSurfaceContact(vertices, parts) {
+  let distance = Infinity, depth = 0;
+  const nearest = new THREE.Vector3();
+  for (const point of vertices) for (const part of parts) {
+    const inside = part.box.containsPoint(point) && part.planes.every(plane => plane.distanceToPoint(point) <= 1e-7);
+    if (!inside && part.box.distanceToPoint(point) >= distance) continue;
+    let d = Infinity;
+    for (const triangle of part.triangles) d = Math.min(d, triangle.closestPointToPoint(point, nearest).distanceTo(point));
+    distance = Math.min(distance, d);
+    if (inside) depth = Math.max(depth, d);
+  }
+  return { distance, depth };
 }
 
 test('十八个书位在伸手、抽出与推入全程保持手书贴合且手臂未超限', () => {
@@ -360,24 +414,25 @@ test('浅 V 的封面、正文和活动页在两端共面，合书保持原厚�
     const frame = bookMotion.bookCoverPose(open);
     const grip = bookMotion.bookCoverGripPose(open);
     const local = grip.position.clone().sub(frame.position).applyQuaternion(frame.quaternion.clone().invert());
-    assert.ok(local.distanceTo(new THREE.Vector3(0.18, -0.004, -0.088)) < 1e-12, 'cover hand remains attached during opening and closing');
+    assert.ok(local.distanceTo(new THREE.Vector3(0.18-.135*(1-bookMotion.smooth(open/.55)), 0.0185, -0.088+.06*Math.sin(Math.PI*open))) < 1e-12, 'cover hand remains attached during opening and closing');
     const support = bookMotion.bookSupportPose(1, open);
     const wing = bookMotion.bookWingPose(1, open);
     const underside = support.position.clone().sub(wing.position).applyQuaternion(wing.quaternion.clone().invert());
-    assert.ok(underside.y <= -0.009 && underside.y >= -0.0141, 'left palm remains below the bottom cover');
-    assert.ok(underside.x > 0 && underside.x <= 0.12 + 1e-12, 'left support moves continuously toward the spine');
+    assert.ok(underside.y >= -.0265 - 1e-12 && underside.y <= -.014 + 1e-12, 'left support anchor stays below the bottom cover');
+    if (i === 0 || i === 120) assert.ok(Math.abs(underside.y - (i === 0 ? -.0265 : -.014)) < 1e-12, 'closed and fully open support heights stay unchanged');
+    assert.ok(underside.x > 0 && underside.x <= 0.19 + 1e-12, 'left support moves continuously toward the spine');
   }
   const left = bookMotion.bookSupportPose(1).position;
   assert.ok(left.x < 0.05 && left.z > 0.02 && left.z < 0.07, 'left palm supports inside the book footprint near the spine');
 });
 
-test('阅读降高八厘米，开合和烘焙交接端点连续，抬页低于面部', () => {
+test('腰前闭书与阅读开合和烘焙交接端点连续，抬页低于面部', () => {
   const book = catalog.freshLibrary().books[0];
   for (const authored of [false, true]) {
     const pose = (phase, progress, direction = 1) => bookMotion.bookPose('habitat', book, { book, phase, progress, direction }, authored);
-    assert.equal(pose('open', 0).position.y, 0.93);
+    assert.equal(pose('open', 0).position.y, 0.84);
     assert.equal(pose('reading', 0).position.y, 0.85);
-    const closed = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.32, Math.PI, 0));
+    const closed = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.08, Math.PI, 0));
     const reading = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.08, Math.PI, 0));
     assert.ok(bookMotion.heldQuaternion.angleTo(closed) < 1e-7, 'preserve the baked closed tilt');
     assert.ok(pose('open', 0).quaternion.angleTo(closed) < 1e-7);
@@ -390,7 +445,7 @@ test('阅读降高八厘米，开合和烘焙交接端点连续，抬页低于�
         const held = pose(phase, i / 120);
         const front = new THREE.Vector3(0, 0, 1).applyQuaternion(held.quaternion);
         const pitch = Math.atan2(front.y, -front.z);
-        assert.ok(Math.abs(pitch - THREE.MathUtils.lerp(-0.32, 0.08, held.open)) < 1e-10, 'pitch follows the same continuous cover opening');
+        assert.ok(Math.abs(pitch - THREE.MathUtils.lerp(0.08, 0.08, held.open)) < 1e-10, 'pitch follows the same continuous cover opening');
         if (previous) assert.ok(held.quaternion.angleTo(previous) < 0.02, phase + ': continuous orientation');
         previous = held.quaternion.clone();
       }
@@ -576,12 +631,6 @@ test('three-row pickup locks the spine before moving, catches upright, and hands
   const joint = name => asset.getObjectByName('mixamorig' + name);
   const at = name => joint(name).getWorldPosition(new THREE.Vector3());
   const armNames = ['RightArm', 'RightForeArm', 'RightHand', 'LeftArm', 'LeftForeArm', 'LeftHand'];
-  // Measure the skin palm in its neutral hand-local frame, independent of the bake's targets.
-  root.rotation.y = 0;
-  const skinPalm = rig.arms[1].palmOffset.clone()
-    .applyQuaternion(joint('LeftHand').getWorldQuaternion(new THREE.Quaternion()).invert())
-    .divideScalar(rigMod.RESIDENT_SCALE);
-  root.rotation.y = Math.PI;
   const sample = (book, phase, progress) => {
     const flow = { book, phase, progress };
     const frame = libraryMotion.libraryMotionSample(flow);
@@ -606,7 +655,7 @@ test('three-row pickup locks the spine before moving, catches upright, and hands
     for (let row = 0; row < 3; row++) {
       const book = { ...catalog.freshLibrary().books[0], slotId: `s${row}-2` };
       const shelf = byFrame(book, 0).pose;
-      const spine = new THREE.Vector3(.006, [-.001, -.011, -.004][row], [.042, .020, -.095][row]);
+      const spine = new THREE.Vector3(-.014, -.036, [.042, .020, -.095][row]);
       for (const fps of [30, 60, 120]) {
         let previous;
         for (let i = 0; i <= 6 * fps; i++) {
@@ -616,12 +665,8 @@ test('three-row pickup locks the spine before moving, catches upright, and hands
           const world = local => local.clone().applyQuaternion(pose.quaternion).add(pose.position);
           if (frame <= 36) assert.ok(pose.position.distanceTo(shelf.position) < .00001, 'book waits for the grip');
           if (frame <= 96) assert.ok(pose.quaternion.angleTo(bookMotion.shelfQuaternion) < .001, 'book stays upright through the bottom catch');
-          if (frame >= 30 && frame <= 108) assert.ok(at('RightHandMiddle4').distanceTo(world(spine)) < .002, `${row}@${frame}: leading skin fingertip remains on spine`);
-          if (frame >= 96) {
-            const underside = new THREE.Vector3(.08, .026, -.118).lerp(new THREE.Vector3(.12, -.009, -.072), bookMotion.smooth((frame - (row === 2 ? 104 : 96)) / 24));
-            const actual = skinPalm.clone().applyMatrix4(joint('LeftHand').matrixWorld);
-            assert.ok(actual.distanceTo(world(underside)) < .002, `${row}@${frame}: supporting skin palm remains at book bottom`);
-          }
+          if (frame >= 30 && frame <= 96) assert.ok(at('RightHandMiddle4').distanceTo(world(spine.clone().setZ(row === 2 ? -.095+.115*bookMotion.smooth((frame-72)/24) : spine.z))) < .002, `${row}@${frame}: leading skin fingertip remains on spine`);
+          // The final volume regression checks actual hand skin against the cover triangles.
           if (frame >= 96) for (const x of [0, .24]) for (const y of [0, .064]) for (const z of [-.11, .11]) {
             assert.ok(world(new THREE.Vector3(x, y, z)).y < 1.19, 'lower the book before turning its corner toward the face');
           }
@@ -715,6 +760,117 @@ test('top-shelf skin clears the head and side hair during late extraction and it
         if (arm.box.intersectsBox(head.box) && (edgesHit(arm, head) || edgesHit(head, arm))) intersections++;
       }
       assert.equal(intersections, 0, `${phase}@${progress}: right hand/thumb skin intersects head or side hair`);
+    }
+  } finally { rig.dispose(); }
+});
+
+// Reconstruct actual skinned triangles in the moving book's local frame. Palm
+// anchors alone miss the cover corner cutting through an elbow, chest or hair.
+test('closed-book volume clears real torso, hair and forearms; final skin pads meet both covers', async () => {
+  const { gltf: baked } = await load(new URL('../../../../assets/public/models/resident/luna-library.glb', import.meta.url));
+  const motion = libraryMotion.readLibraryMotion(baked.animations);
+  const { rig, root, asset } = makeRig();
+  const play = libraryMotion.createLibraryPlayer(rig.mesh, motion);
+  const mesh = asset.getObjectByName('Luna_Surface');
+  const geometry = mesh.geometry, index = geometry.index;
+  const skinIndex = geometry.getAttribute('skinIndex'), skinWeight = geometry.getAttribute('skinWeight');
+  const groups = Array.from({ length: skinIndex.count }, (_, v) => {
+    const weights = {};
+    for (let k = 0; k < 4; k++) {
+      const name = mesh.skeleton.bones[skinIndex.getComponent(v, k)].name;
+      const group = /RightHand/.test(name) ? 'rightHand' : /LeftHand/.test(name) ? 'leftHand'
+        : /RightArm|RightForeArm/.test(name) ? 'rightArm' : /LeftArm|LeftForeArm/.test(name) ? 'leftArm'
+          : /Head|Neck/.test(name) ? 'head' : /Spine/.test(name) ? 'torso' : 'other';
+      weights[group] = (weights[group] ?? 0) + skinWeight.getComponent(v, k);
+    }
+    return Object.entries(weights).sort((a, b) => b[1] - a[1])[0][0];
+  });
+  const triangles = [];
+  for (let i = 0; i < index.count; i += 3) {
+    const ids = [index.getX(i), index.getX(i + 1), index.getX(i + 2)];
+    const cats = ids.map(v => groups[v]);
+    const group = cats.find(c => cats.filter(other => other === c).length >= 2);
+    if (group && group !== 'other') triangles.push({ ids, group });
+  }
+  // One millimetre inside the closed cover surfaces excludes tangent contact.
+  const volume = new THREE.Box3(new THREE.Vector3(.001, -.004, -.109), new THREE.Vector3(.239, .063, .109));
+  const at = name => asset.getObjectByName('mixamorig' + name).getWorldPosition(new THREE.Vector3());
+  const covers = roundedBookSolids(0);
+  const frames = [72, 90, 108, 120, ...Array.from({ length: 193 }, (_, i) => 132 + i / 4)];
+  try {
+    for (let row = 0; row < 3; row++) for (const frame of frames) {
+      const book = { ...catalog.freshLibrary().books[0], slotId: `s${row}-1` };
+      const phase = frame <= 72 ? 'reach' : frame <= 108 ? 'extract' : 'carry';
+      const progress = frame <= 72 ? frame / 72 : frame <= 108 ? (frame - 72) / 36 : (frame - 108) / 72;
+      const flow = { book, phase, progress };
+      const sample = libraryMotion.libraryMotionSample(flow);
+      root.position.fromArray(bookMotion.authoredBookStand('habitat', book));
+      armPose.resetArms(rig, 1);
+      rig.applyPose(0, 0);
+      play(book, sample);
+      root.updateMatrixWorld(true);
+      mesh.skeleton.update();
+      const pose = bookMotion.bookPose('habitat', book, flow, true);
+      libraryMotion.applyLibraryBookMotion(motion, 'habitat', book, sample, pose.position, pose.quaternion);
+      const inverse = new THREE.Matrix4().compose(pose.position, pose.quaternion, new THREE.Vector3(1, 1, 1)).invert();
+      const vertices = groups.map((_, v) => mesh.getVertexPosition(v, new THREE.Vector3()).applyMatrix4(mesh.matrixWorld).applyMatrix4(inverse));
+      const hits = {};
+      for (const triangle of triangles) {
+        if (volume.intersectsTriangle(new THREE.Triangle(...triangle.ids.map(v => vertices[v]))))
+          hits[triangle.group] = (hits[triangle.group] ?? 0) + 1;
+      }
+      for (const part of ['head', 'torso', 'rightArm', 'leftArm'])
+        assert.equal(hits[part] ?? 0, 0, `${row}@${frame}: book corner cuts real ${part} skin`);
+      if (frame >= 132) for (const side of ['Right', 'Left']) {
+        const forearm = at(side + 'Hand').sub(at(side + 'ForeArm'));
+        const fingers = at(side + 'HandMiddle1').sub(at(side + 'Hand'));
+        assert.ok(forearm.angleTo(fingers) < THREE.MathUtils.degToRad(65), `${row}@${frame}: ${side} wrist folds back while carrying`);
+      }
+      if (frame >= 132) {
+        const { distance: gap } = skinSurfaceContact(vertices.filter((_, v) => groups[v] === 'leftHand'), covers);
+        assert.ok(gap < .002, `${row}@${frame}: actual supporting skin floats ${gap}m from book triangles`);
+      }
+      if (frame === 180) for (const side of ['rightHand', 'leftHand']) {
+        assert.equal(hits[side] ?? 0, 0, `${row}: final ${side} skin enters closed page block`);
+        const gap = Math.min(...vertices.filter((_, v) => groups[v] === side).map(v => volume.distanceToPoint(v)));
+        assert.ok(gap < .003, `${row}: actual ${side} pad floats ${gap}m from cover`);
+      }
+    }
+  } finally { rig.dispose(); }
+});
+
+
+test('procedural open/close keeps the actual left support skin within 2 mm of moving rounded book surfaces', async () => {
+  const { gltf: baked } = await load(new URL('../../../../assets/public/models/resident/luna-library.glb', import.meta.url));
+  const motion = libraryMotion.readLibraryMotion(baked.animations);
+  const { rig, root, asset } = makeRig(), play = libraryMotion.createLibraryPlayer(rig.mesh, motion);
+  const mesh = asset.getObjectByName('Luna_Surface');
+  const skinIndex = mesh.geometry.getAttribute('skinIndex'), skinWeight = mesh.geometry.getAttribute('skinWeight');
+  const left = Array.from({ length: skinIndex.count }, (_, v) => v).filter(v => {
+    let weight = 0;
+    for (let k = 0; k < 4; k++) if (mesh.skeleton.bones[skinIndex.getComponent(v, k)].name.includes('LeftHand')) weight += skinWeight.getComponent(v, k);
+    return weight > .5;
+  });
+  assert.ok(left.length, 'real left-hand skin vertices must be present');
+  const progress = Array.from({ length: 41 }, (_, i) => i / 40);
+  const surfaces = new Map();
+  try {
+    for (let row = 0; row < 3; row++) for (const phase of ['open', 'close']) for (const p of progress) {
+      const book = { ...catalog.freshLibrary().books[0], slotId: `s${row}-1` };
+      const flow = { book, phase, progress: p }, sample = libraryMotion.libraryMotionSample(flow);
+      const coverFlow = libraryMotion.libraryCoverFlow(flow, sample);
+      root.position.fromArray(bookMotion.authoredBookStand('habitat', book, true)); root.updateMatrixWorld(true);
+      armPose.resetArms(rig, 1);
+      for (let n = 0; n < 30; n++) residentPose.applyLibraryPose(rig, root, 'habitat', coverFlow, 1 / 60, true);
+      rig.applyPose(0, 0); play(book, sample); root.updateMatrixWorld(true); mesh.skeleton.update();
+      const pose = bookMotion.bookPose('habitat', book, coverFlow, true);
+      libraryMotion.applyLibraryBookMotion(motion, 'habitat', book, sample, pose.position, pose.quaternion);
+      const inverse = new THREE.Matrix4().compose(pose.position, pose.quaternion, new THREE.Vector3(1, 1, 1)).invert();
+      const vertices = left.map(v => mesh.getVertexPosition(v, new THREE.Vector3()).applyMatrix4(mesh.matrixWorld).applyMatrix4(inverse));
+      if (!surfaces.has(pose.open)) surfaces.set(pose.open, roundedBookSolids(pose.open));
+      const contact = skinSurfaceContact(vertices, surfaces.get(pose.open));
+      assert.ok(contact.distance < .002, `${row}/${phase}@${p}: actual LEFT support skin floats ${contact.distance}m from book triangles`);
+      assert.ok(contact.depth < .001, `${row}/${phase}@${p}: actual LEFT support skin enters book by ${contact.depth}m`);
     }
   } finally { rig.dispose(); }
 });

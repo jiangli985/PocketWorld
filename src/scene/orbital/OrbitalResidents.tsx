@@ -9,7 +9,7 @@ import { Cat } from './Cat';
 import { CHAIR_POSES, SEAT_DROP, SEAT_SWIVEL, chairFacing, chairFront, type ChairPose } from './chairPose';
 import { applyLibraryPose, carryResident, libraryCrouch } from './library/residentPose';
 import { resetArms } from './library/armPose';
-import { authoredBookStand, residentLibraryTarget } from './library/bookMotion';
+import { authoredBookStand, libraryHeldBalance, residentLibraryTarget } from './library/bookMotion';
 import { createLibraryPlayer, libraryCoverFlow, libraryMotionSample, loadLibraryMotion, type LibraryMotion } from './library/libraryMotion';
 import { readingStand, shelfOrigin } from './library/catalog';
 import { HIP_HEIGHT as HIP, ResidentModel, type ResidentLeg, type ResidentRig } from './ResidentModel';
@@ -521,6 +521,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     const authored = !!library?.motion.current && !!libraryPlayer.current;
     const authoredTarget = library?.motion.current !== null;
     const librarySample = authored && flow ? libraryMotionSample(flow) : null;
+    const heldBalance = authored && flow ? libraryHeldBalance(libraryCoverFlow(flow, librarySample)) : { back: 0, drop: 0 };
     const libraryTarget = flow ? residentLibraryTarget(p.sceneId, flow, authoredTarget) : null;
     if (libraryWalking && libraryTarget) {
       const key = `${flow!.phase}/${libraryTarget[0]}/${libraryTarget[2]}`;
@@ -805,6 +806,7 @@ export function OrbitalResidents(props: ResidentsProps) {
         if (authored && flow.book && (librarySample || flow.phase === 'reading' || flow.phase === 'turn')) {
           const held = !librarySample || librarySample.coverProgress !== undefined;
           root.position.fromArray(authoredBookStand(p.sceneId, flow.book, held));
+          if (held) { root.position.y -= heldBalance.drop; root.position.z += heldBalance.back; }
           root.rotation.y = Math.PI;
         } else {
           carryResident(root, p.sceneId, flow); root.position.y -= libraryCrouch(flow);
@@ -842,7 +844,7 @@ export function OrbitalResidents(props: ResidentsProps) {
         let thigh = -sit * Math.PI / 2, knee = sit * Math.PI / 2;
         if (libraryActive && root.position.y < -.0005) {
           const footZ = leg.thigh.position.z + leg.shin.position.z + leg.foot.position.z;
-          const [crouchThigh, crouchKnee] = legReach(leg, footZ - leg.hipForward, leg.thigh.position.y - leg.ankleHeight + root.position.y);
+          const [crouchThigh, crouchKnee] = legReach(leg, footZ - leg.hipForward + heldBalance.back, leg.thigh.position.y - leg.ankleHeight + root.position.y);
           thigh = crouchThigh + leg.straighten[0];
           knee = crouchKnee + leg.straighten[1];
         }

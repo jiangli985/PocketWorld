@@ -22,15 +22,18 @@ FPS = 30
 LAST = 144
 GRAB = 36
 CLEAR = 72
-# Give the pre-contact reach 2.4 seconds while retaining the contact/transfer beats.
+# Author frames 0..36 map to export 0..72; later export = author + 36.
+# Reach 0..72, extraction 72..108, carry 108..180 at 30 fps.
 REACH_SCALE = 2
 EXPORT_LAST = LAST + 36
+# Keep the existing timing, adding subframes only to the rotating support transfer.
+EXPORT_FRAMES = tuple(range(132)) + tuple(i/4 for i in range(132*4, EXPORT_LAST*4+1))
 ROWS = (0.7775, 1.0675, 1.3575)
 CONVERSION = Matrix.Rotation(pi / 2, 4, "X")
 ACTOR = Matrix.Translation((0, -STAND, 0)) @ Matrix.Rotation(pi, 4, "Z") @ Matrix.Scale(SCALE, 4)
 TO_RIG = ACTOR.inverted()
 SHELF_ROT = Matrix(((0, -1, 0), (0, 0, 1), (-1, 0, 0))).to_quaternion()
-READ_ROT = (Matrix.Rotation(-.32, 3, "X") @ Matrix.Rotation(pi, 3, "Y")).to_quaternion()
+READ_ROT = (Matrix.Rotation(.08, 3, "X") @ Matrix.Rotation(pi, 3, "Y")).to_quaternion()
 V = Vector
 Q = Quaternion
 
@@ -246,25 +249,26 @@ class Hand:
         self.previous_target = None
         self.previous_turn = 0
         self.previous_pole = None
+        self.handoff_turns = {}
 
     def desired(self, fingers, index):
         return basis(TO_RIG.to_3x3() @ fingers, TO_RIG.to_3x3() @ index) @ self.basis.inverted()
 
-    def curl(self, amount):
+    def curl(self, amount, thumb=None):
         for digit in ("Index", "Middle", "Ring", "Pinky"):
             for segment, factor in enumerate((.62, 1, .52), start=1):
                 name = joint(f"{self.side}Hand{digit}{segment}")
                 axis = self.pose.rotation(self.wrist) @ self.curl_axis
                 self.pose.turn(name, axis, amount * factor)
-        for segment, factor in enumerate((.46, .56), start=1):
+        for segment, factor in enumerate((.65, .9), start=1):
             name = joint(f"{self.side}HandThumb{segment}")
-            axis = self.pose.rotation(self.wrist) @ (self.basis @ V((0, 0, -self.sign)))
-            self.pose.turn(name, axis, amount * factor)
+            axis = self.pose.rotation(self.wrist) @ (self.basis @ V((.85*self.sign, -.5*self.sign, 0))).normalized()
+            self.pose.turn(name, axis, (amount*.6 if thumb is None else thumb) * factor)
 
-    def reach(self, point, target, weight, curl, pole, contact):
+    def reach(self, point, target, weight, curl, pole, contact, align_fingers=0, thumb=None):
         if weight <= 0:
             return
-        self.curl(curl)
+        self.curl(curl, thumb)
         p = self.pose
         entry = {name: p.orientations[name].copy() for name in (self.upper, self.lower, self.wrist)}
         rest_position = p.point(self.wrist)
@@ -273,10 +277,6 @@ class Hand:
             self.previous_target = rest_rotation
         # Limit the palm turn during a transfer before solving the wrist position.
         target = rest_rotation.slerp(target, weight)
-        angle = 2*acos(min(1, abs(self.previous_target.dot(target))))
-        if angle > .18:
-            target = self.previous_target.slerp(target, .18/angle)
-        self.previous_target = target.copy()
         shape = rest_rotation.inverted() @ (p.point(self.middle) - rest_position)
         if contact == "tip":
             shape = rest_rotation.inverted() @ (p.point(self.tip) - rest_position)
@@ -285,6 +285,22 @@ class Hand:
         elif isinstance(contact, float):
             tip = rest_rotation.inverted() @ (p.point(self.tip) - rest_position)
             shape = tip.lerp(self.palm_shape, contact)
+        if align_fingers > 0:
+            # Keep the palm on the contact plane while its fingers follow the
+            # forearm. A fixed shelf frame folded the wrist back during lowering.
+            normal = target @ (self.basis @ V((0, 0, self.sign)))
+            for _ in range(3):
+                trial = TO_RIG @ point - target @ shape
+                p.limb(self.upper, self.lower, self.wrist, trial, pole, keep_bend_plane=True, neutral_frame=True)
+                forward = p.point(self.wrist)-p.point(self.lower)
+                forward -= normal * forward.dot(normal)
+                if forward.length > .001:
+                    aligned = basis(forward, normal.cross(forward)*self.sign) @ self.basis.inverted()
+                    target = target.slerp(aligned, align_fingers)
+        angle = 2*acos(min(1, abs(self.previous_target.dot(target))))
+        if angle > .18:
+            target = self.previous_target.slerp(target, .18/angle)
+        self.previous_target = target.copy()
         wrist = rest_position.lerp(TO_RIG @ point - target @ shape, weight)
         # Lead the wrist forward before lifting: a straight path passes too
         # close to the shoulder and reverses the elbow plane during the reach.
@@ -314,26 +330,118 @@ class Hand:
         p.turn(self.lower, forearm_axis, turn)
         p.set_rotation(self.wrist, target)
         if weight < 1:
-            for name, rotation in entry.items():
-                p.orientations[name] = rotation.slerp(p.orientations[name], weight)
+            for name in (self.upper, self.lower):
+                p.orientations[name] = entry[name].slerp(p.orientations[name], weight)
             p.world.clear()
-            p.set_rotation(self.wrist, rest_rotation.slerp(target, weight))
+            p.set_rotation(self.wrist, target)
 
 
 
 def book_pose(row, frame):
     slot = V((.035, ROWS[row], .20))
     clear = slot + V((0, 0, .326))
-    held = V((.11, .93, STAND+.30-.285))
+    held = V((.11, .84, STAND+.30-.32))
     if frame <= CLEAR:
         return slot.lerp(clear, fade(frame, GRAB, CLEAR)), SHELF_ROT
     # Clear the entire shelf before any turn. Keep the book upright for the
     # second hand to catch the bottom, and lower high books before tipping them.
-    upright = V((.065, max(.94, min(ROWS[row], 1.025)), .61))
-    turn_start = 104 if row == 2 else 96
+    upright = V((.065, 1.025, .65))
+    turn_start = 96
     position = clear.lerp(upright, fade(frame, CLEAR, turn_start))
     position = position.lerp(held, fade(frame, turn_start, turn_start+32))
+    position.z -= .02*sin(pi*fade(frame, turn_start, turn_start+40))
+    position.y += .006*sin(pi*fade(frame, turn_start, turn_start+32))
     return position, SHELF_ROT.slerp(READ_ROT, fade(frame, turn_start, turn_start+32))
+
+
+# Book-local skin contact correction while the leading hand changes grip.
+# Four samples per authored frame 96..144 keep the support on the rounded cover
+# through the turn, including between the original 30 Hz rotation keys.
+SUPPORT_SKIN_OFFSETS = (
+    (0.0000000, 0.0000000), (-0.0002864, 0.0012133), (-0.0002858, 0.0012108), (-0.0002814, 0.0011920),  # author 96
+    (-0.0002731, 0.0011568), (-0.0002675, 0.0011329), (-0.0002579, 0.0010927), (-0.0002446, 0.0010361),  # author 97
+    (-0.0002274, 0.0009631), (-0.0001221, 0.0008797), (0.0000000, 0.0008621), (-0.0000000, 0.0008277),  # author 98
+    (-0.0001439, 0.0006096), (-0.0000870, 0.0003684), (0.0000000, 0.0000000), (0.0000000, 0.0000000),  # author 99
+    (0.0000000, 0.0000000), (0.0000000, 0.0000000), (0.0000000, 0.0000000), (0.0005597, 0.0007765),  # author 100
+    (0.0016990, 0.0012534), (0.0006303, 0.0026700), (0.0022981, 0.0031884), (0.0032163, 0.0044624),  # author 101
+    (0.0000000, 0.0054761), (0.0000000, 0.0054851), (-0.0000000, 0.0054574), (-0.0000000, 0.0053939),  # author 102
+    (-0.0000000, 0.0052949), (-0.0000000, 0.0052917), (0.0000000, 0.0052483), (0.0000000, 0.0051654),  # author 103
+    (-0.0031511, 0.0018537), (-0.0004296, 0.0005960), (0.0000000, 0.0000000), (0.0000000, 0.0000000),  # author 104
+    (0.0000000, 0.0000000), (0.0006357, 0.0026929), (0.0023640, 0.0032798), (0.0024919, 0.0050359),  # author 105
+    (0.0048174, 0.0056717), (0.0067348, 0.0057402), (0.0084472, 0.0060884), (0.0100528, 0.0065600),  # author 106
+    (0.0119649, 0.0065829), (0.0091695, 0.0102527), (0.0094574, 0.0097703), (0.0097164, 0.0093026),  # author 107
+    (0.0099470, 0.0088500), (0.0100869, 0.0072702), (0.0099427, 0.0060593), (0.0101822, 0.0043039),  # author 108
+    (0.0057421, 0.0079668), (0.0055591, 0.0058833), (0.0054331, 0.0039160), (0.0052881, 0.0019436),  # author 109
+    (0.0051008, 0.0008760), (0.0025525, 0.0035414), (0.0014092, 0.0018975), (0.0008642, 0.0002844),  # author 110
+    (0.0006739, -0.0000000), (0.0011925, 0.0000000), (0.0010970, 0.0007906), (0.0006886, 0.0004963),  # author 111
+    (0.0000000, 0.0000000), (0.0008482, 0.0000000), (0.0013351, -0.0000000), (0.0017143, 0.0000000),  # author 112
+    (0.0019948, 0.0000000), (0.0025816, 0.0000000), (0.0024795, 0.0005853), (0.0026883, 0.0005862),  # author 113
+    (0.0031280, 0.0000000), (0.0037172, 0.0000000), (0.0043060, 0.0000000), (0.0048979, 0.0000000),  # author 114
+    (0.0054963, 0.0000000), (0.0059834, 0.0000000), (0.0065546, 0.0000000), (0.0072117, -0.0000000),  # author 115
+    (0.0079559, -0.0000000), (0.0085646, 0.0000000), (0.0091041, -0.0000000), (0.0096000, -0.0000000),  # author 116
+    (0.0100541, 0.0000000), (0.0106991, 0.0000000), (0.0112358, 0.0000000), (0.0115884, -0.0000000),  # author 117
+    (0.0118485, 0.0000000), (0.0123477, 0.0000000), (0.0127594, -0.0000000), (0.0130844, 0.0000000),  # author 118
+    (0.0133239, 0.0000000), (0.0137543, 0.0000000), (0.0141156, -0.0000000), (0.0144092, 0.0000000),  # author 119
+    (0.0146359, 0.0000000), (0.0149916, -0.0000000), (0.0152941, 0.0000000), (0.0155446, 0.0000000),  # author 120
+    (0.0157446, 0.0000000), (0.0160299, 0.0000000), (0.0162702, 0.0000000), (0.0164667, 0.0000000),  # author 121
+    (0.0166208, 0.0000000), (0.0168436, 0.0007691), (0.0170245, 0.0016389), (0.0171646, 0.0025198),  # author 122
+    (0.0172651, 0.0034110), (0.0177224, -0.0000000), (0.0177022, -0.0000000), (0.0176322, 0.0000000),  # author 123
+    (0.0175135, -0.0000000), (0.0175156, -0.0000000), (0.0174523, 0.0000000), (0.0173243, 0.0000000),  # author 124
+    (0.0171324, 0.0000000), (0.0171258, 0.0000000), (0.0170307, 0.0000000), (0.0168476, 0.0000000),  # author 125
+    (0.0165768, -0.0000000), (0.0165769, -0.0000000), (0.0164594, -0.0000000), (0.0162244, 0.0000000),  # author 126
+    (0.0158717, 0.0000000), (0.0158863, 0.0000000), (0.0157529, 0.0000000), (0.0154710, 0.0000000),  # author 127
+    (0.0150400, 0.0000000), (0.0150717, 0.0000000), (0.0149352, 0.0000000), (0.0146297, 0.0000000),  # author 128
+    (0.0141541, 0.0000000), (0.0142157, 0.0000000), (0.0140929, 0.0000000), (0.0137844, 0.0000000),  # author 129
+    (0.0132893, 0.0000000), (0.0133914, 0.0000000), (0.0132881, 0.0000000), (0.0129780, 0.0000000),  # author 130
+    (0.0124597, 0.0000000), (0.0125532, 0.0000000), (0.0121018, 0.0000000), (0.0113820, 0.0000000),  # author 131
+    (0.0103983, 0.0000000), (0.0102925, 0.0000000), (0.0099105, 0.0000000), (0.0092480, 0.0000000),  # author 132
+    (0.0083010, 0.0000000), (0.0082765, 0.0000000), (0.0079687, 0.0000000), (0.0073717, 0.0000000),  # author 133
+    (0.0064797, 0.0000000), (0.0065154, 0.0000000), (0.0062743, 0.0000000), (0.0057488, 0.0000000),  # author 134
+    (0.0049317, 0.0000000), (0.0050035, 0.0000000), (0.0048182, 0.0000000), (0.0043674, 0.0000000),  # author 135
+    (0.0036429, 0.0000000), (0.0037290, 0.0000000), (0.0035887, 0.0000000), (0.0032135, 0.0000000),  # author 136
+    (0.0025947, 0.0000000), (0.0026778, 0.0000000), (0.0025722, 0.0000000), (0.0022697, 0.0000000),  # author 137
+    (0.0017628, 0.0000000), (0.0018310, 0.0000000), (0.0017509, 0.0000000), (0.0015165, 0.0000000),  # author 138
+    (0.0011214, 0.0000000), (0.0011677, 0.0000000), (0.0011065, 0.0000000), (0.0009333, 0.0000000),  # author 139
+    (0.0006437, 0.0000000), (0.0006666, 0.0000000), (0.0006193, 0.0000000), (0.0004990, 0.0000000),  # author 140
+    (0.0000000, 0.0000000), (0.0000000, 0.0000000), (0.0000000, 0.0000000), (0.0000000, 0.0000000),  # author 141
+    (0.0000000, 0.0000000), (0.0000000, 0.0000000), (0.0000000, 0.0000000), (0.0000000, 0.0000000),  # author 142
+    (0.0000000, 0.0000000), (0.0000000, 0.0000000), (0.0000000, 0.0000000), (0.0000000, 0.0000000),  # author 143
+    (0.0000000, 0.0000000),  # author 144
+)
+
+
+def support_skin_offset(frame):
+    t = min(192, max(0, (frame-96)*4))
+    i = min(191, int(t))
+    a, b = SUPPORT_SKIN_OFFSETS[i:i+2]
+    return V((0, a[0]+(b[0]-a[0])*(t-i), a[1]+(b[1]-a[1])*(t-i)))
+
+
+def correct_support_skin(scene, rig, marker, bones):
+    # Snapshot first so inserted correction keys cannot change later baselines.
+    baseline = []
+    for quarter in range(132*4, EXPORT_LAST*4+1):
+        frame = quarter/4
+        scene.frame_set(int(frame), subframe=frame % 1)
+        baseline.append((frame, {name: bone.matrix.copy() for name, bone in bones.items()},
+                         marker.matrix_world.to_3x3().copy()))
+    scene.frame_set(132)
+    previous = {name: bone.rotation_quaternion.copy() for name, bone in bones.items()}
+    for frame, matrices, book_rotation in baseline:
+        pose = Pose(bones, matrices)
+        pose.key_quaternions = previous
+        upper, lower, wrist = (joint('Left'+part) for part in ('Arm', 'ForeArm', 'Hand'))
+        start, mid, end = (pose.point(name) for name in (upper, lower, wrist))
+        ray = (end-start).normalized()
+        pole = (mid-start-ray*ray.dot(mid-start)).normalized()
+        rotation = pose.rotation(wrist)
+        delta = TO_RIG.to_3x3() @ book_rotation @ support_skin_offset(authored_frame(frame))
+        # Preserve the existing elbow plane and all wrist/finger rotations. Only
+        # the supporting wrist position and its two arm segments are re-solved.
+        pose.limb(upper, lower, wrist, end+delta, pole, keep_bend_plane=True)
+        pose.set_rotation(wrist, rotation)
+        pose.key(frame)
+    style_linear(rig)
 
 
 def choreograph(pose, hands, row, frame):
@@ -341,18 +449,18 @@ def choreograph(pose, hands, row, frame):
     lean = fade(frame, 1, 30) * (1-fade(frame, 60, 112))
     # Retreat before the high book reaches the side hair, with the spine grip locked.
     right_step = fade(frame, 45, 66) if row == 2 else fade(frame, 45, 72)
-    left_step = fade(frame, 91, 112) if row == 2 else fade(frame, 79, 102)
+    left_step = fade(frame, 79, 102)
     travel = .15*(right_step+left_step)
     load_left = fade(frame, 29, 41)*(1-fade(frame, 51, 61))
     load_right = fade(frame, 49, 63)*(1-fade(frame, 77, 89))
     clear_face = fade(frame, 39, 60)*(1-fade(frame, 87, 112))
     drop = (.284, .058, .008)[row]
     stepping = right_step-left_step
-    extra_clearance = clear_face if row else 0
+    extra_clearance = clear_face
     # Another 6 cm of top-row lateral yield clears palm/thumb skin from the hair.
     # Release this extra yield by authored frame 96 (export 132), before the
     # closed-pose handoff: a late release flips the upper-arm shortest-roll branch.
-    pose.place_hip((-.018*lean+.041*load_left-.045*load_right+.032*extra_clearance
+    pose.place_hip((-.018*lean+.041*load_left-.045*load_right+.12*extra_clearance
                     +(.06*fade(frame, 39, 60)*(1-fade(frame, 78, 96)) if row == 2 else 0),
                     travel-.012*lean+.065*clear_face, -drop*lean-.078*stepping))
     for name, share in (("Hips", .26), ("Spine", .34), ("Spine1", .26), ("Spine2", .14)):
@@ -377,36 +485,45 @@ def choreograph(pose, hands, row, frame):
     fingers = book_blender.to_3x3() @ V((.40, .40, .82))
     across = book_blender.to_3x3() @ V((.92, -.20, -.40))
     right, left = hands
-    grab = book_blender @ V((.006, (-.001, -.011, -.004)[row], (.042, .020, -.095)[row]))
+    grab = book_blender @ V((-.014, -.036, -.095+.115*fade(frame, 72, 96) if row == 2 else (.042, .020)[row]))
     approach = 1-fade(frame, 19, 30)
     grab += V((.014, -.085, -.014))*approach
     # The leading fingertips stay on the spine through extraction and the
     # upright catch. Only after the left palm carries the book do they move
     # around the free edge to the front cover, ready for the runtime open pose.
-    shift = fade(frame, 108, 132)
-    cover = book_blender @ V((.18, .054, -.088))
-    grab = grab.lerp(cover, shift)
-    grab += (book_blender.to_3x3() @ V((.025, -.035, -.015))) * sin(pi*shift)
-    cover_fingers = book_blender.to_3x3() @ V((.85, .22, -.40))
-    cover_normal = book_blender.to_3x3() @ V((0, 1, 0))
+    shift = fade(frame, 96, 140)
+    cover = book_blender @ V((.045, .0765, -.088))
+    spine_out = book_blender @ V((-.08, -.036, .025))
+    above_spine = book_blender @ V((-.08, .09, .09))
+    if shift < .4:
+        grab = grab.lerp(spine_out, smooth(shift/.4))
+    elif shift < .7:
+        grab = spine_out.lerp(above_spine, smooth((shift-.4)/.3))
+    else:
+        grab = above_spine.lerp(cover, smooth((shift-.7)/.3))
+    flat = fade(frame, 96, 128)
+    cover_fingers = book_blender.to_3x3() @ V((1, 0, 0)).lerp(V((.36, 0, .92)), flat)
+    cover_normal = book_blender.to_3x3() @ V((0, -1, 0))
     cover_across = cover_fingers.cross(cover_normal)
     right_rotation = right.desired(fingers, across).slerp(right.desired(cover_fingers, cover_across), shift)
-    right.reach(grab, right_rotation, fade(frame, 6, 30),
-                .07+.35*fade(frame, 28, GRAB)-.20*shift,
-                V((-.78, .17, -.63)).lerp(V((-.78, -.50, -.35)), fade(frame, 24, 40)*(1-fade(frame, 96, 120))) if row == 2 else V((-.78, .17, -.63)), float(shift))
+    right.reach(grab, right_rotation, fade(frame, 1, 30),
+                .07+.35*fade(frame, 28, GRAB)-.42*shift,
+                V((-.35, .35, -1)), float(shift), 1-shift, thumb=-.4)
 
-    catch = fade(frame, 60, 96)
-    lay_flat = fade(frame, 104 if row == 2 else 96, 128 if row == 2 else 120)
-    left_local = V((.08, .026, -.118)).lerp(V((.12, -.009, -.072)), lay_flat)
+    catch = fade(frame, 48, 96)
+    lay_flat = fade(frame, 96, 120)
+    # Travel around the bottom-cover corner; a diagonal crosses the page block.
+    left_local = V((.035+.155*smooth((lay_flat-.5)/.5),
+                    .052-.0785*smooth(lay_flat/.45)-.009*sin(pi*fade(frame, 96, LAST)),
+                    -.134+.094*smooth((lay_flat-.45)/.55)))
+    left_local.z -= .07*sin(pi*fade(frame, 108, LAST))
     left_position = book_blender @ left_local
     left_position += (book_blender.to_3x3() @ V((-.025, -.08, -.055))) * (1-catch)
-    upright_fingers = V((1, 0, .10))
-    flat_fingers = V((-.75, .20, .55))
-    support_fingers = book_blender.to_3x3() @ upright_fingers.lerp(flat_fingers, lay_flat)
-    support_normal = book_blender.to_3x3() @ V((0, 0, 1)).lerp(V((.10, .995, 0)), lay_flat)
+    support_fingers = V((.36, .93, 0))
+    support_normal = V((0, 0, 1))
     support_across = support_normal.cross(support_fingers)
     left.reach(left_position, left.desired(support_fingers, support_across),
-               catch, .14*catch, V((.72, .12, -.82)), "palm")
+               catch, .04*catch, V((.72, .12, -.82)).lerp(V((.20, .12, -1.4)), fade(frame, 96, 108)*(1-fade(frame, 128, LAST))), "palm", thumb=.024-.5*sin(pi*fade(frame, 96, LAST)))
     # Use the actual runtime closed-cover pose as the endpoint, including its
     # palm/forearm basis, so switching ownership cannot resurrect a released arm.
     handoff = fade(frame, 120, LAST)
@@ -436,12 +553,24 @@ def choreograph(pose, hands, row, frame):
             # Blend axial roll in world space while keeping the solved segment
             # directions. Local quaternion blending can swing an elbow through
             # the opposite half-plane even when both endpoint contacts agree.
+            # Unwrap the axial angle during this offline bake: shortest slerp
+            # alone switches half-turn branches when its endpoint dot crosses zero.
             goals = {}
             for name, child in ((hand.upper, hand.lower), (hand.lower, hand.wrist)):
                 direction = pose.point(child)-pose.point(name)
                 final_direction = pose.handoff.point(child)-pose.handoff.point(name)
                 aligned = final_direction.rotation_difference(direction) @ pose.handoff.rotation(name)
-                goals[name] = pose.rotation(name).slerp(aligned, handoff)
+                current = pose.rotation(name)
+                axis = direction.normalized()
+                delta = aligned @ current.inverted()
+                angle = 2*atan2(V((delta.x, delta.y, delta.z)).dot(axis), delta.w)
+                previous = hand.handoff_turns.get(name, 0)
+                while angle-previous > pi:
+                    angle -= 2*pi
+                while angle-previous < -pi:
+                    angle += 2*pi
+                hand.handoff_turns[name] = angle
+                goals[name] = Q(axis, angle*handoff) @ current
             for name, goal in goals.items():
                 pose.set_rotation(name, goal)
             pose.set_rotation(hand.wrist, rotation)
@@ -563,7 +692,7 @@ def pack_gltf(path, pose, rows):
         accessors.append(accessor)
         return len(accessors)-1
 
-    times = add([i/FPS for i in range(EXPORT_LAST+1)], "SCALAR")
+    times = add([frame/FPS for frame in EXPORT_FRAMES], "SCALAR")
     static_time = add([0], "SCALAR")
     animations = []
     for row, samples in enumerate(rows):
@@ -605,8 +734,8 @@ def sample_export(scene, rig, marker, pose, bind):
         sample["rotation"].extend((rot.x, rot.y, rot.z, rot.w))
         sample["translation"].extend(matrix.translation)
 
-    for frame in range(EXPORT_LAST+1):
-        scene.frame_set(frame)
+    for frame in EXPORT_FRAMES:
+        scene.frame_set(int(frame), subframe=frame % 1)
         bpy.context.view_layer.update()
         world = {name: convert_back @ bone.matrix @ correction[name]
                  for name, bone in pose.bones.items()}
@@ -684,6 +813,7 @@ def main():
             marker.keyframe_insert(data_path="rotation_quaternion", frame=frame)
         style_linear(rig)
         style_linear(marker)
+        correct_support_skin(scene, rig, marker, bones)
         rig_action, marker_action = rig.animation_data.action, marker.animation_data.action
         rig_action.name, marker_action.name = f"Library_Pickup_{row}", f"LibraryBook_{row}"
         rig_action.use_fake_user = marker_action.use_fake_user = True

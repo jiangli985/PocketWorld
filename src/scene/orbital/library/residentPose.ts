@@ -3,6 +3,8 @@ import { PAGE_TURN_AUTHORED } from './pageTurnFrames';
 import type { ResidentRig } from '../ResidentModel';
 import type { LibraryFlow } from './useLibrary';
 import {
+  authoredBookStand,
+  libraryHeldBalance,
   bookCoverGripPose,
   bookGrabLocal,
   bookGrabSide,
@@ -52,6 +54,10 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
   const p = THREE.MathUtils.clamp(flow.progress, 0, 1);
   const t = smooth(p);
   const originX = scene === 'observatory' ? 14 : 0;
+  if (authored && flow.book && ['open', 'reading', 'turn', 'close'].includes(phase)) {
+    const stand = authoredBookStand(scene, flow.book, true), balance = libraryHeldBalance(flow);
+    root.position.set(stand[0], stand[1] - balance.drop, stand[2] + balance.back);
+  }
   rig.mesh.updateWorldMatrix(true, true);
 
   if (!flow.book || ['catalog', 'form', 'recenter', 'shelving'].includes(phase)) {
@@ -155,6 +161,11 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
     return;
   }
 
+  const supportRelax = smooth(book.open / .4);
+  const supportCurl = THREE.MathUtils.lerp(.04, -.12, supportRelax);
+  const supportThumb = THREE.MathUtils.lerp(.024, -.5, supportRelax);
+  const supportPole = (side: 0 | 1) => new THREE.Vector3(side ? .2 : -.2, -1.5, .6)
+    .applyQuaternion(rig.mesh.getWorldQuaternion(new THREE.Quaternion()));
   const leftSupportClosed = contactVec(bookSupportPose(1, 0).position);
   const leftSupportOpen = contactVec(bookSupportPose(1).position);
   const rightSupportOpen = contactVec(bookSupportPose(0).position);
@@ -230,7 +241,8 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
       blend: 1,
       mode: 'palm',
       shoulderWeight: 0.1,
-      fingerCurl: THREE.MathUtils.lerp(0.14, 0.04, settleT),
+      fingerCurl: supportCurl, thumbOppose: supportThumb,
+      poleHint: supportPole(1).lerp(new THREE.Vector3(.72, -.82, -.12).applyQuaternion(rig.mesh.getWorldQuaternion(new THREE.Quaternion())), 1-supportRelax),
     });
 
     // Right hand rides the actual front cover edge, then slips beneath the opened cover as book settles.
@@ -243,7 +255,8 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
         blend: 1,
         mode: 'palm',
         shoulderWeight: 0.15,
-        fingerCurl: 0.22,
+        fingerCurl: 0,
+        thumbOppose: -0.4,
       });
     } else {
       const slip = smooth((p - 0.78) / 0.22);
@@ -254,7 +267,9 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
         blend: 1,
         mode: 'palm',
         shoulderWeight: THREE.MathUtils.lerp(0.15, 0.1, slip),
-        fingerCurl: THREE.MathUtils.lerp(0.22, 0.04, slip),
+        fingerCurl: THREE.MathUtils.lerp(0, supportCurl, slip),
+        thumbOppose: THREE.MathUtils.lerp(-0.4, supportThumb, slip),
+        poleHint: new THREE.Vector3(-.72, -.82, -.12).applyQuaternion(rig.mesh.getWorldQuaternion(new THREE.Quaternion())).lerp(supportPole(0), slip),
       });
     }
     return;
@@ -262,16 +277,21 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
 
   if (phase === 'reading') {
     applyTorsoAndGazeIK(rig, contact(0, 0.05, -0.01), -0.04, 0, 0, 1, dt);
-    reachPalm(rig, rig.arms[0], rightSupportOpen, 0, { quaternion: rightSupportOrientation, blend: 1, mode: 'palm', shoulderWeight: 0.1, fingerCurl: 0.04 });
-    reachPalm(rig, rig.arms[1], leftSupportOpen, 1, { quaternion: leftSupportOrientation, blend: 1, mode: 'palm', shoulderWeight: 0.1, fingerCurl: 0.04 });
+    reachPalm(rig, rig.arms[0], rightSupportOpen, 0, { quaternion: rightSupportOrientation, blend: 1, mode: 'palm', shoulderWeight: 0.1, fingerCurl: supportCurl, thumbOppose: supportThumb, poleHint: supportPole(0) });
+    reachPalm(rig, rig.arms[1], leftSupportOpen, 1, { quaternion: leftSupportOrientation, blend: 1, mode: 'palm', shoulderWeight: 0.1, fingerCurl: supportCurl, thumbOppose: supportThumb, poleHint: supportPole(1) });
     return;
   }
 
   if (phase === 'turn') {
     const hand = turningHandPose(p, flow.direction);
     const side = hand.side;
+    // After releasing the sheet, a small in-plane turn follows the lower stance.
+    // It leaves the page-contact frame, palm normal and both endpoints intact.
+    if (authored) hand.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 0, 1), (side ? -1 : 1) * .23 * Math.sin(Math.PI * smooth((p - PAGE_TURN_AUTHORED.ContactEnd) / .28))));
     const support = (1 - side) as 0 | 1;
     const supportPose = bookSupportPose(support);
+    const activeBlend = smooth((p-.08)/.08) * (1-smooth((p-.86)/.14));
     // A small eye follow keeps the head down and torso quiet while the page passes the spine.
     const gazeTurn = contact(0, 0.05, -0.01).lerp(contactVec(hand.position), PAGE_TURN_AUTHORED.GazeFollow * Math.sin(p * Math.PI));
     applyTorsoAndGazeIK(rig, gazeTurn, -0.04, 0, 0, 1, dt);
@@ -280,7 +300,7 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
       blend: 1,
       mode: 'palm',
       shoulderWeight: 0.1,
-      fingerCurl: 0.04,
+      fingerCurl: supportCurl, thumbOppose: supportThumb, poleHint: supportPole(support),
     });
     reachPalm(rig, rig.arms[side], contactVec(hand.position), side, {
       quaternion: hand.quaternion.premultiply(book.quaternion),
@@ -288,11 +308,11 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
       tipWeight: hand.tipWeight,
       shoulderWeight: hand.shoulderWeight,
       poleHint: new THREE.Vector3(side ? .72 : -.72,
-        THREE.MathUtils.lerp(-.82, PAGE_TURN_AUTHORED.ElbowHeight, Math.sin(Math.PI * p) ** 2),
+        THREE.MathUtils.lerp(-.82, PAGE_TURN_AUTHORED.ElbowHeight + (authored ? .35 : 0), Math.sin(Math.PI * p) ** 2),
         THREE.MathUtils.lerp(-.12, PAGE_TURN_AUTHORED.ElbowForward, Math.sin(Math.PI * p) ** 2))
-        .applyQuaternion(rig.mesh.getWorldQuaternion(new THREE.Quaternion())),
-      fingerCurl: hand.fingerCurl,
-      thumbOppose: hand.thumbOppose,
+        .applyQuaternion(rig.mesh.getWorldQuaternion(new THREE.Quaternion())).lerp(supportPole(side), 1-activeBlend),
+      fingerCurl: THREE.MathUtils.lerp(supportCurl, hand.fingerCurl, activeBlend),
+      thumbOppose: THREE.MathUtils.lerp(supportThumb, hand.thumbOppose, activeBlend),
     });
     return;
   }
@@ -310,7 +330,8 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
       blend: 1,
       mode: 'palm',
       shoulderWeight: 0.1,
-      fingerCurl: THREE.MathUtils.lerp(0.04, 0.14, smooth(p / 0.22)),
+      fingerCurl: supportCurl, thumbOppose: supportThumb,
+      poleHint: supportPole(1).lerp(new THREE.Vector3(.72, -.82, -.12).applyQuaternion(rig.mesh.getWorldQuaternion(new THREE.Quaternion())), 1-supportRelax),
     });
 
     if (p < 0.22) {
@@ -322,7 +343,9 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
         blend: 1,
         mode: 'palm',
         shoulderWeight: THREE.MathUtils.lerp(0.1, 0.15, s),
-        fingerCurl: THREE.MathUtils.lerp(0.04, 0.22, s),
+        fingerCurl: THREE.MathUtils.lerp(supportCurl, 0, s),
+        thumbOppose: THREE.MathUtils.lerp(supportThumb, -0.4, s),
+        poleHint: supportPole(0).lerp(new THREE.Vector3(-.72, -.82, -.12).applyQuaternion(rig.mesh.getWorldQuaternion(new THREE.Quaternion())), s),
       });
     } else {
       reachPalm(rig, rig.arms[0], coverEdgeWorld, 0, {
@@ -330,7 +353,8 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
         blend: 1,
         mode: 'palm',
         shoulderWeight: 0.15,
-        fingerCurl: 0.22,
+        fingerCurl: 0,
+        thumbOppose: -0.4,
       });
     }
     return;
