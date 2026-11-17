@@ -27,7 +27,7 @@ export function paperGeometry(crumpled = false) {
   geometry.computeVertexNormals();
   return { geometry, flat, folded };
 }
-export function pageTexture(page: SchedulePage, bound = false) {
+export function pageTexture(page: SchedulePage, bound = false, side: 'left' | 'right' = 'right') {
   const canvas = document.createElement('canvas');
   canvas.width = 560; canvas.height = 872;
   const ctx = canvas.getContext('2d')!;
@@ -37,7 +37,7 @@ export function pageTexture(page: SchedulePage, bound = false) {
   };
   ctx.fillStyle = bound ? '#f5f0e1' : '#d2c4a8'; ctx.fillRect(0, 0, 560, 872);
   if (!bound) box(16, 16, 528, 840, paper, 26);
-  ctx.fillStyle = '#806b50'; ctx.font = 'bold italic 48px "Segoe Script", cursive'; ctx.textAlign = 'center'; ctx.fillText('Daily Planner', 280, 92);
+  ctx.fillStyle = '#806b50'; ctx.font = 'bold italic 32px "Segoe Script", cursive'; ctx.textAlign = 'right'; ctx.fillText('Daily Planner', 520, 78);
   ctx.textAlign = 'left'; ctx.fillStyle = ink; ctx.font = 'bold 17px "Segoe Print", serif'; ctx.fillText('Date:', 40, 137);
   box(92, 116, 181, 27, oat, 14); ctx.fillStyle = ink; ctx.font = '16px Georgia, serif'; ctx.fillText(page.date, 109, 135);
   const weekday = (new Date(`${page.date}T12:00:00`).getDay() + 6) % 7;
@@ -88,7 +88,7 @@ export function pageTexture(page: SchedulePage, bound = false) {
   }
   if (row < 8) text(line, 297, 610 + row * 24, 210);
   ctx.font = '14px serif'; ctx.fillStyle = '#968671'; ctx.textAlign = 'center'; ctx.fillText(`第 ${page.number} 页`, 280, 830);
-  if (bound) { ctx.font = '25px Georgia, serif'; ctx.fillText('‹', 54, 832); ctx.fillText('›', 507, 832); }
+  if (bound) { ctx.font = '25px Georgia, serif'; ctx.fillText(side === 'left' ? '‹' : '›', side === 'left' ? 54 : 507, 832); }
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }

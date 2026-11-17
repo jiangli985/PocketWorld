@@ -46,10 +46,11 @@ export function ScheduleBoundBook({ world, position, rotation = [0, 0, 0], color
   useEffect(() => {
     if (world.sceneId !== 'habitat') return;
     const book = control.current;
-    const textures = pages.slice(Math.max(0, index - 1), index + 2).map(page => {
-      const texture = pageTexture(page, true), leaf = pages.indexOf(page);
-      book.textures.set(leaf * 2, texture); book.textures.set(leaf * 2 + 1, texture);
-      return texture;
+    // The old left sheet remains visible while the next sheet turns onto it.
+    const textures = pages.slice(Math.max(0, index - 2), index + 2).flatMap(page => {
+      const front = pageTexture(page, true, 'right'), back = pageTexture(page, true, 'left'), leaf = pages.indexOf(page);
+      book.textures.set(leaf * 2, front); book.textures.set(leaf * 2 + 1, back);
+      return [front, back];
     });
     book.revision++;
     return () => { textures.forEach(texture => texture.dispose()); book.textures.clear(); book.revision++; };

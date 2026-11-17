@@ -36,6 +36,14 @@ function mount({ left = false, leaf = 0 } = {}) {
 }
 const valueEvent = value => ({ currentTarget: { value }, target: { value } });
 
+test('each sheet exposes only its outward page-turn button', () => {
+  const right = mount().render(), left = mount({ left: true }).render();
+  assert.equal(right.has('日程上一页'), false);
+  assert.equal(right.has('日程下一页'), true);
+  assert.equal(left.has('左页日程上一页'), true);
+  assert.equal(left.has('左页日程下一页'), false);
+});
+
 test('turned left-page fields follow the back surface and remain upright in printed reading order', () => {
   const { surfacePoint } = mount();
   for (const leaf of [0, 7, 30]) {

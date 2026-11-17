@@ -16,7 +16,8 @@
 .planner-native-field > textarea:not(.planner-native-detail) { font-size: 17px; }
 .planner-native-field textarea::-webkit-scrollbar { display: none; }
 .planner-native-field .planner-native-detail { padding: 7px; border: 1px solid #bda381; background: #f7f1e2; color: #57483e; -webkit-text-fill-color: #57483e; box-shadow: 0 3px 8px #57483e20; }
-.planner-native-nav { display: flex; align-items: center; justify-content: space-between; height: 100%; }
+.planner-native-nav { display: flex; align-items: center; justify-content: flex-start; height: 100%; }
+.planner-native-nav.is-right { justify-content: flex-end; }
 .planner-native-nav button { width: 34px; }
 .schedule-paper-tools { width: 340px; max-width: calc(100vw - 24px); color: #57483e; font: 13px/1.6 'KaiTi', Georgia, serif; }
 .schedule-paper-tools nav { display: flex; align-items: center; justify-content: center; gap: 18px; }

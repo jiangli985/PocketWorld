@@ -71,7 +71,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
     book.current.onTurn = turn;
     book.current.onPaperPointer = (page, u, v, kind, _shift, _delta, pointer) => {
       if (kind !== 'down') return false;
-      if (v > 0.9 && (u < 0.15 || u > 0.85)) { turn(page % 2 ? -1 : 1); return; }
+      if (v > 0.9 && (page % 2 ? u < 0.15 : u > 0.85)) { turn(page % 2 ? -1 : 1); return; }
       if (page !== draftIndex * 2 || !pointer || !pointer.isPrimary || pointer.button !== 0 || !ready || !settled || busy.current || !book.current.ready) return false;
       resetDrag();
       (document.activeElement as HTMLElement)?.blur?.();
