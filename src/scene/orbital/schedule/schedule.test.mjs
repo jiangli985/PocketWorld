@@ -9,8 +9,20 @@ const source = fs.readFileSync(new URL('./schedule.ts', import.meta.url), 'utf8'
 const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const context = { exports: {}, crypto: webcrypto };
 vm.runInNewContext(output, context);
-const { migrateSchedule, openSchedulePage, turnSchedulePage, postSchedulePage, discardSchedulePage, schedulePageError, isScheduleNotebook, flattenSchedule, readScheduleNotebook, SCHEDULE_KEY, MAX_POSTED_SCHEDULES } = context.exports;
+const { migrateSchedule, openSchedulePage, updateSchedulePage, turnSchedulePage, postSchedulePage, discardSchedulePage, schedulePageError, isScheduleNotebook, flattenSchedule, readScheduleNotebook, SCHEDULE_KEY, MAX_POSTED_SCHEDULES } = context.exports;
 const entry = (id, time = '09:00') => ({ id, title: `任务 ${id}`, time, completed: false, content: `正文 ${id}` });
+
+test('editing the turned left sheet updates its queued record without switching or overwriting the right sheet', () => {
+  const first = migrateSchedule([entry('left')]);
+  let state = turnSchedulePage(first, 1);
+  state = updateSchedulePage(state, { ...state.current, notes: '右页备注' });
+  state = updateSchedulePage(state, { ...state.queued[0], notes: '左页备注' });
+  assert.equal(state.current.number, 2);
+  assert.equal(state.current.notes, '右页备注');
+  assert.equal(state.queued[0].id, first.current.id);
+  assert.equal(state.queued[0].notes, '左页备注');
+  assert.equal(turnSchedulePage(state, -1).current.notes, '左页备注');
+});
 
 test('reopening selects the first available sheet and retains later drafts without recreating posted pages', () => {
   let state = migrateSchedule([entry('first')]);

@@ -9,12 +9,19 @@ import { BOOK } from '../journal/bookModel';
 import { useSchedule } from './ScheduleContext';
 import { pageTexture } from './SchedulePaper';
 import { SchedulePageEditor } from './SchedulePageEditor';
-import { openSchedulePage } from './schedule';
+import { openSchedulePage, updateSchedulePage, type SchedulePage } from './schedule';
 
 export function ScheduleBoundBook({ world, position, rotation = [0, 0, 0], color, scale = 1 }: {
   world: WorldModelProps; position: FurnitureVector; rotation?: FurnitureVector; color: string; scale?: number;
 }) {
   const notebook = useSchedule();
+  const latest = useRef(notebook.state);
+  latest.current = notebook.state;
+  const savePage = (page: SchedulePage) => {
+    const next = updateSchedulePage(latest.current, page);
+    latest.current = next;
+    notebook.commit(next, { retainDraftOnError: true });
+  };
   const inactiveBook = useRef(createBookControl());
   const control = world.sceneId === 'habitat' ? notebook.book : inactiveBook;
   const pages = useMemo(() => [notebook.state.current, ...notebook.state.queued].sort((a, b) => a.number - b.number), [notebook.state.current, notebook.state.queued]);
@@ -51,6 +58,6 @@ export function ScheduleBoundBook({ world, position, rotation = [0, 0, 0], color
     <ObjectHandle id="schedule" action="plan" hint="翻开日程 · 安排今天" world={opened ? { ...world, onApproach: () => false } : world}>
       <BoundJournal opened={opened} control={control} reducedMotion={world.reducedMotion} leafCount={leafCount} coverTitle="Daily Planner" coverSubtitle="D A I L Y  P L A N N E R" coverColor={color} coverStyle="daily" />
     </ObjectHandle>
-    {opened && editing && <SchedulePageEditor key={notebook.state.current.id} page={notebook.state.current} book={control} leafCount={leafCount} onChange={page => notebook.commit({ ...notebook.state, current: page }, { retainDraftOnError: true })} onGesture={world.onGesture} previousDisabled={index === 0} nextDisabled={index === pages.length - 1 && pages.length >= 32} />}
+    {opened && editing && pages.slice(Math.max(0, index - 1), index + 1).map(page => <SchedulePageEditor key={page.id} page={page} leaf={pages.indexOf(page)} left={page.id !== notebook.state.current.id} book={control} leafCount={leafCount} onChange={savePage} onGesture={world.onGesture} previousDisabled={index === 0} nextDisabled={index === pages.length - 1 && pages.length >= 32} />)}
   </group>;
 }
