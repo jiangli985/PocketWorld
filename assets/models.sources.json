@@ -80,6 +80,15 @@
       "bytes": 232092,
       "sha256": "bbd25137132498d2140a0b2b24d0a657efea9aa25d741361dbb0999024af8aad",
       "processing": "scripts/export-luna-yawn.py retargets upper-body rotations into Luna rest coordinates. Runtime retains planted neutral pelvis/legs; 54 tracks, 8.333333 seconds, no mesh or textures."
+    },
+    {
+      "file": "resident/luna-library.glb",
+      "source": "PocketWorld-authored Blender pickup motions on the existing user-supplied Luna rig; no new external mesh or texture.",
+      "license": "Original Luna source terms remain unchanged; no separate upstream license declaration supplied.",
+      "used": true,
+      "bytes": 1383148,
+      "sha256": "22218756fd9dbfe2f553ba9d6ae0292e92920f1cb4b5eb6c191342c8a94e3758",
+      "processing": "scripts/bake-luna-library.py builds three shelf-row pickup clips and synchronized book marker tracks. Animation-only GLB, reverse sampling for return. Neutral and closed-book handoff poses from scripts/luna-library-neutral.mjs; 0-180 frames at 30 fps, each of the four right finger pads individually seated on the near cover and opposed thumb on the wrapped spine before extraction, upright support approaches below the bottom edge and is acquired by export124 before transfer132; free reach solves wrist position once, anatomical palm cone and axial-only entry blend; unwrapped bounded forearm twist and matching runtime closed-cover handoff; evaluated Blender skin-support correction at quarter frames over export 132-180. See assets/models/resident/README.md."
     }
   ]
 }

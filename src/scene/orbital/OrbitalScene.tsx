@@ -15,6 +15,7 @@ import { ScheduleSurfaces } from './schedule/ScheduleSurfaces';
 import { OrbitalResidents } from './OrbitalResidents';
 import type { DrawerInteraction } from './drawerInteraction';
 import { shelfOrigin } from './library/catalog';
+import { sideLibraryCamera } from './library/sideCamera';
 import { JOURNAL_PAGE_POSITION } from './journalLayout';
 
 const FOCUS: Record<string, { target: [number, number, number]; offset: [number, number, number] }> = {
@@ -38,11 +39,22 @@ function CameraRig(props: OrbitalSceneProps) {
   const fromTarget = useRef(new THREE.Vector3());
   const destination = useRef(new THREE.Vector3());
   const target = useRef(new THREE.Vector3());
+  const fromLens = useRef(new THREE.Vector2());
+  const toLens = useRef(new THREE.Vector2());
   const moving = useRef(false), cameraProgress = useRef(0), localFlight = useRef(false);
   const currentView = useRef('habitat/');
   const narrow = size.width < 720;
   const homeDirection = useMemo(() => new THREE.Vector3(narrow ? 13 : 11, 9, narrow ? 12 : 14).normalize(), [narrow]);
   const homeDistance = Math.max(19.8, 12 / (2 * Math.tan(THREE.MathUtils.degToRad(17)) * (size.width / size.height) * 0.87));
+  const cameraView = props.library?.cameraView;
+  const sideView = props.focusedObject === 'book-01' && cameraView === 'side';
+  const sideSlot = sideView ? props.library?.view.book?.slotId : undefined;
+  const sideReading = !!sideSlot && ['open', 'reading', 'turn', 'close'].includes(props.library!.view.phase);
+  const setLensOffset = (x: number, y: number) => {
+    if (!(camera instanceof THREE.PerspectiveCamera)) return;
+    if (x || y) camera.setViewOffset(size.width, size.height, x, y, size.width, size.height);
+    else if (camera.view?.enabled) camera.clearViewOffset();
+  };
   useEffect(() => {
     if (!controls.current) return;
     const origin = new THREE.Vector3(...SCENE_ORIGINS[props.sceneId]);
@@ -55,28 +67,35 @@ function CameraRig(props: OrbitalSceneProps) {
   }, [camera, size.width, size.height, homeDistance, homeDirection]);
   useEffect(() => {
     if (!controls.current || props.transition.phase === 'idle') return;
-    const view = `${props.transition.toScene}/${props.focusedObject ?? ''}/${size.width}/${size.height}/${props.library?.cameraView ?? ''}`;
+    const view = `${props.transition.toScene}/${props.focusedObject ?? ''}/${size.width}/${size.height}/${cameraView ?? ''}/${sideSlot ?? ''}/${sideReading}`;
     if (view === currentView.current && props.transition.phase !== 'returning' && props.transition.phase !== 'error') return;
     currentView.current = view;
     fromPosition.current.copy(camera.position);
     fromTarget.current.copy(controls.current.target);
+    const lens = camera instanceof THREE.PerspectiveCamera ? camera.view : null;
+    fromLens.current.set(lens?.enabled ? lens.offsetX : 0, lens?.enabled ? lens.offsetY : 0);
+    toLens.current.set(0, 0);
     const origin = new THREE.Vector3(...SCENE_ORIGINS[props.transition.toScene]);
     const pose = props.focusedObject ? FOCUS[props.focusedObject] : null;
-    if (pose) {
+    if (sideView && camera instanceof THREE.PerspectiveCamera && size.width > 0 && size.height > 0) {
+      const side = sideLibraryCamera(props.transition.toScene, sideSlot, sideReading, size.width, size.height, camera.fov);
+      target.current.fromArray(side.target).add(origin);
+      destination.current.fromArray(side.offset).add(target.current);
+      toLens.current.set(...side.lensOffset);
+    } else if (pose) {
       target.current.copy(origin).add(new THREE.Vector3(...pose.target));
       if (props.focusedObject === 'cabinet') target.current.z += shelfOrigin(props.transition.toScene)[2] - shelfOrigin('habitat')[2];
       if (props.focusedObject === 'book-01' && props.transition.toScene === 'observatory') target.current.z += 1.25;
       const offset = new THREE.Vector3(...pose.offset);
       if (props.focusedObject === 'journal') offset.multiplyScalar(Math.max(1, 0.9 / (size.width / size.height)));
       if (props.focusedObject === 'book-01') {
-        if (props.library?.cameraView === 'close') { offset.set(1.75, .65, .30); target.current.y = 1.08; }
-        if (props.library?.cameraView === 'side') offset.set(2.5, 1.1, -.35);
+        if (cameraView === 'close') { offset.set(1.75, .65, .30); target.current.y = 1.08; }
       }
       if (props.focusedObject?.startsWith('schedule')) {
         offset.multiplyScalar(Math.max(1, 0.62 / (size.width / size.height)));
         if (narrow && props.focusedObject === 'schedule') target.current.x = origin.x + 0.69;
       }
-      if (props.focusedObject === 'book-01' && narrow) { const close = props.library?.cameraView === 'close'; offset.multiplyScalar(close ? 1.9 : 1.6); target.current.y -= close ? .40 : .55; }
+      if (props.focusedObject === 'book-01' && narrow) { const close = cameraView === 'close'; offset.multiplyScalar(close ? 1.9 : 1.6); target.current.y -= close ? .40 : .55; }
       if (props.focusedObject === 'book-01' && !narrow) target.current.x += .45;
       destination.current.copy(target.current).add(offset);
       // Frame the shelf and slot together, including on portrait touchscreens.
@@ -89,9 +108,10 @@ function CameraRig(props: OrbitalSceneProps) {
       camera.position.copy(destination.current);
       controls.current.target.copy(target.current);
       controls.current.update();
+      setLensOffset(toLens.current.x, toLens.current.y);
       moving.current = false;
     } else { moving.current = true; cameraProgress.current = 0; localFlight.current = props.focusedObject === 'book-01'; }
-  }, [props.transition.id, props.focusedObject, props.transition.phase === 'error', size.width, size.height, props.library?.cameraView]);
+  }, [props.transition.id, props.focusedObject, props.transition.phase === 'error', size.width, size.height, cameraView, sideSlot, sideReading]);
   useFrame((_, delta) => {
     if (!controls.current || !moving.current) return;
     const travel = props.transition.action?.kind === 'travel';
@@ -101,6 +121,7 @@ function CameraRig(props: OrbitalSceneProps) {
     if (travel && !props.reducedMotion) camera.position.y += Math.sin(progress * Math.PI) * 3;
     controls.current.target.lerpVectors(fromTarget.current, target.current, progress);
     camera.lookAt(controls.current.target);
+    setLensOffset(THREE.MathUtils.lerp(fromLens.current.x, toLens.current.x, progress), THREE.MathUtils.lerp(fromLens.current.y, toLens.current.y, progress));
     if (progress >= 1) moving.current = false;
   });
   const locked = props.gestureActive || !!props.focusedObject || !['idle', 'active', 'error'].includes(props.transition.phase);
