@@ -87,6 +87,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './library/bookMotion': { residentLibraryTarget: () => [0, 0, 0] },
     './library/catalog': { readingStand: () => [-3.28, 0, -1.92], shelfOrigin: () => [-3.28, 0, -2.79] },
     './scene/orbital/useWorldController': { useWorldController: () => world },
+    './scene/orbital/OrbitalDustPrompt': { DustPrompt: 'DustPrompt' },
     './standingIdle': load('./orbital/standingIdle.ts', { three: THREE, 'three/examples/jsm/loaders/GLTFLoader.js': { GLTFLoader: class {
       loadAsync(url) { return idleLibrary ? Promise.resolve(idleLibrary[url]) : Promise.reject(new Error('Animation offline in controller tests')); }
     } } }),
