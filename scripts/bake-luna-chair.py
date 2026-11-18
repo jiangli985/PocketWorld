@@ -11,17 +11,23 @@ args=parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv els
 OUT=args.output.resolve();SOURCE=args.source.resolve();OUT.mkdir(parents=True,exist_ok=True)
 bpy.ops.wm.open_mainfile(filepath=str(SOURCE))
 s=bpy.context.scene;rig=bpy.data.objects['Luna_ContactCorrected_Baked'];mesh=bpy.data.objects['Luna_Surface'];seat=bpy.data.objects['seat']
-mesh.modifiers.remove(mesh.modifiers['Contact surface interpolation'])
+first,last=map(round,rig.animation_data.action.frame_range)
+frames=range(first,last+1)
+# The editable production mesh already includes the cushion contact tessellation.
+# Older sources used a viewport subdivision modifier in its place.
+preview=mesh.modifiers.get('Contact surface interpolation')
+if preview:mesh.modifiers.remove(preview)
 mesh.modifiers['Full skirt cushion clearance'].offset=.006
 mesh.modifiers['Skirt edge clearance'].offset=.006
 mesh.modifiers['Underhem bridge clearance'].offset=.016
 groups={g.index:g.name for g in mesh.vertex_groups};bone_names=set(rig.pose.bones.keys())
-normals=np.zeros((len(mesh.data.vertices),3));counts=np.zeros(len(mesh.data.vertices))
-for loop,normal in zip(mesh.data.loops,mesh.data.corner_normals):
- normals[loop.vertex_index]+=normal.vector;counts[loop.vertex_index]+=1
-normals/=np.maximum(counts,1)[:,None]
-normal_attribute=mesh.data.attributes.new('source_normal','FLOAT_VECTOR','POINT')
-normal_attribute.data.foreach_set('vector',normals.ravel())
+if not mesh.data.attributes.get('source_normal'):
+ normals=np.zeros((len(mesh.data.vertices),3));counts=np.zeros(len(mesh.data.vertices))
+ for loop,normal in zip(mesh.data.loops,mesh.data.corner_normals):
+  normals[loop.vertex_index]+=normal.vector;counts[loop.vertex_index]+=1
+ normals/=np.maximum(counts,1)[:,None]
+ normal_attribute=mesh.data.attributes.new('source_normal','FLOAT_VECTOR','POINT')
+ normal_attribute.data.foreach_set('vector',normals.ravel())
 def refine(faces=None):
  contact={v.index for v in mesh.data.vertices if any(groups[g.group] in ['Lower contact envelope','Underhem transition','All skirt cushion contact'] and g.weight>.01 for g in v.groups)}
  bm=bmesh.new();bm.from_mesh(mesh.data);bm.verts.ensure_lookup_table();bm.faces.ensure_lookup_table()
@@ -36,22 +42,23 @@ def refine(faces=None):
   for i,value in w[4:]:mesh.vertex_groups[i].remove([v.index])
   for i,value in w[:4]:mesh.vertex_groups[i].add([v.index],value/total,'REPLACE')
  print('REFINED',len(mesh.data.vertices),len(mesh.data.polygons),flush=True)
-refine()
+if preview:refine()
 seat_points=[seat.matrix_world@v.co for v in seat.data.vertices];seat_bvh=BVHTree.FromPolygons(seat_points,[list(p.vertices) for p in seat.data.polygons])
 def overlaps(frames):
  bad=set();rows=[]
- contact={v.index for v in mesh.data.vertices if any((groups[g.group] in ['Lower contact envelope','Underhem transition','All skirt cushion contact'] and g.weight>.01) or ('UpLeg' in groups[g.group] and g.weight>.4) for g in v.groups)}
- faces=[p for p in mesh.data.polygons if any(i in contact for i in p.vertices)];polys=[list(p.vertices) for p in faces]
+ # Include the palms on the armrests, calves at the cushion lip and skirt against the back.
+ polys=[list(p.vertices) for p in mesh.data.polygons]
  for f in frames:
   s.frame_set(f);ev=mesh.evaluated_get(bpy.context.evaluated_depsgraph_get());me=ev.to_mesh();pts=[ev.matrix_world@v.co for v in me.vertices]
-  pairs=BVHTree.FromPolygons(pts,polys).overlap(seat_bvh);bad.update(faces[a].index for a,b in pairs);rows.append([f,len(pairs)])
+  pairs=BVHTree.FromPolygons(pts,polys).overlap(seat_bvh);bad.update(a for a,b in pairs);rows.append([f,len(pairs)])
   ev.to_mesh_clear()
  print('OVERLAPS',len(bad),max(x[1] for x in rows),flush=True);return bad,rows
 for iteration in range(10):
- bad,rows=overlaps(range(1,69,2))
+ bad,rows=overlaps(frames)
  if not bad:break
  refine(bad)
-bad,rows=overlaps(range(1,69))
+else:
+ bad,rows=overlaps(frames)
 (OUT/'runtime-native-contact.json').write_text(json.dumps(rows))
 assert not bad,('unresolved intersections',len(bad))
 bones=list(rig.pose.bones);bi={b.name:i for i,b in enumerate(bones)};n=len(mesh.data.vertices)
@@ -64,7 +71,7 @@ contact_mods=[m for m in mesh.modifiers if m.type=='SHRINKWRAP']
 def evaluated():
  bpy.context.view_layer.update();ev=mesh.evaluated_get(bpy.context.evaluated_depsgraph_get());me=ev.to_mesh();a=np.empty(n*3);me.vertices.foreach_get('co',a);ev.to_mesh_clear();return a.reshape(n,3)
 deltas=[];maxerrors=[]
-for f in range(1,69):
+for f in frames:
  s.frame_set(f)
  for m in contact_mods:m.show_viewport=False
  raw=evaluated()
@@ -77,14 +84,15 @@ D=np.array(deltas);indices=np.where(np.max(np.abs(D),axis=(0,2))>1e-6)[0]
 # glTF axes: Blender x,y,z -> x,z,-y. Quantized 16-bit displacement, independently sampled at 30 Hz.
 cache=D[:,indices,:][:,:,[0,2,1]];cache[:,:,2]*=-1
 quantum=float(np.max(np.abs(cache))/32760);quantized=np.rint(cache/quantum).astype('<i2')
-header=struct.pack('<4sIII f',b'PWSC',1,68,len(indices),quantum)
+header=struct.pack('<4sIII f',b'PWSC',1,len(frames),len(indices),quantum)
 (OUT/'luna-seat-contact.bin').write_bytes(header+quantized.tobytes())
-attr=mesh.data.attributes.new('_CONTACT_ID','FLOAT','POINT');ids=np.full(n,-1,dtype=np.float32);ids[indices]=np.arange(len(indices),dtype=np.float32);attr.data.foreach_set('value',ids)
+attr=mesh.data.attributes.get('_CONTACT_ID') or mesh.data.attributes.new('_CONTACT_ID','FLOAT','POINT');ids=np.full(n,-1,dtype=np.float32);ids[indices]=np.arange(len(indices),dtype=np.float32);attr.data.foreach_set('value',ids)
 normals=np.empty(n*3);mesh.data.attributes['source_normal'].data.foreach_get('vector',normals);normals=normals.reshape(n,3);normals/=np.maximum(np.linalg.norm(normals,axis=1)[:,None],1e-9)
 mesh.data.normals_split_custom_set_from_vertices(normals.tolist())
 np.savez_compressed(OUT/'runtime-reference.npz',rest=rest,delta=D,indices=indices)
-s.frame_start=1;s.frame_end=68;s.frame_set(1);bpy.context.preferences.filepaths.save_version=0
-bpy.ops.wm.save_as_mainfile(filepath=str(OUT/'runtime-native.blend'))
+s.frame_start=first;s.frame_end=last;s.frame_set(last);bpy.context.preferences.filepaths.save_version=0
+bpy.ops.wm.save_as_mainfile(filepath=str(OUT/'runtime-native.blend'),compress=True)
+s.frame_set(first)
 for mod in list(contact_mods):mesh.modifiers.remove(mod)
 rig.parent=None;rig.matrix_world=Matrix.Identity(4)
 bpy.ops.object.select_all(action='DESELECT');rig.select_set(True);mesh.select_set(True);bpy.context.view_layer.objects.active=rig
