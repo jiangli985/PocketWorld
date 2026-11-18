@@ -47,9 +47,19 @@
       "license": null,
       "licensePage": null,
       "used": true,
-      "bytes": 7087592,
-      "sha256": "ccab0f90867ebdfe3293cc4ef2de8a85c8f94c2da95613711c1db7f7193c55ca",
-      "processing": "Tripo GLB supplied by a project member. Packaged byte-for-byte; runtime scales and animates the skinned mesh."
+      "bytes": 4445308,
+      "sha256": "13a2f74be5cde26383049a85aa657013890a2d6fa70466dd67c0fee1b6f15fbf",
+      "processing": "Project member supplied cartoon cat 3d model.glb (Tripo). Fitted with Blender Rigify Cat and exported with web FK joints. See assets/models/cat/README.md."
+    },
+    {
+      "file": "cat/tuanzi-motion.glb",
+      "sourcePage": "https://extensions.blender.org/add-ons/animal-animator/",
+      "license": "GPL-3.0-or-later",
+      "licensePage": "https://www.gnu.org/licenses/gpl-3.0.html",
+      "used": true,
+      "bytes": 195512,
+      "sha256": "152003193c826c855a828e8b609873213ee712bb3ac7ab8fd57c28ed275b22bf",
+      "processing": "Adapted from David-Alfter's Animal Animator 0.1.0 presets. Retargeted paw contact and belly-rest breathing for Tuanzi. Editable animation source and license: assets/models/cat/motion/."
     },
     {
       "file": "resident/luna-bed-v3.glb",
