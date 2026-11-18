@@ -252,6 +252,7 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
     if (p <= 0.78) {
       reachPalm(rig, rig.arms[0], coverEdgeWorld, 0, {
         quaternion: coverQuatWorld,
+        forearmTwistBlend: 1 - smooth(openVal / .5),
         blend: 1,
         mode: 'palm',
         shoulderWeight: 0.15,
@@ -350,6 +351,7 @@ export function applyLibraryPose(rig: ResidentRig, root: THREE.Group, scene: str
     } else {
       reachPalm(rig, rig.arms[0], coverEdgeWorld, 0, {
         quaternion: coverQuatWorld,
+        forearmTwistBlend: 1 - smooth(openVal / .5),
         blend: 1,
         mode: 'palm',
         shoulderWeight: 0.15,

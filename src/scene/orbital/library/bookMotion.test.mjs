@@ -796,7 +796,7 @@ test('closed-book volume clears real torso, hair and forearms; final skin pads m
   const volume = new THREE.Box3(new THREE.Vector3(.001, -.004, -.109), new THREE.Vector3(.239, .063, .109));
   const at = name => asset.getObjectByName('mixamorig' + name).getWorldPosition(new THREE.Vector3());
   const covers = roundedBookSolids(0);
-  const frames = [72, 90, 108, 120, ...Array.from({ length: 193 }, (_, i) => 132 + i / 4)];
+  const frames = [72, 90, 108, 120, ...Array.from({ length: 225 }, (_, i) => 124 + i / 4)];
   try {
     for (let row = 0; row < 3; row++) for (const frame of frames) {
       const book = { ...catalog.freshLibrary().books[0], slotId: `s${row}-1` };
@@ -852,6 +852,9 @@ test('procedural open/close keeps the actual left support skin within 2 mm of mo
     return weight > .5;
   });
   assert.ok(left.length, 'real left-hand skin vertices must be present');
+  rig.applyPose(0, 0);
+  const wrists = ['Right', 'Left'].map(side => asset.getObjectByName('mixamorig' + side + 'Hand'));
+  const wristNeutral = wrists.map(hand => hand.quaternion.clone());
   const progress = Array.from({ length: 41 }, (_, i) => i / 40);
   const surfaces = new Map();
   try {
@@ -863,6 +866,8 @@ test('procedural open/close keeps the actual left support skin within 2 mm of mo
       armPose.resetArms(rig, 1);
       for (let n = 0; n < 30; n++) residentPose.applyLibraryPose(rig, root, 'habitat', coverFlow, 1 / 60, true);
       rig.applyPose(0, 0); play(book, sample); root.updateMatrixWorld(true); mesh.skeleton.update();
+      wrists.forEach((hand, side) => assert.ok(hand.quaternion.angleTo(wristNeutral[side]) < THREE.MathUtils.degToRad(70),
+        `${row}/${phase}@${p}: wrist ${side} retains excessive axial turn at the cover handoff`));
       const pose = bookMotion.bookPose('habitat', book, coverFlow, true);
       libraryMotion.applyLibraryBookMotion(motion, 'habitat', book, sample, pose.position, pose.quaternion);
       const inverse = new THREE.Matrix4().compose(pose.position, pose.quaternion, new THREE.Vector3(1, 1, 1)).invert();
@@ -871,6 +876,162 @@ test('procedural open/close keeps the actual left support skin within 2 mm of mo
       const contact = skinSurfaceContact(vertices, surfaces.get(pose.open));
       assert.ok(contact.distance < .002, `${row}/${phase}@${p}: actual LEFT support skin floats ${contact.distance}m from book triangles`);
       assert.ok(contact.depth < .001, `${row}/${phase}@${p}: actual LEFT support skin enters book by ${contact.depth}m`);
+    }
+  } finally { rig.dispose(); }
+});
+
+
+// Use real deformed palm patches as well as joint centerlines. Quaternion
+// continuity alone accepted the old reach with its fingers pointing at the elbow.
+test('three-row reach and reversed release keep real skin palms aligned with the forearm throughout pickup', async () => {
+  const { gltf: baked } = await load(new URL('../../../../assets/public/models/resident/luna-library.glb', import.meta.url));
+  const motion = libraryMotion.readLibraryMotion(baked.animations);
+  const { rig, root, asset } = makeRig(), play = libraryMotion.createLibraryPlayer(rig.mesh, motion);
+  const mesh = asset.getObjectByName('Luna_Surface');
+  const skinIndex = mesh.geometry.getAttribute('skinIndex'), skinWeight = mesh.geometry.getAttribute('skinWeight');
+  const at = name => asset.getObjectByName('mixamorig' + name).getWorldPosition(new THREE.Vector3());
+  const vertex = v => mesh.getVertexPosition(v, new THREE.Vector3()).applyMatrix4(mesh.matrixWorld);
+  rig.applyPose(0, 0); root.updateMatrixWorld(true); mesh.skeleton.update();
+  const palms = ['Right', 'Left'].map(side => {
+    const wrist = at(side + 'Hand'), middle = at(side + 'HandMiddle1');
+    const across = at(side + 'HandIndex1').sub(at(side + 'HandPinky1'));
+    const normal = middle.clone().sub(wrist).cross(across).normalize().multiplyScalar(side === 'Left' ? 1 : -1);
+    const candidates = Array.from({ length: skinIndex.count }, (_, v) => v).filter(v => {
+      let weight = 0;
+      for (let k = 0; k < 4; k++) if (mesh.skeleton.bones[skinIndex.getComponent(v, k)].name.includes(side + 'Hand')) weight += skinWeight.getComponent(v, k);
+      return weight > .8;
+    });
+    const patches = [wrist.clone().lerp(middle, .18), middle, at(side + 'HandIndex1'), at(side + 'HandPinky1')].map(point => {
+      point.addScaledVector(normal, .008);
+      return candidates.map(v => ({ v, d: vertex(v).distanceToSquared(point) })).sort((a, b) => a.d - b.d).slice(0, 4).map(x => x.v);
+    });
+    assert.ok(patches.every(patch => patch.length === 4), 'actual skinned palm patches must exist');
+    return { side, patches, hand: asset.getObjectByName('mixamorig' + side + 'Hand'),
+      neutral: asset.getObjectByName('mixamorig' + side + 'Hand').quaternion.clone() };
+  });
+  const mean = patch => patch.reduce((sum, v) => sum.add(vertex(v)), new THREE.Vector3()).multiplyScalar(1 / patch.length);
+  try {
+    for (let row = 0; row < 3; row++) for (const fps of [30, 60, 120]) for (const reverse of [false, true]) {
+      const book = { ...catalog.freshLibrary().books[0], slotId: `s${row}-1` };
+      root.position.fromArray(bookMotion.authoredBookStand('habitat', book));
+      for (let i = 0; i <= 6 * fps; i++) {
+        const frame = reverse ? 180 - i * 30 / fps : i * 30 / fps;
+        const phase = frame <= 72 ? (reverse ? 'release' : 'reach') : frame <= 108 ? (reverse ? 'insert' : 'extract') : (reverse ? 'return-carry' : 'carry');
+        const p = frame <= 72 ? frame / 72 : frame <= 108 ? (frame - 72) / 36 : (frame - 108) / 72;
+        const sample = libraryMotion.libraryMotionSample({ book, phase, progress: reverse ? 1 - p : p });
+        armPose.resetArms(rig, 1); rig.applyPose(0, 0); play(book, sample); root.updateMatrixWorld(true); mesh.skeleton.update();
+        for (const { side, patches, hand, neutral } of palms) {
+          const forearm = at(side + 'Hand').sub(at(side + 'ForeArm')).normalize();
+          const fingers = at(side + 'HandMiddle1').sub(at(side + 'Hand')).normalize();
+          const [heel, middle, index, pinky] = patches.map(mean);
+          const skinForward = middle.sub(heel).normalize();
+          const skinNormal = skinForward.clone().cross(index.sub(pinky)).normalize();
+          const label = `${row}/${phase}@${frame.toFixed(2)} ${fps}Hz ${side}`;
+          assert.ok(hand.quaternion.angleTo(neutral) < THREE.MathUtils.degToRad(70), `${label}: static wrist reversal despite forward fingers`);
+          assert.ok(forearm.angleTo(fingers) < THREE.MathUtils.degToRad(65), `${label}: finger axis folds back toward elbow`);
+          assert.ok(forearm.angleTo(skinForward) < THREE.MathUtils.degToRad(65), `${label}: actual skin palm folds back toward elbow`);
+          const flexion = Math.asin(THREE.MathUtils.clamp(skinNormal.dot(forearm), -1, 1));
+          assert.ok(Math.abs(flexion) < THREE.MathUtils.degToRad(65), `${label}: actual palm surface bends excessively at wrist`);
+        }
+      }
+    }
+  } finally { rig.dispose(); }
+});
+
+
+// Exact surface distances reuse the independent runner's edge/face definition.
+// Vertex-to-surface distance alone can miss contact in a triangle interior.
+const contactSurfaceCache = new WeakMap();
+function handTriangleContact(vertices, ids, parts, initialDistance = Infinity) {
+  if (!contactSurfaceCache.has(parts)) contactSurfaceCache.set(parts, parts.map(part => ({ box: part.box,
+    triangles: part.triangles.map(triangle => ({ triangle, box: new THREE.Box3().setFromPoints([triangle.a, triangle.b, triangle.c]) })) })));
+  const boxes = contactSurfaceCache.get(parts);
+  const boxGapSquared = (a, b) => {
+    const x = Math.max(0, a.min.x - b.max.x, b.min.x - a.max.x);
+    const y = Math.max(0, a.min.y - b.max.y, b.min.y - a.max.y);
+    const z = Math.max(0, a.min.z - b.max.z, b.min.z - a.max.z);
+    return x * x + y * y + z * z;
+  };
+  function edgeDistance(a, b, c, d) {
+    const u = b.clone().sub(a), v = d.clone().sub(c), w = a.clone().sub(c);
+    const aa = u.lengthSq(), bb = u.dot(v), cc = v.lengthSq(), dd = u.dot(w), ee = v.dot(w), den = aa * cc - bb * bb;
+    let distance = Infinity;
+    for (const [p, x, y] of [[a, c, d], [b, c, d], [c, a, b], [d, a, b]])
+      distance = Math.min(distance, new THREE.Line3(x, y).closestPointToPoint(p, true, new THREE.Vector3()).distanceTo(p));
+    if (den > 1e-20) {
+      const s = (bb * ee - cc * dd) / den, t = (aa * ee - bb * dd) / den;
+      if (s >= 0 && s <= 1 && t >= 0 && t <= 1) distance = Math.min(distance, a.clone().addScaledVector(u, s).distanceTo(c.clone().addScaledVector(v, t)));
+    }
+    return distance;
+  }
+  function triangleDistance(a, b) {
+    const av = [a.a, a.b, a.c], bv = [b.a, b.b, b.c];
+    let distance = Infinity;
+    for (const [vs, triangle] of [[av, b], [bv, a]]) for (let i = 0; i < 3; i++) {
+      const p = vs[i], q = vs[(i + 1) % 3], delta = q.clone().sub(p);
+      const hit = new THREE.Ray(p, delta.clone().normalize()).intersectTriangle(triangle.a, triangle.b, triangle.c, false, new THREE.Vector3());
+      if (hit && hit.distanceTo(p) <= delta.length() + 1e-9) return 0;
+      distance = Math.min(distance, triangle.closestPointToPoint(p, new THREE.Vector3()).distanceTo(p));
+    }
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) distance = Math.min(distance, edgeDistance(av[i], av[(i + 1) % 3], bv[j], bv[(j + 1) % 3]));
+    return distance;
+  }
+  let distance = initialDistance;
+  for (const indices of ids) {
+    const triangle = new THREE.Triangle(...indices.map(i => vertices[i]));
+    const box = new THREE.Box3().setFromPoints([triangle.a, triangle.b, triangle.c]);
+    for (const part of boxes) if (boxGapSquared(box, part.box) < distance * distance)
+      for (const other of part.triangles) if (boxGapSquared(box, other.box) < distance * distance)
+        distance = Math.min(distance, triangleDistance(triangle, other.triangle));
+  }
+  return distance;
+}
+
+test('catch bearing hand stays on real book triangles before the spine hand transfers, without thumb penetration', async () => {
+  const { gltf: baked } = await load(new URL('../../../../assets/public/models/resident/luna-library.glb', import.meta.url));
+  const motion = libraryMotion.readLibraryMotion(baked.animations);
+  const { rig, root, asset } = makeRig(), play = libraryMotion.createLibraryPlayer(rig.mesh, motion);
+  const mesh = asset.getObjectByName('Luna_Surface'), geometry = mesh.geometry;
+  const skinIndex = geometry.getAttribute('skinIndex'), skinWeight = geometry.getAttribute('skinWeight');
+  const groups = Array.from({ length: skinIndex.count }, (_, v) => {
+    const weights = {};
+    for (let k = 0; k < 4; k++) {
+      const name = mesh.skeleton.bones[skinIndex.getComponent(v, k)].name;
+      const category = /RightHand/.test(name) ? 'rightHand' : /LeftHand/.test(name) ? 'leftHand'
+        : /RightArm|RightForeArm/.test(name) ? 'rightArm' : /LeftArm|LeftForeArm/.test(name) ? 'leftArm'
+          : /Head|Neck/.test(name) ? 'head' : /Spine/.test(name) ? 'torso' : 'other';
+      weights[category] = (weights[category] ?? 0) + skinWeight.getComponent(v, k);
+    }
+    return Object.entries(weights).sort((a, b) => b[1] - a[1])[0][0];
+  });
+  const hands = { leftHand: [], rightHand: [] };
+  const vertexIds = Object.fromEntries(Object.keys(hands).map(side => [side, groups.flatMap((group, v) => group === side ? [v] : [])]));
+  for (let i = 0; i < geometry.index.count; i += 3) {
+    const ids = [0, 1, 2].map(k => geometry.index.getX(i + k));
+    for (const side of Object.keys(hands)) if (ids.some(v => groups[v] === side)) hands[side].push(ids);
+  }
+  const covers = roundedBookSolids(0);
+  try {
+    for (let row = 0; row < 3; row++) for (const reverse of [false, true]) for (let quarter = 124 * 4; quarter <= 134 * 4; quarter++) {
+      const frame = reverse ? 258 - quarter / 4 : quarter / 4;
+      const book = { ...catalog.freshLibrary().books[0], slotId: `s${row}-1` };
+      const phase = reverse ? 'return-carry' : 'carry', progress = reverse ? (180 - frame) / 72 : (frame - 108) / 72;
+      const flow = { book, phase, progress }, sample = libraryMotion.libraryMotionSample(flow);
+      root.position.fromArray(bookMotion.authoredBookStand('habitat', book));
+      armPose.resetArms(rig, 1); rig.applyPose(0, 0); play(book, sample); root.updateMatrixWorld(true); mesh.skeleton.update();
+      const pose = bookMotion.bookPose('habitat', book, flow, true);
+      libraryMotion.applyLibraryBookMotion(motion, 'habitat', book, sample, pose.position, pose.quaternion);
+      const inverse = new THREE.Matrix4().compose(pose.position, pose.quaternion, new THREE.Vector3(1, 1, 1)).invert();
+      const vertices = groups.map((_, v) => mesh.getVertexPosition(v, new THREE.Vector3()).applyMatrix4(mesh.matrixWorld).applyMatrix4(inverse));
+      const contacts = Object.fromEntries(Object.keys(hands).map(side => {
+        const vertexContact = skinSurfaceContact(vertexIds[side].map(v => vertices[v]), covers);
+        return [side, { distance: handTriangleContact(vertices, hands[side], covers, vertexContact.distance), depth: vertexContact.depth }];
+      }));
+      // Left has acquired the load by124; right may change its spine grip only
+      // after132. Require the named bearing hand, not just either proxy anchor.
+      assert.ok(contacts.leftHand.distance < .002, `${row}/${phase}@${frame}: real bearing palm floats ${contacts.leftHand.distance}m`);
+      for (const side of Object.keys(hands)) assert.ok(contacts[side].depth < .001,
+        `${row}/${phase}@${frame}: real ${side} skin penetrates ${contacts[side].depth}m`);
     }
   } finally { rig.dispose(); }
 });

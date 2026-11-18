@@ -126,6 +126,8 @@ export interface ReachPalmOptions {
   poleHint?: THREE.Vector3;
   fingerCurl?: number;
   thumbOppose?: number;
+  /** Exact bounded pronation for the closed-cover grip, faded out before reading. */
+  forearmTwistBlend?: number;
 }
 
 export function reachPalm(
@@ -180,7 +182,12 @@ export function reachPalm(
         // The signed sine is invariant to q/-q and continuous at a half turn.
         // Fade out at the undefined opposite swing instead of selecting a
         // discontinuous atan2 branch; retain the existing 100° upper bound.
-        const share = 1.75 * (2 * dot * delta.w) / (dot * dot + delta.w * delta.w + 0.16);
+        const sineShare = 1.75 * (2 * dot * delta.w) / (dot * dot + delta.w * delta.w + 0.16);
+        // This grip stays on one side of the half-turn branch. The sine share
+        // loses leverage there and leaves >100 degrees in the closed wrist.
+        // Canonicalizing q/-q keeps repeated or reverse seeking deterministic.
+        const request = 2 * Math.atan2(dot * (delta.w < 0 ? -1 : 1), Math.abs(delta.w));
+        const share = THREE.MathUtils.lerp(sineShare, THREE.MathUtils.clamp(request, -1.75, 1.75), opts.forearmTwistBlend ?? 0);
         twistQuat.setFromAxisAngle(forearmAxis, share);
         arm.forearm.parent!.getWorldQuaternion(invParent).invert();
         arm.forearm.getWorldQuaternion(forearmWorldQuat);

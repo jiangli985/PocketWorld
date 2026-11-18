@@ -248,8 +248,10 @@ class Hand:
     def reset(self):
         self.previous_target = None
         self.previous_turn = 0
+        self.previous_request = 0
         self.previous_pole = None
         self.handoff_turns = {}
+        self.approach_turns = {}
 
     def desired(self, fingers, index):
         return basis(TO_RIG.to_3x3() @ fingers, TO_RIG.to_3x3() @ index) @ self.basis.inverted()
@@ -270,7 +272,7 @@ class Hand:
             return
         self.curl(curl, thumb)
         p = self.pose
-        entry = {name: p.orientations[name].copy() for name in (self.upper, self.lower, self.wrist)}
+        entry = {name: p.matrix(name).copy() for name in (self.upper, self.lower, self.wrist)}
         rest_position = p.point(self.wrist)
         rest_rotation = p.rotation(self.wrist)
         if self.previous_target is None:
@@ -285,7 +287,7 @@ class Hand:
         elif isinstance(contact, float):
             tip = rest_rotation.inverted() @ (p.point(self.tip) - rest_position)
             shape = tip.lerp(self.palm_shape, contact)
-        if align_fingers > 0:
+        if align_fingers > 0 and weight >= 1:
             # Keep the palm on the contact plane while its fingers follow the
             # forearm. A fixed shelf frame folded the wrist back during lowering.
             normal = target @ (self.basis @ V((0, 0, self.sign)))
@@ -308,6 +310,11 @@ class Hand:
         ray = (wrist-p.point(self.upper)).normalized()
         preferred = pole.copy()
         preferred -= ray*ray.dot(preferred)
+        if self.previous_pole is None and weight < 1:
+            # Enter from the actual relaxed elbow plane, rather than snapping
+            # straight to the preferred IK pole on the first nonzero sample.
+            rest_bend = entry[self.lower].translation-entry[self.upper].translation
+            self.previous_pole = (rest_bend-ray*ray.dot(rest_bend)).normalized()
         if self.previous_pole is not None:
             previous = (self.previous_pole-ray*ray.dot(self.previous_pole)).normalized()
             if preferred.length < .08:
@@ -320,21 +327,52 @@ class Hand:
         p.limb(self.upper, self.lower, self.wrist, wrist, preferred, keep_bend_plane=True, neutral_frame=True)
         self.previous_pole = preferred.copy()
         forearm_axis = (p.point(self.wrist)-p.point(self.lower)).normalized()
+        # Before touching the book, the wrist follows the actually solved arm.
+        # Full-target alignment plus a second arm blend folded the hand back
+        # during both reach and its reversed empty-hand withdrawal. The free
+        # approach needs no contact-offset iteration (which can oscillate).
+        if weight < 1:
+            forward = target @ (self.basis @ V((1, 0, 0)))
+            angle = forward.angle(forearm_axis)
+            limit = .87
+            if angle > limit:
+                correction = forward.rotation_difference(forearm_axis)
+                target = Q((1, 0, 0, 0)).slerp(correction, (angle-limit)/angle) @ target
+        if weight < 1:
+            # Blend axial roll only. Local arm-quaternion interpolation would
+            # move the solved wrist again and invalidate the palm/forearm cone.
+            goals = {}
+            for name, child in ((self.upper, self.lower), (self.lower, self.wrist)):
+                axis = (p.point(child)-p.point(name)).normalized()
+                old_axis = entry[child].translation-entry[name].translation
+                aligned = old_axis.rotation_difference(axis) @ entry[name].to_quaternion()
+                delta = p.rotation(name) @ aligned.inverted()
+                angle = 2*atan2(V((delta.x, delta.y, delta.z)).dot(axis), delta.w)
+                previous = self.approach_turns.get(name, 0)
+                while angle-previous > pi:
+                    angle -= 2*pi
+                while angle-previous < -pi:
+                    angle += 2*pi
+                self.approach_turns[name] = angle
+                goals[name] = Q(axis, angle*weight) @ aligned
+            for name, goal in goals.items():
+                p.set_rotation(name, goal)
+        # Decompose the requested rotation after approach roll is finalized.
+        # The old bounded sine share tends back to zero near a half turn, leaving
+        # almost the whole pronation in the wrist despite a forward finger axis.
         delta = target @ p.rotation(self.wrist).inverted()
         dot = V((delta.x, delta.y, delta.z)).dot(forearm_axis)
-        # Same signed, bounded forearm share as the runtime. Iteratively changing
-        # the palm cone after solving the wrist lost contact near a straight arm.
-        turn = 1.75 * (2*dot*delta.w) / (dot*dot+delta.w*delta.w+.16)
+        request = 2*atan2(dot, delta.w)
+        while request-self.previous_request > pi:
+            request -= 2*pi
+        while request-self.previous_request < -pi:
+            request += 2*pi
+        self.previous_request = request
+        turn = max(-1.75, min(1.75, request))
         turn = max(self.previous_turn-.10, min(self.previous_turn+.10, turn))
         self.previous_turn = turn
         p.turn(self.lower, forearm_axis, turn)
         p.set_rotation(self.wrist, target)
-        if weight < 1:
-            for name in (self.upper, self.lower):
-                p.orientations[name] = entry[name].slerp(p.orientations[name], weight)
-            p.world.clear()
-            p.set_rotation(self.wrist, target)
-
 
 
 def book_pose(row, frame):
@@ -510,7 +548,10 @@ def choreograph(pose, hands, row, frame):
                 .07+.35*fade(frame, 28, GRAB)-.42*shift,
                 V((-.35, .35, -1)), float(shift), 1-shift, thumb=-.4)
 
-    catch = fade(frame, 48, 96)
+    # Acquire the supporting palm by export124 (author88), before the leading
+    # spine grip is allowed to transfer at132. A nearly-complete free reach still
+    # blends wrist position and constrains palm orientation, losing real contact.
+    catch = fade(frame, 48, 88)
     lay_flat = fade(frame, 96, 120)
     # Travel around the bottom-cover corner; a diagonal crosses the page block.
     left_local = V((.035+.155*smooth((lay_flat-.5)/.5),
@@ -522,8 +563,15 @@ def choreograph(pose, hands, row, frame):
     support_fingers = V((.36, .93, 0))
     support_normal = V((0, 0, 1))
     support_across = support_normal.cross(support_fingers)
+    # Bring the catch elbow slightly inward while the palm stays on the book.
+    # This removes the last axial wrist excess without changing either contact.
+    catch_yield = (.22 if row == 0 else .10)*fade(frame, 72, 96)*(1-fade(frame, 108, 120))
+    # Early load acquisition needs its own elbow clearance while the book is
+    # still higher. Fade it out before the existing tilt/support calibration.
+    acquire_yield = .35*fade(frame, 72, 88)*(1-fade(frame, 88, 96))
+    support_pole = V((.72-catch_yield-acquire_yield, .12, -.82))
     left.reach(left_position, left.desired(support_fingers, support_across),
-               catch, .04*catch, V((.72, .12, -.82)).lerp(V((.20, .12, -1.4)), fade(frame, 96, 108)*(1-fade(frame, 128, LAST))), "palm", thumb=.024-.5*sin(pi*fade(frame, 96, LAST)))
+               catch, .04*catch, support_pole.lerp(V((.20, .12, -1.4)), fade(frame, 96, 108)*(1-fade(frame, 128, LAST))), "palm", thumb=.024-.5*sin(pi*fade(frame, 96, LAST)))
     # Use the actual runtime closed-cover pose as the endpoint, including its
     # palm/forearm basis, so switching ownership cannot resurrect a released arm.
     handoff = fade(frame, 120, LAST)
@@ -826,7 +874,7 @@ def main():
         setup_stage(marker, args.row)
         cameras(scene)
         for name, frame in (("Looking", 6), ("Reach", 19), ("Grip", GRAB), ("Spine clear", CLEAR),
-                            ("Supporting hand", 96), ("Lower and tilt", 112), ("Cover grip ready", LAST)):
+                            ("Load secured", 88), ("Lower and tilt", 112), ("Cover grip ready", LAST)):
             scene.timeline_markers.new(name, frame=round(timeline(frame)))
         scene.frame_set(0)
         bpy.ops.file.pack_all()
