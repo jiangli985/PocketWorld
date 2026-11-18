@@ -17,9 +17,6 @@ frames=range(first,last+1)
 # Older sources used a viewport subdivision modifier in its place.
 preview=mesh.modifiers.get('Contact surface interpolation')
 if preview:mesh.modifiers.remove(preview)
-mesh.modifiers['Full skirt cushion clearance'].offset=.006
-mesh.modifiers['Skirt edge clearance'].offset=.006
-mesh.modifiers['Underhem bridge clearance'].offset=.016
 groups={g.index:g.name for g in mesh.vertex_groups};bone_names=set(rig.pose.bones.keys())
 if not mesh.data.attributes.get('source_normal'):
  normals=np.zeros((len(mesh.data.vertices),3));counts=np.zeros(len(mesh.data.vertices))

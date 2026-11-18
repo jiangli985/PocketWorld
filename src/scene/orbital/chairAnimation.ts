@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CHAIR_CLIP_ORIGIN, CHAIR_SIT_SECONDS } from './chairMotion';
+import { CHAIR_CLIP_ORIGIN, CHAIR_FPS, CHAIR_SIT_FRAMES, CHAIR_SIT_SECONDS } from './chairMotion';
 import { RESIDENT_SCALE } from './residentRig';
 
 export interface SeatContactCache { frames: number; count: number; quantum: number; values: Int16Array }
@@ -8,7 +8,7 @@ export function readSeatContactCache(buffer: ArrayBuffer): SeatContactCache {
   if (buffer.byteLength < 20 || header.getUint32(0, true) !== 0x43535750 || header.getUint32(4, true) !== 1)
     throw new Error('Invalid Luna seat contact cache');
   const frames = header.getUint32(8, true), count = header.getUint32(12, true), quantum = header.getFloat32(16, true);
-  if (frames !== 68 || !count || !Number.isFinite(quantum) || quantum <= 0 || buffer.byteLength !== 20 + frames * count * 6)
+  if (frames !== CHAIR_SIT_FRAMES || !count || !Number.isFinite(quantum) || quantum <= 0 || buffer.byteLength !== 20 + frames * count * 6)
     throw new Error('Incomplete Luna seat contact cache');
   return { frames, count, quantum, values: new Int16Array(buffer, 20) };
 }
@@ -46,7 +46,7 @@ export function createChairAnimation(asset: THREE.Object3D, clip: THREE.Animatio
   function deform(time: number, weight: number) {
     if (time === lastTime && weight === lastWeight) return;
     lastTime = time; lastWeight = weight;
-    const f = THREE.MathUtils.clamp(time * 30, 0, cache.frames - 1), a = Math.floor(f), b = Math.min(a + 1, cache.frames - 1), t = f - a;
+    const f = THREE.MathUtils.clamp(time * CHAIR_FPS, 0, cache.frames - 1), a = Math.floor(f), b = Math.min(a + 1, cache.frames - 1), t = f - a;
     const stride = cache.count * 3;
     for (const { rest, position, mapping } of surfaces) {
       for (const [vertex, id] of mapping) for (let axis = 0; axis < 3; axis++) {
