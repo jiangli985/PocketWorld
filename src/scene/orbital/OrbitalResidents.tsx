@@ -423,7 +423,7 @@ export function OrbitalResidents(props: ResidentsProps) {
           if (target) { cancelApproach(); act(target.id, target.kind); }
         }
       } else {
-        const scooting = p.sceneId === 'habitat' && state.current.posture === 'chair' && !state.current.exiting && chairMotion.current.time === CHAIR_SIT_SECONDS;
+        const scooting = p.sceneId === 'habitat' && state.current.posture === 'chair' && !state.current.exiting && chairMotion.current.hasSeated;
         if (!scooting) stand();
         if (state.current.external) { state.current.external = false; p.onArrive(); }
         keys.current.add(event.code);
@@ -532,7 +532,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (s.posture !== 'standing') beginExit();
       else if (wanted !== 'standing') s.path = route([root.position.x, root.position.z], entry, obstacles(room, pose));
     }
-    const scooting = p.sceneId === 'habitat' && s.posture === 'chair' && !s.exiting && s.blend >= 1;
+    const scooting = p.sceneId === 'habitat' && s.posture === 'chair' && !s.exiting && chairMotion.current.hasSeated;
     if (!scooting) {
       s.kick = 0; s.planted = false; s.idle = Infinity;
       s.perch = THREE.MathUtils.damp(s.perch, 0, 7, dt);
