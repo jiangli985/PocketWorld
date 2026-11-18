@@ -2,13 +2,13 @@
 
 ## 转椅坐姿
 
-`Luna-Sit-ContactFixed.blend` 基于用户提供的接触修正版，调整了落座深度与小腿轨迹，保留 115 骨骼、坐下动作、真实转椅和接触修形修改器。源文件 SHA-256：`a9b60ea23722f85dcf3d9bdb419eca4ed7bbafb8028778442f85e0aaf09af3ab`。角色与 Mixamo 行走素材沿用既有项目输入，未收到独立许可声明；不将其标记为 CC0。
+`Luna-Sit-ContactFixed.blend` 基于用户提供的接触修正版，加入撑扶手、后挪和收手的关键帧，保留 115 骨骼、真实转椅和接触修形修改器。第 53 帧是脚掌着地的前缘坐姿；第 65–85 帧支撑、抬髋后挪并落稳；第 98 帧双手已回到膝上。前裙随大腿抬起，后裙收进坐垫与靠背之间。源文件 SHA-256 为 `447ed4dd10b66f984417c8e1278cdd4a0f31eb4d2fb8aebb6efa01c13f9fdb51`。角色与 Mixamo 行走素材沿用既有项目输入，未收到独立许可声明；不将其标记为 CC0。
 
 ### 运行资源
 
-- `assets/public/models/resident/luna-walk-room.glb`：保留 `Walk_Grounded_Loop`，加入 `ChairSit_Contact`（第 1–68 帧，30 fps，时间归零后 67/30 秒）。31,140 个三角形，10,267,804 bytes。
-- 同目录 `luna-seat-contact.bin`：68 帧、2,716 个局部顶点的蒙皮前修形，1,108,148 bytes。不能只替换 GLB 而遗漏该文件；普通 glTF 查看器只显示骨骼动作，不会自动应用此缓存。
-- 相对原运行模型合计增加 3,097,320 bytes；源 `.blend` 不在 `assets/public/`，不进入网页构建。
+- `assets/public/models/resident/luna-walk-room.glb`：保留 `Walk_Grounded_Loop`，加入 `ChairSit_Contact`（第 1–98 帧，30 fps，时间归零后 97/30 秒）。31,140 个三角形，10,406,152 bytes。
+- 同目录 `luna-seat-contact.bin`：98 帧、3,260 个局部顶点的蒙皮前修形，1,916,900 bytes。不能只替换 GLB 而遗漏该文件；普通 glTF 查看器只显示骨骼动作，不会自动应用此缓存。
+- GLB 与接触缓存合计 12.32 MB；源 `.blend` 不在 `assets/public/`，不进入网页构建。
 
 原始 4096 × 4096 底色 JPEG 来自用户提供的 Tripo GLB，在 Git 提交 `2e1ff72` 的 `art/resident/animated-transfer/walk-repair/luna-walk-repaired.glb` 中也有相同副本。法线与粗糙度／金属度图保留 2048 × 2048。当前材质将法线强度设为 0.18、金属系数设为 0，并复用底色作为 0.55 强度的自发光，用来减轻室内近景的发际线和眼周暗块。
 
@@ -21,15 +21,15 @@ blender --background --python scripts/bake-luna-chair.py -- --output <外部目�
 python scripts/pack-luna-chair.py --output <外部目录>
 ```
 
-第二步默认从 Git 基线 `6f6df88` 读取原 Walk 与压缩贴图，也可通过 `--original <原始GLB>` 指定输入。动画重建后，把输出 `luna-room-contact.glb` 与 `luna-seat-contact.bin` 作为运行资源。打包脚本沿用 2K 基线材质，发布前需按上段的来源与参数恢复 4K 底色和当前材质。
+第二步默认从项目当前的 `luna-walk-room.glb` 复用 Walk、压缩贴图和材质。也可通过 `--original <角色GLB>` 指定来源。将输出的 `luna-room-contact.glb` 更名为 `luna-walk-room.glb`，与同一次导出的 `luna-seat-contact.bin` 一起更新到运行目录。
 
-制作脚本仅细化裙摆接触区，先限制为四骨骼权重，再从 Blender 评估网格反解蒙皮前位移；保留原平滑法线。转椅按场景尺寸归一化并降低 0.25 m，人物比例 1.43。升降通过人物与座椅共同平移实现，不伸长腿骨。
+制作源保留细化过的裙摆、四骨骼权重和可编辑的接触修改器。制作脚本逐帧检查角色与椅子上半部的相交，并从 Blender 评估网格反解蒙皮前位移；保留原平滑法线。转椅按场景尺寸归一化并降低 0.25 m，人物比例 1.43。升降通过人物与座椅共同平移实现，不伸长腿骨。
 
-缓存为小端：20 bytes 头（`PWSC`、uint32 版本 1、uint32 帧数、uint32 顶点数、float32 量化步长），随后为帧优先的 int16 XYZ 位移。GLB 的 `_CONTACT_ID` 对应缓存行，-1 表示不修形；轴采用 glTF 的 X/Y/Z。量化分量误差小于 1.2 微米（世界坐标）。骨骼采样时间与缓存第零帧必须对齐。
+缓存为小端：20 bytes 头（`PWSC`、uint32 版本 1、uint32 帧数、uint32 顶点数、float32 量化步长），随后为帧优先的 int16 XYZ 位移。GLB 的 `_CONTACT_ID` 对应缓存行，-1 表示不修形；轴采用 glTF 的 X/Y/Z。量化分量误差上界约为 0.99 微米（世界坐标）。骨骼采样时间与缓存第零帧必须对齐。
 
 ### 验证边界
 
-制作脚本检查原生 68 帧的接触面；运行时单测检查时间原点、绑定、独立实例、恢复、骨长与有限坐标。网页动作和导出后网格还需单独验收，不能用原生检查替代浏览器检查。验证结果及截图放在任务 PR，临时模型、报告和录屏不提交。
+制作脚本检查原生 98 帧的接触面；运行时单测检查时间原点、绑定、独立实例、恢复、骨长与有限坐标。网页动作和导出后网格还需单独验收，不能用原生检查替代浏览器检查。验证结果及截图放在任务 PR，临时模型、报告和录屏不提交。
 
 ## 上床三版
 

@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 const module = { exports: {} };
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL('./chairMotion.ts', import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,module);
-const {createChairMotion,stepChairMotion,CHAIR_SIT_SECONDS,CHAIR_REST_LIFT,CHAIR_LIFT_SECONDS}=module.exports;
+const {createChairMotion,stepChairMotion,CHAIR_SIT_SECONDS,CHAIR_PERCH_SECONDS,CHAIR_REST_LIFT,CHAIR_LIFT_SECONDS}=module.exports;
 function advance(s, seconds, {exiting=false,moving=false,reduced=false,fps=60}={}) {
   let result;
   for(let i=0;i<Math.ceil(seconds*fps);i++)result=stepChairMotion(s,1/fps,exiting,moving,reduced);
@@ -28,10 +28,12 @@ test('movement and stand requests cannot move or reverse the sit until the lift 
  const first=stepChairMotion(s,.02,false,true,false);
  assert.equal(first.canMove,false);assert(s.height>0&&s.height<CHAIR_REST_LIFT);
  advance(s,1,{moving:true});assert(s.height>0);assert.equal(s.time,CHAIR_SIT_SECONDS);
- const low=advance(s,.6,{moving:true});assert.equal(s.height,0);assert.equal(low.canMove,true);
- advance(s,3);assert.equal(s.height,CHAIR_REST_LIFT);
+ const low=advance(s,.6,{moving:true});assert.equal(s.height,0);assert.equal(low.canMove,false);
+ assert(s.time<CHAIR_SIT_SECONDS&&s.time>CHAIR_PERCH_SECONDS);
+ const planted=advance(s,1,{moving:true});assert.equal(planted.canMove,true);assert.equal(s.time,CHAIR_PERCH_SECONDS);
+ advance(s,4);assert.equal(s.height,CHAIR_REST_LIFT);
  advance(s,1,{exiting:true});assert.equal(s.time,CHAIR_SIT_SECONDS);assert(s.height>0);
- assert(advance(s,4,{exiting:true}).done);assert.equal(s.height,0);assert.equal(s.align,0);
+ assert(advance(s,5,{exiting:true}).done);assert.equal(s.height,0);assert.equal(s.align,0);
 });
 test('reversing a rise or cancelling during entry preserves position and always releases the chair',()=>{
  for(const seconds of [.2,.9,2,3.2,4]) {
@@ -50,4 +52,25 @@ test('reduced motion and large resume deltas keep ordering and finite state',()=
  stepChairMotion(s,60,true,true,false);assert(s.height>0);assert.equal(s.time,CHAIR_SIT_SECONDS);
  assert(advance(s,3,{exiting:true,reduced:true}).done);
  for(const value of Object.values(s))if(typeof value==='number')assert(Number.isFinite(value));
+});
+
+test('steering changes direction mid-scoot without jumping ahead or leaving the chair',()=>{
+ for(const fps of [30,60,120]){
+  const s=createChairMotion();advance(s,6,{fps});
+  advance(s,1.9,{fps,moving:true});
+  assert.equal(s.phase,'perch');assert(s.time>CHAIR_PERCH_SECONDS);
+  advance(s,.95,{fps});assert.equal(s.phase,'sit');
+  const before=s.time;
+  const result=stepChairMotion(s,1/fps,false,true,false);
+  assert.equal(result.canMove,false);assert(s.hasSeated&&s.time<before);
+  assert(before-s.time<=1.51/fps);
+  advance(s,1.2,{fps,moving:true});
+  assert.equal(s.time,CHAIR_PERCH_SECONDS);assert.equal(s.height,0);
+  advance(s,1.15,{fps});
+  assert(s.time>CHAIR_PERCH_SECONDS&&s.time<CHAIR_SIT_SECONDS);
+  const exitTime=s.time;
+  stepChairMotion(s,1/fps,true,true,false);
+  assert(s.time<exitTime&&exitTime-s.time<=1.01/fps);
+  assert(advance(s,5,{fps,exiting:true}).done);
+ }
 });

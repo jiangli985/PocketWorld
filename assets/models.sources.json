@@ -25,20 +25,20 @@
     },
     {
       "file": "resident/luna-walk-room.glb",
-      "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the deeper seat adjustment; Walk and 2K data maps from repository commit 6f6df88; original 4K base color from the user-supplied Tripo GLB, also preserved in commit 2e1ff72.",
+      "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the arm-supported scoot from the cushion edge to the resting pose; Walk and 2K data maps from repository commit 6f6df88; original 4K base color from the user-supplied Tripo GLB, also preserved in commit 2e1ff72.",
       "license": "User-supplied; no separate license declaration supplied.",
       "used": true,
-      "bytes": 10267804,
-      "sha256": "5a4acb8d189b027a3b370cd089c8e9da20b1f42a685610579fb3ae9542b0ca4f",
-      "processing": "Original base-color JPEG copied into the existing runtime model. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. See assets/models/resident/README.md."
+      "bytes": 10406152,
+      "sha256": "dcd8a06b19abb208908cecc02f3b9503178bc426e08759f9dc8181769aed2347",
+      "processing": "The seated clip and detailed contact mesh are baked from Blender. The walk channels and existing compressed textures are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. See assets/models/resident/README.md."
     },
     {
       "file": "resident/luna-seat-contact.bin",
-      "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the deeper seat adjustment; original Walk/textures from repository commit 6f6df88.",
+      "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the arm-supported scoot from the cushion edge to the resting pose; original Walk/textures from repository commit 6f6df88.",
       "license": "User-supplied; no separate license declaration supplied.",
       "used": true,
-      "bytes": 1108148,
-      "sha256": "1f5ce9bd2f1301ef62da7ae826504a6c4bfed5472d6876ee73e570c7a1925c6e",
+      "bytes": 1916900,
+      "sha256": "13a49d98dc0b01a3fba2455243ca9bc5798108cd6baaf9f040e73e2075e2a026",
       "processing": "See assets/models/resident/README.md and scripts/bake-luna-chair.py + scripts/pack-luna-chair.py."
     },
     {
