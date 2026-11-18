@@ -131,30 +131,44 @@ function CameraRig(props: OrbitalSceneProps) {
     target={[0, 1.05, 0]} />;
 }
 const SUN_DAY_COLOR = new THREE.Color('#fff2d9');
-const SUN_LIMB_COLOR = new THREE.Color('#ff9a52');
+const SUN_LIMB_COLOR = new THREE.Color('#ff8e47');
 const SKY_DAY_COLOR = new THREE.Color('#f1e7d9');
-const SKY_SHADOW_COLOR = new THREE.Color('#9eaed4');
+const SKY_DUSK_COLOR = new THREE.Color('#e8a87c');
+const SKY_SHADOW_COLOR = new THREE.Color('#95aad6');
+const GROUND_DAY_COLOR = new THREE.Color('#3b4145');
+const GROUND_DUSK_COLOR = new THREE.Color('#463733');
+const GROUND_SHADOW_COLOR = new THREE.Color('#283040');
+const EARTHSHINE_DAY_COLOR = new THREE.Color('#9ec5f0');
+const EARTHSHINE_DUSK_COLOR = new THREE.Color('#f09d6b');
+const EARTHSHINE_NIGHT_COLOR = new THREE.Color('#6b96d6');
 const SUN_INTENSITY = 2.3;
 
 function OrbitalLighting({ objects, sun }: Pick<WorldSceneProps, 'objects'> & { sun: SunState }) {
   const lamp = useRef<THREE.PointLight>(null);
   const ambient = useRef<THREE.HemisphereLight>(null);
   const key = useRef<THREE.DirectionalLight>(null);
+  const earthshine = useRef<THREE.DirectionalLight>(null);
   const scene = useThree(state => state.scene);
   const sunTarget = useMemo(() => new THREE.Object3D(), []);
   useEffect(() => () => { scene.environmentIntensity = 1; }, [scene]);
   useFrame((_, delta) => {
     const sleeping = objects.bed?.active;
     const daylight = sun.daylight.value;
+    const warmth = sun.warmth;
     if (lamp.current) lamp.current.intensity = THREE.MathUtils.damp(lamp.current.intensity, objects.lamp?.active === false ? 0 : sleeping ? 1 : 4, 5, delta);
     if (ambient.current) {
-      ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, sleeping ? 0.18 : 0.22 + 0.26 * daylight, 3, delta);
-      ambient.current.color.lerpColors(SKY_SHADOW_COLOR, SKY_DAY_COLOR, daylight);
+      ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, sleeping ? 0.18 : 0.22 + 0.26 * daylight + 0.04 * warmth, 3, delta);
+      ambient.current.color.lerpColors(SKY_SHADOW_COLOR, SKY_DAY_COLOR, daylight).lerp(SKY_DUSK_COLOR, warmth * 0.42);
+      ambient.current.groundColor.lerpColors(GROUND_SHADOW_COLOR, GROUND_DAY_COLOR, daylight).lerp(GROUND_DUSK_COLOR, warmth * 0.35);
     }
     if (key.current) {
       key.current.position.copy(sun.light).multiplyScalar(18);
       key.current.intensity = SUN_INTENSITY * daylight;
-      key.current.color.lerpColors(SUN_DAY_COLOR, SUN_LIMB_COLOR, sun.warmth * 0.85);
+      key.current.color.lerpColors(SUN_DAY_COLOR, SUN_LIMB_COLOR, warmth * 0.88);
+    }
+    if (earthshine.current) {
+      earthshine.current.intensity = sleeping ? 0.14 : 0.24 + 0.22 * (1 - daylight) + 0.14 * warmth;
+      earthshine.current.color.lerpColors(EARTHSHINE_NIGHT_COLOR, EARTHSHINE_DAY_COLOR, daylight).lerp(EARTHSHINE_DUSK_COLOR, warmth * 0.55);
     }
     scene.environmentIntensity = 0.45 + 0.55 * daylight;
   });
@@ -164,6 +178,7 @@ function OrbitalLighting({ objects, sun }: Pick<WorldSceneProps, 'objects'> & { 
     <directionalLight ref={key} target={sunTarget} color="#fff2d9" intensity={SUN_INTENSITY} position={sun.light.toArray().map(n => n * 18) as [number, number, number]} castShadow
       shadow-mapSize={[2048, 2048]} shadow-camera-left={-8} shadow-camera-right={8} shadow-camera-top={8} shadow-camera-bottom={-8}
       shadow-camera-near={0.1} shadow-camera-far={60} shadow-normalBias={0.035} shadow-bias={-0.0001} />
+    <directionalLight ref={earthshine} target={sunTarget} color="#9ec5f0" intensity={0.28} position={[-11, 4.5, -10]} />
     <pointLight ref={lamp} position={[-1, 2.5, -1]} color="#ffca8b" intensity={4} distance={8} decay={2} />
     <pointLight position={[2.3, 2.0, 0.5]} color="#c7dded" intensity={2.2} distance={7} decay={2} />
   </>;

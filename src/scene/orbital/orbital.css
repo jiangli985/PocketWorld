@@ -13,26 +13,14 @@
 .orbital-emblem { display: block; width: 22px; height: 22px; border: 1px solid #e5dcc4; border-radius: 50%; position: relative; }
 .orbital-emblem::after { content: ''; position: absolute; inset: 6px -5px; border: 1px solid #bca783; border-radius: 50%; transform: rotate(-35deg); }
 .orbital-edition { margin: 4px 0 0 27px; font-size: 8px; letter-spacing: 2.4px; color: #8c969b; }
-.orbital-coordinate { margin-left: auto; text-align: right; display: grid; gap: 5px; letter-spacing: 2px; }
-.orbital-coordinate span { font-size: 8px; color: #8a9a9d; }
-.orbital-coordinate strong { font-size: 10px; font-weight: 500; }
-.orbital-coordinate i { font-size: 9px; font-style: normal; color: #8a9a9d; letter-spacing: 1px; }
-.orbital-caption { position: absolute; top: 126px; left: 43px; pointer-events: none; z-index: 3; transition: opacity .45s; }
-.orbital-caption h1 { margin: 17px 0 0; font-size: clamp(22px, 2.3vw, 35px); font-family: 'Songti SC', 'Noto Serif SC', Georgia, serif; font-weight: 400; line-height: 1.65; letter-spacing: 3px; white-space: pre-line; text-shadow: 0 2px 20px #0009; }
-.orbital-footer { position: absolute; bottom: 26px; left: 42px; right: 42px; z-index: 4; display: flex; align-items: end; justify-content: space-between; pointer-events: none; gap: 20px; }
-.orbital-location { display: flex; align-items: center; gap: 10px; white-space: nowrap; font-size: 10px; letter-spacing: 1px; }
-.orbital-location > span:last-child { color: #7f9197; font-size: 8px; letter-spacing: 1.6px; }
-.orbital-live-dot { width: 4px; height: 4px; border-radius: 50%; background: #b2c0a7; box-shadow: 0 0 10px #b2c0a733; }
-.orbital-location-rule { width: 22px; height: 1px; background: #80909255; }
-.orbital-status { position: absolute; bottom: 36px; width: 100%; text-align: center; font-size: 11px; color: #d9d4c6; letter-spacing: 1.5px; text-shadow: 0 2px 8px #000; }
-.orbital-guide { margin: 0; display: grid; gap: 6px; text-align: right; font-size: 9px; color: #a3acb0; letter-spacing: 1px; }
-.orbital-guide span { font-size: 8px; color: #738087; }
-.orbital-now-playing { position: absolute; left: 42px; bottom: 95px; pointer-events: none; display: flex; align-items: center; gap: 12px; }
+.orbital-dust-prompt { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 4; display: flex; justify-content: center; width: min(1040px, calc(100vw - 24px)); }
+.orbital-dust-canvas { display: block; pointer-events: none; }
+.orbital-app:has(.library-surface) .orbital-dust-prompt { display: none; }
+.orbital-now-playing { position: absolute; left: 42px; bottom: 36px; pointer-events: none; display: flex; align-items: center; gap: 12px; }
 .orbital-now-playing small { font-size: 8px; letter-spacing: 2px; color: #9b9d8b; }
 .orbital-now-playing p { margin: 5px 0 0; font-size: 11px; letter-spacing: 1px; }
 .orbital-record-dot { height: 28px; width: 28px; border-radius: 50%; border: 1px solid #b4aa8b99; background: repeating-radial-gradient(#111a20 0 2px, #57605b 3px, #111a20 4px); position: relative; }
 .orbital-record-dot::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #bf9a65; position: absolute; top: 10px; left: 10px; }
-.is-focused .orbital-caption { opacity: 0; }
 .is-focused .orbital-edition { opacity: .3; }
 .orbital-drop-message { position: absolute; inset: 0; background: #08141dce; backdrop-filter: blur(8px); display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; z-index: 50; }
 .orbital-drop-message p { font-family: 'Songti SC', Georgia, serif; font-size: 25px; letter-spacing: 3px; }
@@ -71,25 +59,18 @@
 .world-book-form input { box-sizing: border-box; width: 100%; border: 0; border-bottom: 1px solid #d0c3a4; background: transparent; padding: 6px 0; color: #505247; font: 15px 'Songti SC', serif; }
 .world-book-form textarea { min-height: 90px; }
 .world-book-form button { align-self: flex-end; }
+@media (max-width: 860px) {
+  .orbital-dust-prompt { top: max(62px, calc(env(safe-area-inset-top) + 44px)); }
+}
 @media (max-width: 720px) {
   .orbital-header { top: max(23px, env(safe-area-inset-top)); left: 22px; right: 22px; }
   .orbital-wordmark { font-size: 22px; gap: 10px; }
   .orbital-edition { display: none; }
-  .orbital-coordinate { gap: 4px; letter-spacing: 1px; }
-  .orbital-coordinate i { display: none; }
-  .orbital-coordinate strong { font-size: 8px; }
-  .orbital-caption { top: 102px; left: 24px; }
-  .orbital-caption h1 { font-size: 24px; margin-top: 12px; }
-  .orbital-footer { bottom: max(23px, env(safe-area-inset-bottom)); left: 23px; right: 23px; display: grid; gap: 11px; }
-  .orbital-status { bottom: 74px; font-size: 10px; text-align: left; line-height: 1.8; width: calc(100vw - 46px); }
-  .orbital-location { font-size: 9px; }
-  .orbital-guide { text-align: left; font-size: 9px; }
-  .orbital-guide span { display: none; }
-  .orbital-now-playing { left: 24px; bottom: 151px; }
+  .orbital-dust-prompt { top: max(54px, calc(env(safe-area-inset-top) + 34px)); }
+  .orbital-now-playing { left: 24px; bottom: max(28px, env(safe-area-inset-bottom)); }
   .orbital-now-playing p { max-width: 200px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .world-book-text { font-size: 22px; line-height: 1.6; }
   .world-page textarea { font-size: 22px; line-height: 29px; }
   .world-page h2 { font-size: 25px; }
-  .is-focused .orbital-footer { text-shadow: 0 1px 4px #000, 0 1px 7px #000; }
 }
 @media (prefers-reduced-motion: reduce) { .orbital-app * { scroll-behavior: auto; transition-duration: .01ms !important; animation-duration: .01ms !important; } }

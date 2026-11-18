@@ -22,24 +22,26 @@ export interface SunState {
   daylight: { value: number };
   /** 1 while the Sun grazes Earth's limb, 0 far from it. */
   warmth: number;
+  /** Uniform wrapper synced with `warmth` for shader materials. */
+  warmthUniform: { value: number };
 }
 
 export function createSunState(): SunState {
   const direction = new THREE.Vector3(...BASE_SUN_DIRECTION).normalize();
-  return { direction, light: direction.clone(), daylight: { value: 1 }, warmth: 0 };
+  return { direction, light: direction.clone(), daylight: { value: 1 }, warmth: 0, warmthUniform: { value: 0 } };
 }
 
 const GALACTIC_POLE = new THREE.Vector3(0.32, 0.88, -0.35).normalize();
-const STAR_COUNT = 9000;
+const STAR_COUNT = 12000;
 const STAR_RADIUS = 1400;
-const DRIFT_COUNT = 160;
+const DRIFT_COUNT = 320;
 const EARTH_POSITION: [number, number, number] = [-623, -277, -588];
 const EARTH_NARROW_POSITION: [number, number, number] = [-606, -259, -613];
 const EARTH_RADIUS = 115;
 const EARTH_NARROW_SCALE = 0.72;
 const NO_RAYCAST = () => undefined;
-const STAR_COLORS = ['#8fb0ff', '#b9ccff', '#dfe9ff', '#f8f7ff', '#fff4e8', '#ffd9b0'].map(hex => new THREE.Color(hex));
-const DRIFT_COLORS = ['#7fd4ff', '#a8e4ff', '#e6f4ff', '#9fb8ff'].map(hex => new THREE.Color(hex));
+const STAR_COLORS = ['#7aa4ff', '#9cbaff', '#cadbff', '#f5f7ff', '#fff3e2', '#ffd7ab', '#ffb684'].map(hex => new THREE.Color(hex));
+const DRIFT_COLORS = ['#7fd4ff', '#a8e4ff', '#e6f4ff', '#9fb8ff', '#ffe8c8', '#b8f0e8'].map(hex => new THREE.Color(hex));
 
 function seededRandom(seed: number) {
   return () => {
@@ -59,22 +61,57 @@ function createStarGeometry() {
   const tangent = new THREE.Vector3().crossVectors(GALACTIC_POLE, new THREE.Vector3(0, 0, 1)).normalize();
   const bitangent = new THREE.Vector3().crossVectors(GALACTIC_POLE, tangent);
   const direction = new THREE.Vector3();
+
+  // Precompute 6 open star cluster centers along and near the galactic plane
+  const clusters = Array.from({ length: 6 }, (_, idx) => {
+    const angle = (idx / 6) * Math.PI * 2 + (random() - 0.5) * 0.45;
+    const latOffset = (random() - 0.5) * 0.26;
+    return new THREE.Vector3()
+      .copy(tangent).multiplyScalar(Math.cos(angle))
+      .addScaledVector(bitangent, Math.sin(angle))
+      .addScaledVector(GALACTIC_POLE, latOffset)
+      .normalize();
+  });
+
   for (let i = 0; i < STAR_COUNT; i++) {
-    if (random() < 0.45) {
-      const angle = random() * Math.PI * 2;
+    const roll = random();
+    let isClusterStar = false;
+    if (roll < 0.48) {
+      // Galactic disc & core bulge stars
+      const inBulge = random() < 0.28;
+      const angle = inBulge ? (random() - 0.5) * 1.15 : random() * Math.PI * 2;
       const gaussian = Math.sqrt(-2 * Math.log(random() + 1e-6)) * Math.cos(Math.PI * 2 * random());
-      direction.copy(tangent).multiplyScalar(Math.cos(angle)).addScaledVector(bitangent, Math.sin(angle)).addScaledVector(GALACTIC_POLE, gaussian * 0.12);
+      const spread = inBulge ? 0.16 : 0.105;
+      direction.copy(tangent).multiplyScalar(Math.cos(angle))
+        .addScaledVector(bitangent, Math.sin(angle))
+        .addScaledVector(GALACTIC_POLE, gaussian * spread);
+    } else if (roll < 0.55) {
+      // Compact open star clusters (Pleiades / Jewel Box style)
+      isClusterStar = true;
+      const center = clusters[Math.floor(random() * clusters.length)];
+      const r1 = Math.sqrt(-2 * Math.log(random() + 1e-6)) * 0.022;
+      const theta = random() * Math.PI * 2;
+      direction.copy(center).add(new THREE.Vector3(
+        Math.cos(theta) * r1,
+        (random() - 0.5) * 0.028,
+        Math.sin(theta) * r1,
+      ));
     } else {
+      // All-sky background field stars
       direction.set(random() * 2 - 1, random() * 2 - 1, random() * 2 - 1);
       if (direction.lengthSq() < 1e-4) direction.set(0, 1, 0);
     }
     direction.setLength(STAR_RADIUS).toArray(positions, i * 3);
-    const magnitude = Math.pow(random(), 7);
-    const color = STAR_COLORS[Math.floor(random() * STAR_COLORS.length)];
-    const brightness = 0.22 + 0.5 * random() + magnitude * 1.3;
+    const magnitude = Math.pow(random(), isClusterStar ? 4.8 : 6.8);
+    // Cluster stars skew toward young hot blue-white O/B/A spectral types
+    const colorIdx = isClusterStar
+      ? Math.floor(Math.pow(random(), 1.8) * 4)
+      : Math.floor(random() * STAR_COLORS.length);
+    const color = STAR_COLORS[colorIdx];
+    const brightness = 0.22 + 0.52 * random() + magnitude * 1.42;
     colors.set([color.r * brightness, color.g * brightness, color.b * brightness], i * 3);
-    sizes[i] = 0.9 + magnitude * 4.6;
-    twinkles.set([random() * Math.PI * 2, 0.4 + random() * 2.6], i * 2);
+    sizes[i] = 0.85 + magnitude * 4.9;
+    twinkles.set([random() * Math.PI * 2, 0.35 + random() * 2.7], i * 2);
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -89,35 +126,49 @@ function createDriftGeometry() {
   const positions = new Float32Array(DRIFT_COUNT * 3);
   const colors = new Float32Array(DRIFT_COUNT * 3);
   const sizes = new Float32Array(DRIFT_COUNT);
-  const seeds = new Float32Array(DRIFT_COUNT * 3);
+  const seeds = new Float32Array(DRIFT_COUNT * 4);
   const point = new THREE.Vector3();
   let i = 0;
   while (i < DRIFT_COUNT) {
-    point.set(-14 + random() * 42, 0.6 + random() * 9.4, -14 + random() * 28);
+    const deepLayer = i >= Math.floor(DRIFT_COUNT * 0.65);
+    if (!deepLayer) {
+      point.set(-14 + random() * 42, 0.6 + random() * 9.8, -14 + random() * 28);
+    } else {
+      // Outer orbital halo surrounding the station for 360° camera parallax
+      const theta = random() * Math.PI * 2;
+      const radius = 16 + random() * 28;
+      point.set(Math.cos(theta) * radius + 4, -2.5 + random() * 16, Math.sin(theta) * radius);
+    }
     const nearFloor = point.y < 4.5 && Math.abs(point.z) < 6 && (Math.abs(point.x) < 6 || Math.abs(point.x - 14) < 6);
     if (nearFloor) continue;
     point.toArray(positions, i * 3);
     const color = DRIFT_COLORS[Math.floor(random() * DRIFT_COLORS.length)];
-    const brightness = 0.5 + random() * 0.6;
+    const brightness = 0.52 + random() * 0.62;
     colors.set([color.r * brightness, color.g * brightness, color.b * brightness], i * 3);
-    sizes[i] = 1.6 + random() * 2.6;
-    seeds.set([random() * Math.PI * 2, random() * Math.PI * 2, random() * Math.PI * 2], i * 3);
+    sizes[i] = (deepLayer ? 1.9 : 1.4) + random() * 2.8;
+    seeds.set([random() * Math.PI * 2, random() * Math.PI * 2, random() * Math.PI * 2, random()], i * 4);
     i++;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
   geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
-  geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 3));
+  geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 4));
   return geometry;
 }
 
 interface CosmicClock { value: number }
 
-function Drift({ clock }: { clock: CosmicClock }) {
+function Drift({ clock, sun }: { clock: CosmicClock; sun: SunState }) {
   const geometry = useMemo(createDriftGeometry, []);
   const dpr = useThree(state => state.viewport.dpr);
-  const uniforms = useMemo(() => ({ uTime: clock, uPixelRatio: { value: dpr } }), [clock]);
+  const uniforms = useMemo(() => ({
+    uTime: clock,
+    uPixelRatio: { value: dpr },
+    uSun: { value: sun.direction },
+    uDaylight: sun.daylight,
+    uWarmth: sun.warmthUniform,
+  }), [clock, sun]);
   useEffect(() => { uniforms.uPixelRatio.value = dpr; }, [dpr, uniforms]);
   return (
     <points geometry={geometry} raycast={NO_RAYCAST} frustumCulled={false}>
@@ -134,7 +185,12 @@ function CelestialSphere({ clock, sun, onBeforeRender }: { clock: CosmicClock; s
   const starGeometry = useMemo(createStarGeometry, []);
   const earthGlow = useMemo(() => new THREE.Vector3(...(narrow ? EARTH_NARROW_POSITION : EARTH_POSITION)).normalize(), [narrow]);
   const skyUniforms = useMemo(() => ({
-    uTime: clock, uSun: { value: sun.direction }, uDaylight: sun.daylight, uGalacticPole: { value: GALACTIC_POLE }, uEarthGlow: { value: earthGlow },
+    uTime: clock,
+    uSun: { value: sun.direction },
+    uDaylight: sun.daylight,
+    uWarmth: sun.warmthUniform,
+    uGalacticPole: { value: GALACTIC_POLE },
+    uEarthGlow: { value: earthGlow },
   }), [clock, sun, earthGlow]);
   const starUniforms = useMemo(() => ({ uTime: clock, uPixelRatio: { value: dpr }, uDaylight: sun.daylight }), [clock, sun]);
   useEffect(() => { starUniforms.uPixelRatio.value = dpr; }, [dpr, starUniforms]);
@@ -213,6 +269,7 @@ export const Cosmos: React.FC<{ reducedMotion: boolean; sun: SunState }> = ({ re
     sun.light.set(...roomLightDirection(sample.direction));
     sun.daylight.value = sample.daylight;
     sun.warmth = sample.warmth;
+    sun.warmthUniform.value = sample.warmth;
     follow(camera);
   });
   return (
@@ -221,7 +278,7 @@ export const Cosmos: React.FC<{ reducedMotion: boolean; sun: SunState }> = ({ re
         <CelestialSphere clock={clock} sun={sun} onBeforeRender={(_renderer, _scene, camera) => { follow(camera); distant.current?.updateMatrixWorld(true); }} />
         <Earth clock={clock} sun={sun} />
       </group>
-      <Drift clock={clock} />
+      <Drift clock={clock} sun={sun} />
     </>
   );
 };
