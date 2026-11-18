@@ -25,20 +25,20 @@
     },
     {
       "file": "resident/luna-walk-room.glb",
-      "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the deeper seat adjustment; Walk and 2K data maps from repository commit 6f6df88; original 4K base color from the user-supplied Tripo GLB, also preserved in commit 2e1ff72.",
+      "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the arm-supported scoot from the cushion edge to the resting pose; Walk and 2K data maps from repository commit 6f6df88; original 4K base color from the user-supplied Tripo GLB, also preserved in commit 2e1ff72.",
       "license": "User-supplied; no separate license declaration supplied.",
       "used": true,
-      "bytes": 10267804,
-      "sha256": "5a4acb8d189b027a3b370cd089c8e9da20b1f42a685610579fb3ae9542b0ca4f",
-      "processing": "Original base-color JPEG copied into the existing runtime model. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. See assets/models/resident/README.md."
+      "bytes": 10406152,
+      "sha256": "dcd8a06b19abb208908cecc02f3b9503178bc426e08759f9dc8181769aed2347",
+      "processing": "The seated clip and detailed contact mesh are baked from Blender. The walk channels and existing compressed textures are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. See assets/models/resident/README.md."
     },
     {
       "file": "resident/luna-seat-contact.bin",
-      "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the deeper seat adjustment; original Walk/textures from repository commit 6f6df88.",
+      "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the arm-supported scoot from the cushion edge to the resting pose; original Walk/textures from repository commit 6f6df88.",
       "license": "User-supplied; no separate license declaration supplied.",
       "used": true,
-      "bytes": 1108148,
-      "sha256": "1f5ce9bd2f1301ef62da7ae826504a6c4bfed5472d6876ee73e570c7a1925c6e",
+      "bytes": 1916900,
+      "sha256": "13a49d98dc0b01a3fba2455243ca9bc5798108cd6baaf9f040e73e2075e2a026",
       "processing": "See assets/models/resident/README.md and scripts/bake-luna-chair.py + scripts/pack-luna-chair.py."
     },
     {
@@ -80,6 +80,15 @@
       "bytes": 232092,
       "sha256": "bbd25137132498d2140a0b2b24d0a657efea9aa25d741361dbb0999024af8aad",
       "processing": "scripts/export-luna-yawn.py retargets upper-body rotations into Luna rest coordinates. Runtime retains planted neutral pelvis/legs; 54 tracks, 8.333333 seconds, no mesh or textures."
+    },
+    {
+      "file": "resident/luna-library.glb",
+      "source": "PocketWorld-authored Blender pickup motions on the existing user-supplied Luna rig; no new external mesh or texture.",
+      "license": "Original Luna source terms remain unchanged; no separate upstream license declaration supplied.",
+      "used": true,
+      "bytes": 1383148,
+      "sha256": "22218756fd9dbfe2f553ba9d6ae0292e92920f1cb4b5eb6c191342c8a94e3758",
+      "processing": "scripts/bake-luna-library.py builds three shelf-row pickup clips and synchronized book marker tracks. Animation-only GLB, reverse sampling for return. Neutral and closed-book handoff poses from scripts/luna-library-neutral.mjs; 0-180 frames at 30 fps, each of the four right finger pads individually seated on the near cover and opposed thumb on the wrapped spine before extraction, upright support approaches below the bottom edge and is acquired by export124 before transfer132; free reach solves wrist position once, anatomical palm cone and axial-only entry blend; unwrapped bounded forearm twist and matching runtime closed-cover handoff; evaluated Blender skin-support correction at quarter frames over export 132-180. See assets/models/resident/README.md."
     }
   ]
 }

@@ -240,16 +240,34 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     const palmZ = palmX.clone().cross(palmY).normalize();
     const palmBasis = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(palmX, palmY, palmZ));
     const palmOffset = palmVec.clone().multiplyScalar(0.55).addScaledVector(palmZ, 0.018);
-    const fingerTipOffset = mid4.clone().sub(wrist).multiplyScalar(0.86).addScaledVector(palmZ, 0.013);
+    const fingerTipOffset = mid4.clone().sub(wrist);
     const curlAxis = palmX.clone().negate();
     const thumbAxis = fingerDir.clone().multiplyScalar(sideIndex === 0 ? -0.85 : 0.85).addScaledVector(curlAxis, 0.5).normalize();
     const fingerChains = ['Index', 'Middle', 'Ring', 'Pinky'].map((name, fi) =>
       [1, 2, 3].map(seg => ({ bone: control(bone(`${side}Hand${name}${seg}`), hand, wrist), factor: (0.75 + seg * 0.22) * (0.92 + fi * 0.05) }))
     ).flat();
     const thumbChain = [1, 2].map(seg => ({ bone: control(bone(`${side}HandThumb${seg}`), hand, wrist), factor: seg === 1 ? 0.65 : 0.9 }));
+    const handNeutral = handBone.getWorldQuaternion(new THREE.Quaternion());
+    const middleChain = [1, 2, 3, 4].map(seg => {
+      const target = bone(side + 'HandMiddle' + seg);
+      return { target, rest: capture(target), mapping: controlMap.find(entry => entry.target === target) };
+    });
+    const fingerMatrix = new THREE.Matrix4(), segmentMatrix = new THREE.Matrix4();
+    const segmentRotation = new THREE.Quaternion();
     const setFingers = (curl: number, thumbOppose = curl * 0.6) => {
       for (const f of fingerChains) f.bone.quaternion.setFromAxisAngle(curlAxis, curl * f.factor);
       for (const t of thumbChain) t.bone.quaternion.setFromAxisAngle(thumbAxis, thumbOppose * t.factor);
+      // Solve the actual curled middle-finger chain, in the hand controller's
+      // neutral room basis. Library IK must touch the sheet with the real tip,
+      // rather than a shortened neutral finger proxy that floats above it.
+      fingerMatrix.identity();
+      for (const { rest, mapping } of middleChain) {
+        if (mapping) segmentRotation.copy(mapping.parentBasis).multiply(mapping.control.quaternion).multiply(mapping.neutral);
+        else segmentRotation.copy(rest.quaternion);
+        segmentMatrix.compose(rest.position, segmentRotation, rest.scale);
+        fingerMatrix.multiply(segmentMatrix);
+      }
+      fingerTipOffset.setFromMatrixPosition(fingerMatrix).multiplyScalar(RESIDENT_SCALE).applyQuaternion(handNeutral);
     };
     return { shoulder, upper, forearm, hand, restWrist: wrist,
       restUpper: forearm.position.clone(), restLower: hand.position.clone(),

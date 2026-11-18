@@ -95,3 +95,21 @@ test('debug query parameters pin the phase or change the speed', () => {
   assert.deepEqual({ ...readSunOverrides('?sun=abc&sunSpeed=-3') }, { phase: null, speed: 0 });
   assert.equal(readSunOverrides('?sunSpeed=9999').speed, 240);
 });
+
+test('cosmos shaders include multi-layer Milky Way rifts, parallax cloud shadows, aurora, and particle Mie scattering', () => {
+  const cosmosShaderModule = { exports: {} };
+  vm.runInNewContext(
+    ts.transpileModule(readFileSync(new URL('./shaders/cosmos.ts', import.meta.url), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS },
+    }).outputText,
+    { module: cosmosShaderModule, exports: cosmosShaderModule.exports },
+  );
+  const shaders = cosmosShaderModule.exports;
+  assert.ok(shaders.skyFragment.includes('ridgedFbm') && shaders.skyFragment.includes('uWarmth'));
+  assert.ok(shaders.starFragment.includes('vProminence') && shaders.starFragment.includes('secondarySpikes'));
+  assert.ok(shaders.particleVertex.includes('forwardScatter') && shaders.particleFragment.includes('crystalMote'));
+  assert.ok(shaders.planetVertex.includes('vObjectSun'));
+  assert.ok(shaders.earthFragment.includes('shadowSamplePos') && shaders.earthFragment.includes('auroralOval'));
+  assert.ok(shaders.cloudFragment.includes('selfShadow') && shaders.cloudFragment.includes('ridgeHighlight'));
+  assert.ok(shaders.atmosphereFragment.includes('nightSide') && shaders.atmosphereFragment.includes('duskBand'));
+});

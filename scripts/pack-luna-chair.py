@@ -2,18 +2,20 @@ import json,struct,copy,argparse,subprocess
 from pathlib import Path
 parser=argparse.ArgumentParser(description='Combine the seat export with the existing Walk and compressed textures.')
 parser.add_argument('--output',type=Path,required=True,help='The external directory used by bake-luna-chair.py')
-parser.add_argument('--original',type=Path,help='Optional original walk GLB; otherwise read the baseline Git object')
-parser.add_argument('--base-ref',default='6f6df88')
+parser.add_argument('--original',type=Path,help='GLB supplying the production Walk, textures and materials')
+parser.add_argument('--base-ref',help='Read the source GLB from a specific Git revision instead')
 args=parser.parse_args();OUT=args.output.resolve();REPO=Path(__file__).resolve().parents[1]
 def read(p):
  raw=p.read_bytes();n=struct.unpack_from('<I',raw,12)[0];return json.loads(raw[20:20+n]),raw[28+n:]
 original_path=args.original
-if original_path is None:
+if original_path is None and args.base_ref:
  original_path=OUT/'luna-walk-original.glb'
  original_path.write_bytes(subprocess.run(['git','show',args.base_ref+':assets/public/models/resident/luna-walk-room.glb'],cwd=REPO,check=True,capture_output=True).stdout)
+if original_path is None:
+ original_path=REPO/'assets/public/models/resident/luna-walk-room.glb'
 original,ob=read(original_path)
 doc,db=read(OUT/'luna-seat-runtime.glb')
-# Blender exports scene frames 1..68 at times 1/30..68/30. The cache starts at
+# Blender exports the scene on its native time axis. The cache starts at
 # frame 1, so rebase every sit sampler to zero before merging the Walk clip.
 db=bytearray(db)
 for i in {sam['input'] for anim in doc['animations'] for sam in anim['samplers']}:
