@@ -6,6 +6,7 @@ import { SoftBox, Tube } from './Primitives';
 import { ReactiveKeyboard } from './media/ReactiveKeyboard';
 import { FurnitureCylinder as Cylinder, FurnitureMotion, FURNITURE as C } from './FurnitureParts';
 import { ScheduleBook } from './FurnitureBooks';
+import { SCHEDULE_BOOK_POSITION, SCHEDULE_BOOK_SCALE, SCHEDULE_BOOK_YAW } from './schedule/bookLayout';
 import { DRAWER_TRAVEL } from './drawerInteraction';
 
 function FurnitureComputer({ world }: { world: WorldModelProps }) {
@@ -59,6 +60,6 @@ export function FurnitureDesk({ world }: { world: WorldModelProps }) {
       </FurnitureMotion>
     </ObjectHandle>
     <FurnitureComputer world={world} />
-    <ScheduleBook world={world} position={[0.55, 1.121, -2.14]} color="#7b9184" scale={0.76} rotation={[0, 0.08, 0]} />
+    <ScheduleBook world={world} position={SCHEDULE_BOOK_POSITION} color="#6f4b3e" scale={SCHEDULE_BOOK_SCALE} rotation={[0, SCHEDULE_BOOK_YAW, 0]} />
   </group>;
 }

@@ -5,6 +5,7 @@ import type { WorldAction, WorldActionKind, WorldModelProps } from '../../types/
 import { roomAudio } from '../audioEngine';
 import { ObjectHandle } from './ObjectHandle';
 import { JOURNAL_POSITION } from './journalLayout';
+import { SCHEDULE_BOOK_POSITION } from './schedule/bookLayout';
 import { Cat } from './Cat';
 import { CHAIR_POSES, SEAT_DROP, SEAT_SWIVEL, chairFacing, chairFront, type ChairPose } from './chairPose';
 import { applyLibraryPose, carryResident, libraryCrouch } from './library/residentPose';
@@ -284,7 +285,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     const drawerOpen = !!p.objects['desk-drawer']?.open;
     const targets: NearbyAction[] = [
       { id: 'computer', kind: 'inspect', hint: '使用电脑', point: [1.55, -1.36], reach: 0.64 },
-      { id: 'schedule', kind: 'plan', hint: '打开日程', point: [0.57, -1.42], reach: 0.48 },
+      { id: 'schedule', kind: 'plan', hint: '打开日程', point: [SCHEDULE_BOOK_POSITION[0] + 0.02, -1.42], reach: 0.48 },
       { id: 'journal', kind: 'write', hint: '打开日记', point: [JOURNAL_POSITION[0], -1.42], reach: 0.43 },
       { id: 'music-player', kind: 'inspect', hint: '使用唱机', point: [-0.30, -1.42], reach: 0.43 },
       { id: 'book-01', kind: 'inspect', hint: '查看藏书', point: [bookX, bookZ], reach: 0.75 },

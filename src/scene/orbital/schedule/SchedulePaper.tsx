@@ -2,21 +2,22 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PaperBall, SchedulePage } from './schedule';
+import { SCHEDULE_BOOK_POSITION } from './bookLayout';
 
 export const GLASS_POSITION: [number, number, number] = [0.69, 2.3, -3.39];
-export const BOOK_POSITION: [number, number, number] = [0.69, 1.201, -2.154];
+export const BOOK_POSITION: [number, number, number] = [SCHEDULE_BOOK_POSITION[0] + 0.126, SCHEDULE_BOOK_POSITION[1] + 0.033, SCHEDULE_BOOK_POSITION[2] - 0.01];
 const ease = (t: number) => 1 - (1 - t) ** 3;
 export function paperBallPosition(seed: number): [number, number, number] {
   return [0.25 + Math.sin(seed * 2.4) * 0.65, 0.105, -0.68 + Math.cos(seed * 1.8) * 0.45];
 }
 export function paperGeometry(crumpled = false) {
-  const geometry = new THREE.PlaneGeometry(0.56, 0.74, 20, 26).toNonIndexed();
+  const geometry = new THREE.PlaneGeometry(0.56, 0.872, 20, 26).toNonIndexed();
   const attribute = geometry.attributes.position;
   const flat = attribute.array.slice() as Float32Array;
   const folded = new Float32Array(flat.length);
   for (let i = 0; i < attribute.count; i++) {
     const x = flat[i * 3], y = flat[i * 3 + 1];
-    const u = (x + 0.28) / 0.56, v = (y + 0.37) / 0.74;
+    const u = (x + 0.28) / 0.56, v = (y + 0.436) / 0.872;
     const longitude = u * Math.PI * 2, latitude = v * Math.PI;
     const radius = 0.083 + Math.sin(u * 23 + v * 17) * Math.cos(v * 29) * 0.009;
     folded.set([Math.cos(longitude) * Math.sin(latitude) * radius, Math.cos(latitude) * radius, Math.sin(longitude) * Math.sin(latitude) * radius], i * 3);
@@ -26,28 +27,68 @@ export function paperGeometry(crumpled = false) {
   geometry.computeVertexNormals();
   return { geometry, flat, folded };
 }
-function pageTexture(page: SchedulePage) {
+export function pageTexture(page: SchedulePage, bound = false, side: 'left' | 'right' = 'right') {
   const canvas = document.createElement('canvas');
-  canvas.width = 560; canvas.height = 740;
+  canvas.width = 560; canvas.height = 872;
   const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#f4ead3'; ctx.fillRect(0, 0, 560, 740);
-  for (let i = 0; i < 6500; i++) {
-    const x = (i * 137.7) % 560, y = (i * 97.3) % 740;
-    ctx.fillStyle = i % 2 ? '#8a704009' : '#ffffff38'; ctx.fillRect(x, y, 1, 1);
-  }
-  ctx.fillStyle = '#454b3d'; ctx.font = '32px "Songti SC", serif'; ctx.fillText('今天的安排', 48, 76);
-  ctx.fillStyle = '#6c614b'; ctx.font = '17px serif'; ctx.fillText(`${page.date}  /  第 ${page.number} 页`, 48, 112);
-  page.entries.forEach((entry, index) => {
-    const y = 168 + index * 244;
-    ctx.font = '20px serif'; ctx.fillStyle = '#775b38'; ctx.fillText(entry.time || '—', 48, y);
-    ctx.font = '25px "Songti SC", serif'; ctx.fillStyle = '#454b3d';
-    const lines = (text: string, length: number) => Array.from(text).reduce<string[]>((rows, char, i) => { const row = Math.floor(i / length); rows[row] = (rows[row] || '') + char; return rows; }, []);
-    lines(entry.title || '留一点空白', 17).slice(0, 2).forEach((line, i) => ctx.fillText(line, 48, y + 42 + i * 32));
-    ctx.font = '19px "Songti SC", serif';
-    lines(entry.content ?? '', 23).slice(0, 3).forEach((line, i) => ctx.fillText(line, 48, y + 110 + i * 30));
-    ctx.strokeStyle = '#cbbd9f'; ctx.beginPath(); ctx.moveTo(48, y + 212); ctx.lineTo(512, y + 212); ctx.stroke();
+  const oat = '#e7dcc6', wheat = '#e4d9c3', paper = '#f7f1e2', ink = '#57483e';
+  const box = (x: number, y: number, w: number, h: number, color: string, radius = 4) => {
+    ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(x, y, w, h, radius); ctx.fill();
+  };
+  ctx.fillStyle = bound ? '#f5f0e1' : '#d2c4a8'; ctx.fillRect(0, 0, 560, 872);
+  if (!bound) box(16, 16, 528, 840, paper, 26);
+  ctx.fillStyle = '#806b50'; ctx.font = 'bold italic 32px "Segoe Script", cursive'; ctx.textAlign = 'right'; ctx.fillText('Daily Planner', 520, 78);
+  ctx.textAlign = 'left'; ctx.fillStyle = ink; ctx.font = 'bold 17px "Segoe Print", serif'; ctx.fillText('Date:', 40, 137);
+  box(92, 116, 181, 27, oat, 14); ctx.fillStyle = ink; ctx.font = '16px Georgia, serif'; ctx.fillText(page.date, 109, 135);
+  const weekday = (new Date(`${page.date}T12:00:00`).getDay() + 6) % 7;
+  ['M', 'T', 'W', 'T', 'F', 'S', 'S'].forEach((day, i) => {
+    if (i === weekday) box(298 + i * 30, 115, 24, 27, wheat, 14);
+    ctx.fillStyle = ink; ctx.font = 'bold 14px "Segoe Print", serif'; ctx.fillText(day, 304 + i * 30, 135);
   });
-  ctx.font = '16px serif'; ctx.fillStyle = '#6c614b'; ctx.fillText('把想做的事，留在眼前。', 48, 702);
+  box(40, 165, 230, 634, wheat);
+  box(284, 165, 236, 190, oat);
+  box(284, 380, 236, 35, oat);
+  box(284, 551, 236, 35, oat);
+  ctx.strokeStyle = oat; ctx.lineWidth = 2; ctx.strokeRect(285, 585, 234, 214);
+  ctx.fillStyle = ink; ctx.font = 'bold 18px "Segoe Print", serif';
+  ctx.fillText('Schedule', 50, 190); ctx.fillText('To Do List', 295, 190); ctx.fillText('For Tomorrow', 295, 404); ctx.fillText('Notes', 295, 575);
+  const text = (value: string, x: number, y: number, width: number) => {
+    let shown = value;
+    while (shown && ctx.measureText(shown).width > width) shown = shown.slice(0, -1);
+    if (shown !== value) shown = `${shown.slice(0, -1)}…`;
+    ctx.fillStyle = ink; ctx.fillText(shown, x, y);
+  };
+  page.entries.forEach((entry, index) => {
+    const y = 240 + index * 73;
+    ctx.font = '16px Georgia, serif'; text(entry.time, 50, y, 48);
+    ctx.font = '19px "KaiTi", serif'; text(entry.title, 104, y, bound ? 127 : 151);
+    if (bound) { ctx.fillStyle = '#a08a71'; ctx.font = '15px Georgia, serif'; ctx.fillText('···', 242, y); }
+    ctx.strokeStyle = '#f7f1e2aa'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(50, y + 22); ctx.lineTo(258, y + 22); ctx.stroke();
+  });
+  page.todos.forEach((item, i) => {
+    const y = 236 + i * 45;
+    ctx.strokeStyle = '#a18b6f'; ctx.lineWidth = 2; ctx.strokeRect(296, y - 12, 16, 16);
+    if (item.completed) box(299, y - 9, 10, 10, '#9b7b58', 0);
+    ctx.font = '19px "KaiTi", serif'; text(item.text, 322, y, 184);
+    ctx.strokeStyle = '#aa9a7d80'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(322, y + 8); ctx.lineTo(506, y + 8); ctx.stroke();
+  });
+  page.tomorrow.forEach((item, i) => {
+    const y = 447 + i * 53;
+    box(298, y - 10, 11, 11, wheat, 6);
+    ctx.font = '19px "KaiTi", serif'; text(item, 320, y, 186);
+  });
+  ctx.font = '17px "KaiTi", serif';
+  let line = '', row = 0;
+  for (const char of page.notes) {
+    if (char === '\n' || ctx.measureText(line + char).width > 210) {
+      text(line, 297, 610 + row * 24, 210); line = ''; row++;
+    }
+    if (row >= 8) break;
+    if (char !== '\n') line += char;
+  }
+  if (row < 8) text(line, 297, 610 + row * 24, 210);
+  ctx.font = '14px serif'; ctx.fillStyle = '#968671'; ctx.textAlign = 'center'; ctx.fillText(`第 ${page.number} 页`, 280, 830);
+  if (bound) { ctx.font = '25px Georgia, serif'; ctx.fillText(side === 'left' ? '‹' : '›', side === 'left' ? 54 : 507, 832); }
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
@@ -60,7 +101,7 @@ export function PostedPaper({ page, position, onSelect }: { page: SchedulePage; 
     <mesh geometry={geometry} onClick={event => { event.stopPropagation(); onSelect(); }} castShadow receiveShadow>
       <meshStandardMaterial map={texture} roughness={0.96} side={THREE.DoubleSide} />
     </mesh>
-    {[-0.16, 0.16].map(x => <mesh key={x} position={[x, 0.365, 0.008]} rotation={[0, 0, x > 0 ? -0.1 : 0.08]}>
+    {[-0.16, 0.16].map(x => <mesh key={x} position={[x, 0.431, 0.008]} rotation={[0, 0, x > 0 ? -0.1 : 0.08]}>
       <planeGeometry args={[0.16, 0.052]} /><meshStandardMaterial color="#d3c299" roughness={1} transparent opacity={0.78} side={THREE.DoubleSide} depthWrite={false} />
     </mesh>)}
   </group>;

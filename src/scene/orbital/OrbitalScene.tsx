@@ -12,6 +12,8 @@ import { MediaObjects } from './media/MediaObjects';
 import { FeatureSurfaces } from './FeatureSurfaces';
 import { ScheduleProvider } from './schedule/ScheduleContext';
 import { ScheduleSurfaces } from './schedule/ScheduleSurfaces';
+import { BOOK_POSITION } from './schedule/SchedulePaper';
+import { SCHEDULE_BOOK_POSITION } from './schedule/bookLayout';
 import { OrbitalResidents } from './OrbitalResidents';
 import type { DrawerInteraction } from './drawerInteraction';
 import { shelfOrigin } from './library/catalog';
@@ -22,7 +24,7 @@ const FOCUS: Record<string, { target: [number, number, number]; offset: [number,
   computer: { target: [1.45, 1.58, -2.30], offset: [0, 0.30, 3.5] },
   'music-player': { target: [-0.45, 1.2, -2.0], offset: [1.4, 2.5, 3.1] },
   journal: { target: JOURNAL_PAGE_POSITION, offset: [0, 0.60, 0.28] },
-  schedule: { target: [0.57, 1.20, -2.14], offset: [0, 0.88, 0.48] },
+  schedule: { target: [SCHEDULE_BOOK_POSITION[0] + 0.02, SCHEDULE_BOOK_POSITION[1] + 0.079, SCHEDULE_BOOK_POSITION[2]], offset: [0, 0.88, 0.48] },
   'schedule-glass': { target: [0.69, 2.30, -3.39], offset: [0, 0.02, 1.75] },
   'book-01': { target: [-3.35, 1.03, -1.14], offset: [1.35, 1.12, 2.5] },
   cabinet: { target: [-3.28, 0.48, -2.47], offset: [0.9, 0.71, 2.35] },
@@ -92,8 +94,8 @@ function CameraRig(props: OrbitalSceneProps) {
         if (cameraView === 'close') { offset.set(1.75, .65, .30); target.current.y = 1.08; }
       }
       if (props.focusedObject?.startsWith('schedule')) {
-        offset.multiplyScalar(Math.max(1, 0.62 / (size.width / size.height)));
-        if (narrow && props.focusedObject === 'schedule') target.current.x = origin.x + 0.69;
+        offset.multiplyScalar(Math.max(1, (narrow && props.focusedObject === 'schedule' ? 0.5 : 0.62) / (size.width / size.height)));
+        if (narrow && props.focusedObject === 'schedule') target.current.x = origin.x + BOOK_POSITION[0];
       }
       if (props.focusedObject === 'book-01' && narrow) { const close = cameraView === 'close'; offset.multiplyScalar(close ? 1.9 : 1.6); target.current.y -= close ? .40 : .55; }
       if (props.focusedObject === 'book-01' && !narrow) target.current.x += .45;

@@ -74,6 +74,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './residentRig': residentRig,
     './bedMotion': load('./orbital/bedMotion.ts', { three: THREE, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './journalLayout': load('./orbital/journalLayout.ts', {}),
+    './schedule/bookLayout': load('./orbital/schedule/bookLayout.ts', {}),
     './chairPose': load('./orbital/chairPose.ts', {}),
     './chairMotion': load('./orbital/chairMotion.ts', {}),
     './drawerInteraction': load('./orbital/drawerInteraction.ts', {}),
