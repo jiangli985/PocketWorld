@@ -86,9 +86,9 @@
       "source": "PocketWorld-authored Blender pickup motions on the existing user-supplied Luna rig; no new external mesh or texture.",
       "license": "Original Luna source terms remain unchanged; no separate upstream license declaration supplied.",
       "used": true,
-      "bytes": 1351996,
-      "sha256": "dd03dd893164237641ce4017e97f74977dfad606c2e15478ffa472b2ed196053",
-      "processing": "scripts/bake-luna-library.py builds three shelf-row pickup clips and synchronized book marker tracks. Animation-only GLB, reverse sampling for return. Neutral and closed-book handoff poses from scripts/luna-library-neutral.mjs; 0-180 frames at 30 fps, grip before extraction, upright bearing palm acquired by export124 before transfer132; free reach solves wrist position once, anatomical palm cone and axial-only entry blend; unwrapped bounded forearm twist and matching runtime closed-cover handoff; evaluated Blender skin-support correction at quarter frames over export 132-180. See assets/models/resident/README.md."
+      "bytes": 1383148,
+      "sha256": "22218756fd9dbfe2f553ba9d6ae0292e92920f1cb4b5eb6c191342c8a94e3758",
+      "processing": "scripts/bake-luna-library.py builds three shelf-row pickup clips and synchronized book marker tracks. Animation-only GLB, reverse sampling for return. Neutral and closed-book handoff poses from scripts/luna-library-neutral.mjs; 0-180 frames at 30 fps, each of the four right finger pads individually seated on the near cover and opposed thumb on the wrapped spine before extraction, upright support approaches below the bottom edge and is acquired by export124 before transfer132; free reach solves wrist position once, anatomical palm cone and axial-only entry blend; unwrapped bounded forearm twist and matching runtime closed-cover handoff; evaluated Blender skin-support correction at quarter frames over export 132-180. See assets/models/resident/README.md."
     }
   ]
 }

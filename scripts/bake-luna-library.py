@@ -267,7 +267,7 @@ class Hand:
             axis = self.pose.rotation(self.wrist) @ (self.basis @ V((.85*self.sign, -.5*self.sign, 0))).normalized()
             self.pose.turn(name, axis, (amount*.6 if thumb is None else thumb) * factor)
 
-    def reach(self, point, target, weight, curl, pole, contact, align_fingers=0, thumb=None):
+    def reach(self, point, target, weight, curl, pole, contact, thumb=None):
         if weight <= 0:
             return
         self.curl(curl, thumb)
@@ -278,7 +278,7 @@ class Hand:
         if self.previous_target is None:
             self.previous_target = rest_rotation
         # Limit the palm turn during a transfer before solving the wrist position.
-        target = rest_rotation.slerp(target, weight)
+        target = rest_rotation.slerp(target, smooth(weight) if self.side == "Right" else weight)
         shape = rest_rotation.inverted() @ (p.point(self.middle) - rest_position)
         if contact == "tip":
             shape = rest_rotation.inverted() @ (p.point(self.tip) - rest_position)
@@ -287,18 +287,6 @@ class Hand:
         elif isinstance(contact, float):
             tip = rest_rotation.inverted() @ (p.point(self.tip) - rest_position)
             shape = tip.lerp(self.palm_shape, contact)
-        if align_fingers > 0 and weight >= 1:
-            # Keep the palm on the contact plane while its fingers follow the
-            # forearm. A fixed shelf frame folded the wrist back during lowering.
-            normal = target @ (self.basis @ V((0, 0, self.sign)))
-            for _ in range(3):
-                trial = TO_RIG @ point - target @ shape
-                p.limb(self.upper, self.lower, self.wrist, trial, pole, keep_bend_plane=True, neutral_frame=True)
-                forward = p.point(self.wrist)-p.point(self.lower)
-                forward -= normal * forward.dot(normal)
-                if forward.length > .001:
-                    aligned = basis(forward, normal.cross(forward)*self.sign) @ self.basis.inverted()
-                    target = target.slerp(aligned, align_fingers)
         angle = 2*acos(min(1, abs(self.previous_target.dot(target))))
         if angle > .18:
             target = self.previous_target.slerp(target, .18/angle)
@@ -306,7 +294,7 @@ class Hand:
         wrist = rest_position.lerp(TO_RIG @ point - target @ shape, weight)
         # Lead the wrist forward before lifting: a straight path passes too
         # close to the shoulder and reverses the elbow plane during the reach.
-        wrist += V((0, -.12 / SCALE, 0)) * sin(pi*weight)
+        wrist += V((0, (-.20 if self.side == "Right" else -.12) / SCALE, 0)) * sin(pi*weight)
         ray = (wrist-p.point(self.upper)).normalized()
         preferred = pole.copy()
         preferred -= ray*ray.dot(preferred)
@@ -520,10 +508,11 @@ def choreograph(pose, hands, row, frame):
 
     pos, rot = book_pose(row, frame)
     book_blender = CONVERSION @ transform(pos, rot)
-    fingers = book_blender.to_3x3() @ V((.40, .40, .82))
-    across = book_blender.to_3x3() @ V((.92, -.20, -.40))
+    # The right fingers turn toward the cover beside the spine. Luna's thumb
+    # and relaxed distal pads lie on -cross(fingers, pinky-to-index).
     right, left = hands
-    grab = book_blender @ V((-.014, -.036, -.095+.115*fade(frame, 72, 96) if row == 2 else (.042, .020)[row]))
+    grip_height = -.037+.057*fade(frame, 72, 96) if row == 2 else (.042, .020)[row]
+    grab = book_blender @ V((.026, -.00965, grip_height))
     approach = 1-fade(frame, 19, 30)
     grab += V((.014, -.085, -.014))*approach
     # The leading fingertips stay on the spine through extraction and the
@@ -531,7 +520,7 @@ def choreograph(pose, hands, row, frame):
     # around the free edge to the front cover, ready for the runtime open pose.
     shift = fade(frame, 96, 140)
     cover = book_blender @ V((.045, .0765, -.088))
-    spine_out = book_blender @ V((-.08, -.036, .025))
+    spine_out = book_blender @ V((-.08, -0.03465, .025))
     above_spine = book_blender @ V((-.08, .09, .09))
     if shift < .4:
         grab = grab.lerp(spine_out, smooth(shift/.4))
@@ -539,14 +528,47 @@ def choreograph(pose, hands, row, frame):
         grab = spine_out.lerp(above_spine, smooth((shift-.4)/.3))
     else:
         grab = above_spine.lerp(cover, smooth((shift-.7)/.3))
-    flat = fade(frame, 96, 128)
-    cover_fingers = book_blender.to_3x3() @ V((1, 0, 0)).lerp(V((.36, 0, .92)), flat)
-    cover_normal = book_blender.to_3x3() @ V((0, -1, 0))
-    cover_across = cover_fingers.cross(cover_normal)
-    right_rotation = right.desired(fingers, across).slerp(right.desired(cover_fingers, cover_across), shift)
+    # Rotate around the exposed spine after the pads clear it. The initial and
+    # final palm normals oppose each other, so shortest quaternion interpolation
+    # between them has two equally short paths.
+    roll = smooth((shift-.28)/.64)
+    turn = Q(V((0, 0, 1)), -pi*roll)
+    fingers = book_blender.to_3x3() @ (turn @ V((.43-.79*roll, 0, .90+.02*roll)))
+    normal = book_blender.to_3x3() @ (turn @ V((0, 1, 0)))
+    right_rotation = right.desired(fingers, fingers.cross(normal))
     right.reach(grab, right_rotation, fade(frame, 1, 30),
-                .07+.35*fade(frame, 28, GRAB)-.42*shift,
-                V((-.35, .35, -1)), float(shift), 1-shift, thumb=-.4)
+                (.07+.08*fade(frame, 19, 30))*(1-shift),
+                V((-.35, .35, -1)), float(shift), thumb=-.4)
+
+    grip_load = fade(frame, 18, 30)*(1-fade(frame, 96, 112))
+    if grip_load > 0:
+        # Seat each pad after the wrist solve so the opposed thumb keeps its brace.
+        # Flex at the knuckles, then flatten the distal segments against the cloth.
+        wrist_rotation = pose.rotation(right.wrist)
+        flex_axis = wrist_rotation @ right.curl_axis
+        for digit, angles in (("Index", (.44, -.10, -.30)), ("Middle", (.40, -.34, -.46))):
+            for segment, angle in enumerate(angles, start=1):
+                pose.turn(joint(f"RightHand{digit}{segment}"), flex_axis, angle*grip_load)
+        # The index reaches just past the rounded corner onto the flat cover.
+        palm_normal = wrist_rotation @ (right.basis @ V((0, 0, right.sign)))
+        pose.turn(joint("RightHandIndex1"), palm_normal, .15*grip_load)
+
+    if grip_load > 0:
+        # Brace the wrapped spine with the opposed thumb while the distal pads
+        # press the cover. Aim from the first thumb joint so its length is fixed.
+        thumb = joint("RightHandThumb1")
+        start = pose.point(thumb)
+        end = pose.point(right.thumb)
+        rest = pose.rotation(thumb)
+        # The raised label adds 3 mm at the middle of the wrapped spine.
+        label_clearance = .0028*(1-fade(frame, 85.7, 88.0)) if row == 2 else 0
+        brace = TO_RIG @ (grab + book_blender.to_3x3() @ V((-.040+label_clearance, .02465, -.042)))
+        swing = (end-start).rotation_difference(brace-start)
+        pose.set_rotation(thumb, Q((1, 0, 0, 0)).slerp(swing, grip_load) @ rest)
+        # Oppose the thumb toward the spine, turning the fleshy distal surface
+        # in together with the thumb ray. The thumb tip stays at its brace.
+        axis = (pose.point(right.thumb)-start).normalized()
+        pose.turn(thumb, axis, -.65*grip_load)
 
     # Acquire the supporting palm by export124 (author88), before the leading
     # spine grip is allowed to transfer at132. A nearly-complete free reach still
@@ -557,6 +579,8 @@ def choreograph(pose, hands, row, frame):
     left_local = V((.035+.155*smooth((lay_flat-.5)/.5),
                     .052-.0785*smooth(lay_flat/.45)-.009*sin(pi*fade(frame, 96, LAST)),
                     -.134+.094*smooth((lay_flat-.45)/.55)))
+    # Keep the approaching thumb below the bottom edge until it seats at 124.
+    left_local.z -= .026*fade(frame, 73, 81)*(1-fade(frame, 86, 88))
     left_local.z -= .07*sin(pi*fade(frame, 108, LAST))
     left_position = book_blender @ left_local
     left_position += (book_blender.to_3x3() @ V((-.025, -.08, -.055))) * (1-catch)
