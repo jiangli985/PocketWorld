@@ -3,7 +3,6 @@ import type { ResidentArm, ResidentRig } from '../ResidentModel';
 
 const origin = new THREE.Vector3();
 const target = new THREE.Vector3();
-const axis = new THREE.Vector3();
 const bend = new THREE.Vector3();
 const elbow = new THREE.Vector3();
 const local = new THREE.Vector3();
@@ -12,14 +11,26 @@ const invParent = new THREE.Quaternion();
 const tempMat = new THREE.Matrix4();
 const tempEuler = new THREE.Euler();
 
-function aim(bone: THREE.Bone, rest: THREE.Vector3, point: THREE.Vector3) {
+function aim(bone: THREE.Bone, rest: THREE.Vector3, point: THREE.Vector3, planeNormal: THREE.Vector3) {
   bone.parent!.updateWorldMatrix(true, false);
   local.copy(point);
   bone.parent!.worldToLocal(local);
   local.sub(bone.position);
   if (local.lengthSq() < 1e-10) return;
   local.normalize();
-  bone.quaternion.setFromUnitVectors(axis.copy(rest).normalize(), local);
+  // A direction alone leaves roll undefined and its shortest arc flips near -rest.
+  // The elbow plane supplies the second axis for a deterministic anatomical frame.
+  const restForward = rest.clone().normalize();
+  const restUp = new THREE.Vector3(0, 0, Math.abs(restForward.z) > 0.98 ? 0 : 1);
+  if (restUp.lengthSq() === 0) restUp.set(0, 1, 0);
+  restUp.addScaledVector(restForward, -restUp.dot(restForward)).normalize();
+  const up = planeNormal.clone().applyQuaternion(bone.parent!.getWorldQuaternion(new THREE.Quaternion()).invert());
+  up.addScaledVector(local, -up.dot(local)).normalize();
+  const bindFrame = new THREE.Quaternion().setFromRotationMatrix(
+    new THREE.Matrix4().makeBasis(restForward, restUp, restForward.clone().cross(restUp)),
+  );
+  bone.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(local, up, local.clone().cross(up)))
+    .multiply(bindFrame.invert());
   bone.updateWorldMatrix(false, true);
 }
 
@@ -69,9 +80,9 @@ export function reachArm(
 
   const meshQuat = rig.mesh.getWorldQuaternion(rotation);
   // Anatomical elbow pole: comfortably outward, downward, and slightly backward.
-  bend.set(side ? 0.78 : -0.78, -0.52, -0.36).applyQuaternion(meshQuat);
+  bend.set(side ? 0.72 : -0.72, -0.82, -0.12).applyQuaternion(meshQuat);
   if (poleHint && poleHint.lengthSq() > 1e-6) {
-    bend.addScaledVector(poleHint.clone().normalize(), 0.35);
+    bend.copy(poleHint);
   }
   bend.addScaledVector(target, -bend.dot(target));
   if (bend.lengthSq() < 1e-6) {
@@ -85,8 +96,9 @@ export function reachArm(
     .copy(origin)
     .addScaledVector(target, along)
     .addScaledVector(bend, Math.sqrt(Math.max(0, arm.upperLength ** 2 - along ** 2)));
-  aim(arm.upper, arm.restUpper, elbow);
-  aim(arm.forearm, arm.restLower, destination);
+  const planeNormal = new THREE.Vector3().crossVectors(target, bend).multiplyScalar(side ? 1 : -1).normalize();
+  aim(arm.upper, arm.restUpper, elbow, planeNormal);
+  aim(arm.forearm, arm.restLower, destination, planeNormal);
   arm.hand.quaternion.identity();
 }
 
@@ -109,10 +121,13 @@ export interface ReachPalmOptions {
   blend?: number;
   armBlend?: number;
   mode?: 'palm' | 'tip' | 'pinch';
+  tipWeight?: number;
   shoulderWeight?: number;
   poleHint?: THREE.Vector3;
   fingerCurl?: number;
   thumbOppose?: number;
+  /** Exact bounded pronation for the closed-cover grip, faded out before reading. */
+  forearmTwistBlend?: number;
 }
 
 export function reachPalm(
@@ -123,13 +138,15 @@ export function reachPalm(
   orientationOrOptions?: { quaternion: THREE.Quaternion; blend: number } | ReachPalmOptions,
 ) {
   const opts: ReachPalmOptions = orientationOrOptions ?? {};
+  if (opts.fingerCurl !== undefined) arm.setFingers?.(opts.fingerCurl, opts.thumbOppose);
   const shoulderWeight = opts.shoulderWeight ?? 0;
   solveShoulder(rig, arm, contact, side, shoulderWeight);
 
   const localOffset = new THREE.Vector3();
   const palm = arm.palmOffset?.clone() ?? (side ? new THREE.Vector3(-0.025, -0.004, 0.014) : new THREE.Vector3(-0.008, -0.025, -0.004));
   const tip = arm.fingerTipOffset?.clone() ?? palm.clone().multiplyScalar(1.55);
-  if (opts.mode === 'tip') localOffset.copy(tip);
+  if (opts.tipWeight !== undefined) localOffset.lerpVectors(palm, tip, opts.tipWeight);
+  else if (opts.mode === 'tip') localOffset.copy(tip);
   else if (opts.mode === 'pinch') localOffset.lerpVectors(palm, tip, 0.48);
   else localOffset.copy(palm);
 
@@ -159,10 +176,18 @@ export function reachPalm(
         forearmAxis.normalize();
         const delta = base.clone().multiply(restPalm.clone().invert());
         const dot = delta.x * forearmAxis.x + delta.y * forearmAxis.y + delta.z * forearmAxis.z;
-        let twistAngle = 2 * Math.atan2(dot, delta.w);
-        if (twistAngle > Math.PI) twistAngle -= 2 * Math.PI;
-        if (twistAngle < -Math.PI) twistAngle += 2 * Math.PI;
-        const share = THREE.MathUtils.clamp(twistAngle * 0.78, -1.75, 1.75);
+        // Preserve the signed swing/twist decomposition. Squaring the projected
+        // quaternion discarded pronation direction and could turn the forearm
+        // away from the requested palm, leaving a half turn at the wrist.
+        // The signed sine is invariant to q/-q and continuous at a half turn.
+        // Fade out at the undefined opposite swing instead of selecting a
+        // discontinuous atan2 branch; retain the existing 100° upper bound.
+        const sineShare = 1.75 * (2 * dot * delta.w) / (dot * dot + delta.w * delta.w + 0.16);
+        // This grip stays on one side of the half-turn branch. The sine share
+        // loses leverage there and leaves >100 degrees in the closed wrist.
+        // Canonicalizing q/-q keeps repeated or reverse seeking deterministic.
+        const request = 2 * Math.atan2(dot * (delta.w < 0 ? -1 : 1), Math.abs(delta.w));
+        const share = THREE.MathUtils.lerp(sineShare, THREE.MathUtils.clamp(request, -1.75, 1.75), opts.forearmTwistBlend ?? 0);
         twistQuat.setFromAxisAngle(forearmAxis, share);
         arm.forearm.parent!.getWorldQuaternion(invParent).invert();
         arm.forearm.getWorldQuaternion(forearmWorldQuat);
@@ -185,7 +210,6 @@ export function reachPalm(
     arm.forearm.quaternion.copy(id.clone().slerp(arm.forearm.quaternion, ab));
     arm.hand.quaternion.copy(id.clone().slerp(arm.hand.quaternion, ab));
   }
-  if (opts.fingerCurl !== undefined) arm.setFingers?.(opts.fingerCurl, opts.thumbOppose);
 }
 
 export function applyTorsoAndGazeIK(
