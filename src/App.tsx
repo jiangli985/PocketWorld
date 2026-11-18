@@ -7,6 +7,7 @@ import { OrbitalScene } from './scene/orbital/OrbitalScene';
 import { useLibrary } from './scene/orbital/library/useLibrary';
 import { LibrarySurface } from './scene/orbital/library/LibrarySurface';
 import { useWorldController } from './scene/orbital/useWorldController';
+import { DustPrompt } from './scene/orbital/OrbitalDustPrompt';
 import './scene/orbital/orbital.css';
 
 export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters }) => {
@@ -88,8 +89,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
   const focusGuide = world.focusedObject === 'journal' ? '点击书页书写 · ← / → 翻页 · 自动保存 · Esc 返回'
     : world.focusedObject === 'schedule' ? '← / → 翻页 · 上拖纸页贴出 · V 切换视角 · Esc 返回'
     : world.focusedObject === 'schedule-glass' ? '左右键浏览 · V 切换视角 · Esc 返回' : '';
-  const status = announcement || world.error || audio.error || focusGuide || world.hover?.hint || (world.focusedObject ? '操作物品继续探索 · Esc / 双指轻触退回' : '靠近物品后按 E 互动');
-  const travelling = world.transition.action?.kind === 'travel' && !['active', 'idle', 'error'].includes(world.transition.phase);
+  const status = announcement || world.error || audio.error || focusGuide || world.hover?.hint || (world.focusedObject ? '操作物品继续探索 · Esc / 双指轻触退回' : '');
   return <main className={`orbital-app${draggingFile ? ' is-importing' : ''}${world.focusedObject ? ' is-focused' : ''}`} aria-label="PocketWorld 轨道居住舱"
     onDragEnter={event => { if (world.focusedObject !== 'music-player' || !event.dataTransfer.types.includes('Files')) return; event.preventDefault(); inputDepth.current += 1; setDraggingFile(true); }}
     onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
@@ -101,14 +101,8 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     <header className="orbital-header">
       <div className="orbital-wordmark"><span className="orbital-emblem" aria-hidden="true" /><span>pocketworld<span className="orbital-wordmark-dot">.</span></span></div>
       <p className="orbital-edition">A LITTLE SPACE TO BE YOURSELF</p>
-      <div className="orbital-coordinate"><span>EARTH ORBIT</span><strong>{world.sceneId === 'habitat' ? 'HABITAT / 01' : 'OBSERVATORY / 02'}</strong><i>旋转居住环 · 地球轨道</i></div>
     </header>
-    <div className="orbital-caption" aria-hidden="true"><h1>{world.sceneId === 'habitat' ? '宇宙很大。\n这里，刚刚好。' : '在星光里，\n慢慢读一页。'}</h1></div>
-    <footer className="orbital-footer">
-      <div className="orbital-location"><span className="orbital-live-dot" /><span>{travelling ? '前往下一间舱室' : world.sceneId === 'habitat' ? '生活舱' : '观景阅览舱'}</span><span className="orbital-location-rule" /><span>ORBITAL HOME</span></div>
-      <p className="orbital-status" role="status" aria-live="polite">{status}</p>
-      <p className="orbital-guide">拖动环绕 · 捏合缩放 · 点地面走动<span>WASD / 方向键行走 · E 互动</span></p>
-    </footer>
+    <DustPrompt text={status} reducedMotion={world.reducedMotion} />
     {audio.isPlaying && <aside className="orbital-now-playing"><span className="orbital-record-dot" /><div><small>NOW PLAYING</small><p>{audio.disc.title}</p></div></aside>}
     {draggingFile && <div className="orbital-drop-message"><span className="orbital-drop-disc" /><p>让这段音乐，留在这里。</p><small>松手制作一张自己的唱片</small></div>}
     <input ref={fileInput} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac" hidden onChange={event => importFiles(event.target.files)} />

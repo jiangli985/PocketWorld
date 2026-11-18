@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import * as THREE from 'three';
 import { webcrypto } from 'node:crypto';
 function fixture({ fail = false } = {}) {
   const memory = new Map(); let tail = Promise.resolve();
@@ -77,12 +78,24 @@ test('移除用户书释放原书位，其他内容、进度及刷新恢复保�
   const next = await m.mutateLibrary(d => ({ ...d, books: [...d.books, m.makeUserBook(d, '另一本', '', '另一段')] }));
   assert.equal(next.books.at(-1).slotId, b.slotId); assert.equal(next.books[0].anchor, 50); assert.equal(next.books.filter(x => x.id === b.id).length, 0);
 });
-function controller() {
+function controller(reducedMotion = false) {
   const m = fixture(), effects = [], errors = [], actions = [], frames = [];
   const react = { useRef: current => ({ current }), useState: v => [typeof v === 'function' ? v() : v, () => {}], useCallback: fn => fn, useEffect: fn => effects.push(fn) };
-  const exports = {};
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('./useLibrary.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports, ...m.globals, require: name => name === 'react' ? react : m, window: { addEventListener() {}, removeEventListener() {}, setTimeout: fn => fn(), clearTimeout() {} } });
-  const c = exports.useLibrary({ sceneId: 'habitat', reducedMotion: false, onAction: a => actions.push(a), onReturn: () => actions.push('return'), error: s => errors.push(s) }); effects.forEach(fn => fn());
+  const dependencies = { react, three: THREE, './catalog': m };
+  const loadModule = filename => {
+    const exports = {};
+    const require = name => {
+      if (!(name in dependencies)) throw new Error('Missing controller fixture dependency: ' + name);
+      return dependencies[name];
+    };
+    vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(filename, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports, ...m.globals, require, window: { addEventListener() {}, removeEventListener() {}, setTimeout: fn => fn(), clearTimeout() {} } });
+    return exports;
+  };
+  dependencies['../residentRig'] = loadModule('../residentRig.ts');
+  dependencies['./pageTurnFrames'] = loadModule('./pageTurnFrames.ts');
+  dependencies['./bookMotion'] = loadModule('./bookMotion.ts');
+  dependencies['./libraryMotion'] = loadModule('./libraryMotion.ts');
+  const c = loadModule('./useLibrary.ts').useLibrary({ sceneId: 'habitat', reducedMotion, onAction: a => actions.push(a), onReturn: () => actions.push('return'), error: s => errors.push(s) }); effects.forEach(fn => fn());
   const advance = () => { for (let i = 0; i < 250; i++) { if (['approach', 'reading', 'catalog', 'align', 'recenter', 'idle'].includes(c.flow.current.phase)) break; c.tick(.04); } };
   const enter = (itemId) => {
     c.dispatch({ sceneId: 'habitat', objectId: 'book-01', kind: 'read', payload: { itemId } });
@@ -116,8 +129,8 @@ test('抵达书柜即开始取指定书，归还后可退出并继续待处理�
   c.back();
   assert.equal(c.flow.current.phase, 'idle');
 });
-test('翻页边界、连点、动画中 Esc 不跳页，换书先还后取且记住独立锚点', async () => {
-  const { c, m, enter, open, advance, actions } = controller(); enter(); open('book-01'); assert.equal(c.flow.current.phase, 'reading'); c.turn(-1); assert.equal(c.flow.current.phase, 'reading');
+for (const reducedMotion of [false, true]) test(`翻页边界、连点、动画中 Esc 不跳页，换书先还后取且记住独立锚点（${reducedMotion ? '减少动态效果' : '普通'}）`, async () => {
+  const { c, m, enter, open, advance, actions } = controller(reducedMotion); enter(); open('book-01'); assert.equal(c.flow.current.phase, 'reading'); c.turn(-1); assert.equal(c.flow.current.phase, 'reading');
   c.turn(1); for (let i = 0; i < 20; i++) c.turn(i % 2 ? 1 : -1); assert.equal(c.flow.current.phase, 'turn'); advance(); assert.equal(c.flow.current.page, 1); c.turn(1); assert.equal(c.flow.current.phase, 'reading');
   c.turn(-1); c.back(); advance(); assert.equal(c.flow.current.phase, 'recenter'); c.arrived(); assert.equal(c.flow.current.phase, 'catalog'); assert.equal(actions.includes('return'), false);
   open('book-01'); c.choose('book-02'); assert.equal(c.flow.current.book.id, 'book-01'); advance(); c.arrived(); assert.equal(c.flow.current.book.id, 'book-02'); assert.equal(c.flow.current.phase, 'align');

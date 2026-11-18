@@ -43,6 +43,84 @@ export function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE
   setWorldRotation(foot, sole);
 }
 
+/** A spring with an analytic update so its settling time is independent of the display rate. */
+function followSpring(frequency: number) {
+  const damping = frequency * .72;
+  const oscillation = Math.sqrt(frequency ** 2 - damping ** 2);
+  let value = 0;
+  let velocity = 0;
+  return {
+    step(target: number, dt: number) {
+      const error = value - target;
+      const envelope = Math.exp(-damping * dt);
+      const sin = Math.sin(oscillation * dt);
+      const cos = Math.cos(oscillation * dt);
+      value = target + envelope * (error * cos + (velocity + damping * error) / oscillation * sin);
+      velocity = envelope * (velocity * cos - (damping * velocity + frequency ** 2 * error) / oscillation * sin);
+      return value;
+    },
+    reset() { value = velocity = 0; },
+  };
+}
+
+function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
+  const inverse = new THREE.Quaternion();
+  const forward = head.getWorldQuaternion(inverse).invert();
+  const headForward = new THREE.Vector3(0, 0, 1).applyQuaternion(forward);
+  const axis = new THREE.Vector3(), direction = new THREE.Vector3();
+  const offset = new THREE.Quaternion();
+  const parts = Array.from(bones).flatMap(joint => {
+    const match = /^(Hair|Dress)_(.+)_0([1-4])$/.exec(joint.name);
+    if (!match) return [];
+    const hair = match[1] === 'Hair';
+    const depth = Number(match[3]);
+    const weight = (hair ? [.17, .34, .42, .40] : [.21, .41, .48])[depth - 1]
+      * (hair && match[2].startsWith('Front') ? .45 : 1);
+    joint.getWorldQuaternion(inverse).invert();
+    return [{
+      joint, hair, weight,
+      pitchAxis: new THREE.Vector3(1, 0, 0).applyQuaternion(inverse),
+      rollAxis: new THREE.Vector3(0, 0, 1).applyQuaternion(inverse),
+    }];
+  });
+  const hairPitch = followSpring(14), hairRoll = followSpring(12);
+  const skirtPitch = followSpring(17), skirtRoll = followSpring(15);
+  const clamp = THREE.MathUtils.clamp;
+  const angleDelta = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+  let previous: { yaw: number; gaze: number } | null = null;
+
+  return (rawDelta: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => {
+    if (!enabled || rawDelta > .2) {
+      previous = null;
+      hairPitch.reset(); hairRoll.reset(); skirtPitch.reset(); skirtRoll.reset();
+      return;
+    }
+    if (rawDelta <= 0) return;
+    const dt = Math.min(rawDelta, .05);
+    direction.copy(headForward).applyQuaternion(head.getWorldQuaternion(inverse));
+    const gaze = Math.atan2(direction.x, direction.z);
+    const turning = previous ? clamp(angleDelta(yaw, previous.yaw) / rawDelta / 4.5, -1, 1) : 0;
+    const headTurn = previous ? clamp(angleDelta(gaze, previous.gaze) / rawDelta / 4.5, -1, 1) : 0;
+    if (previous) { previous.yaw = yaw; previous.gaze = gaze; }
+    else previous = { yaw, gaze };
+    const walk = clamp(Math.hypot(dx, dz) / (dt * WALK_SPEED), 0, 1);
+    const forwardSpeed = clamp((dx * Math.sin(yaw) + dz * Math.cos(yaw)) / (dt * WALK_SPEED), -.35, 1);
+    const swing = Math.sin(phase * Math.PI * 2);
+    const hairPitchAngle = hairPitch.step(.15 * forwardSpeed + .090 * swing * walk, dt);
+    const hairRollAngle = hairRoll.step(-.31 * headTurn + .105 * swing * walk, dt);
+    const skirtPitchAngle = skirtPitch.step(.085 * forwardSpeed + .060 * swing * walk, dt);
+    const skirtRollAngle = skirtRoll.step(-.20 * turning + .145 * swing * walk, dt);
+    for (const { joint, hair, weight, pitchAxis, rollAxis } of parts) {
+      const pitch = (hair ? hairPitchAngle : skirtPitchAngle) * weight;
+      const roll = (hair ? hairRollAngle : skirtRollAngle) * weight;
+      const angle = Math.hypot(pitch, roll);
+      if (angle < .0001) continue;
+      axis.copy(pitchAxis).multiplyScalar(pitch / angle).addScaledVector(rollAxis, roll / angle);
+      joint.quaternion.multiply(offset.setFromAxisAngle(axis, angle));
+    }
+  };
+}
+
 export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationClip): ResidentRig {
   const bones = new Map<string, THREE.Bone>();
   const skinned: THREE.SkinnedMesh[] = [];
@@ -162,16 +240,34 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     const palmZ = palmX.clone().cross(palmY).normalize();
     const palmBasis = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(palmX, palmY, palmZ));
     const palmOffset = palmVec.clone().multiplyScalar(0.55).addScaledVector(palmZ, 0.018);
-    const fingerTipOffset = mid4.clone().sub(wrist).multiplyScalar(0.86).addScaledVector(palmZ, 0.013);
+    const fingerTipOffset = mid4.clone().sub(wrist);
     const curlAxis = palmX.clone().negate();
     const thumbAxis = fingerDir.clone().multiplyScalar(sideIndex === 0 ? -0.85 : 0.85).addScaledVector(curlAxis, 0.5).normalize();
     const fingerChains = ['Index', 'Middle', 'Ring', 'Pinky'].map((name, fi) =>
       [1, 2, 3].map(seg => ({ bone: control(bone(`${side}Hand${name}${seg}`), hand, wrist), factor: (0.75 + seg * 0.22) * (0.92 + fi * 0.05) }))
     ).flat();
     const thumbChain = [1, 2].map(seg => ({ bone: control(bone(`${side}HandThumb${seg}`), hand, wrist), factor: seg === 1 ? 0.65 : 0.9 }));
+    const handNeutral = handBone.getWorldQuaternion(new THREE.Quaternion());
+    const middleChain = [1, 2, 3, 4].map(seg => {
+      const target = bone(side + 'HandMiddle' + seg);
+      return { target, rest: capture(target), mapping: controlMap.find(entry => entry.target === target) };
+    });
+    const fingerMatrix = new THREE.Matrix4(), segmentMatrix = new THREE.Matrix4();
+    const segmentRotation = new THREE.Quaternion();
     const setFingers = (curl: number, thumbOppose = curl * 0.6) => {
       for (const f of fingerChains) f.bone.quaternion.setFromAxisAngle(curlAxis, curl * f.factor);
       for (const t of thumbChain) t.bone.quaternion.setFromAxisAngle(thumbAxis, thumbOppose * t.factor);
+      // Solve the actual curled middle-finger chain, in the hand controller's
+      // neutral room basis. Library IK must touch the sheet with the real tip,
+      // rather than a shortened neutral finger proxy that floats above it.
+      fingerMatrix.identity();
+      for (const { rest, mapping } of middleChain) {
+        if (mapping) segmentRotation.copy(mapping.parentBasis).multiply(mapping.control.quaternion).multiply(mapping.neutral);
+        else segmentRotation.copy(rest.quaternion);
+        segmentMatrix.compose(rest.position, segmentRotation, rest.scale);
+        fingerMatrix.multiply(segmentMatrix);
+      }
+      fingerTipOffset.setFromMatrixPosition(fingerMatrix).multiplyScalar(RESIDENT_SCALE).applyQuaternion(handNeutral);
     };
     return { shoulder, upper, forearm, hand, restWrist: wrist,
       restUpper: forearm.position.clone(), restLower: hand.position.clone(),
@@ -184,6 +280,7 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     neutral: target.getWorldQuaternion(new THREE.Quaternion()),
     front: target.name.includes('Front'), side: /^Dress_(Left|Right)_/.test(target.name),
   }));
+  const followMotion = createFollowMotion(bones.values(), bone('Head'));
   const neutral = Array.from(bones.values(), joint => ({ joint, pose: capture(joint) }));
   const walkPose = neutral.map(({ joint }) => capture(joint));
   const axisX = new THREE.Vector3(1, 0, 0);
@@ -221,6 +318,6 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     });
   }
 
-  return { mesh, legs, arms, torso, neck, head, skirtFront, skirtBack, applyPose, neutralPose: neutral,
+  return { mesh, legs, arms, torso, neck, head, skirtFront, skirtBack, applyPose, followMotion, neutralPose: neutral,
     dispose: () => { for (const object of skinned) object.skeleton.dispose(); } };
 }
