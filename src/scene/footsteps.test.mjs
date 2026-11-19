@@ -22,8 +22,9 @@ function load(path, dependencies, globals = {}) {
   return context.exports;
 }
 
+const catalog = load('./orbital/library/catalog.ts', {});
+
 function libraryDependencies(residentRig) {
-  const catalog = load('./orbital/library/catalog.ts', {});
   const authored = load('./orbital/library/pageTurnFrames.ts', {});
   const bookMotion = load('./orbital/library/bookMotion.ts', { three: THREE, './catalog': catalog, './pageTurnFrames': authored });
   const armPose = load('./orbital/library/armPose.ts', { three: THREE });
@@ -86,7 +87,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './library/armPose': { resetArms() {} },
     './library/libraryMotion': { libraryCoverFlow: flow => flow },
     './library/bookMotion': { residentLibraryTarget: () => [0, 0, 0] },
-    './library/catalog': { readingStand: () => [-3.28, 0, -1.92], shelfOrigin: () => [-3.28, 0, -2.79] },
+    './library/catalog': catalog,
     './scene/orbital/useWorldController': { useWorldController: () => world },
     './scene/orbital/OrbitalDustPrompt': { DustPrompt: 'DustPrompt' },
     './standingIdle': load('./orbital/standingIdle.ts', { three: THREE, 'three/examples/jsm/loaders/GLTFLoader.js': { GLTFLoader: class {
@@ -156,8 +157,9 @@ test('书柜站位等待动画绑定，成功保持烘焙站位，失败平滑�
     };
     const view = mount('orbital', { enabled: false, focusedObject: 'book-01', library });
     try {
-      view.root.position.set(-3.28, 0, -1.92);
-      view.root.rotation.y = Math.PI;
+      const catalog = modules['./library/catalog'];
+      view.root.position.fromArray(catalog.readingStand('habitat'));
+      view.root.rotation.y = Math.PI + catalog.shelfYaw('habitat');
       const bookMotion = modules['./library/bookMotion'];
       const authored = new THREE.Vector3(...bookMotion.authoredBookStand('habitat', flow.book));
       for (let i = 0; i < 180; i++) view.frame(1 / 60);
@@ -343,13 +345,15 @@ for (const fps of [30, 60, 144]) {
     const view = mount('orbital');
     let performed = 0;
     try {
-      view.props.interaction.current([-3.3, 1, -1.8], { sceneId: 'habitat', objectId: 'book-01', kind: 'read' }, () => performed++);
+      view.root.position.set(.15, 0, .15);
+      const target = catalog.shelfPoint('habitat', 0, 1, .87);
+      view.props.interaction.current(target, { sceneId: 'habitat', objectId: 'book-01', kind: 'read' }, () => performed++);
       assert.equal(performed, 0);
       for (let i = 0; i < fps / 2; i++) view.frame(1 / fps);
       assert.equal(performed, 0);
       for (let i = 0; i < fps * 10 && !performed; i++) view.frame(1 / fps);
       assert.equal(performed, 1);
-      assert.ok(Math.hypot(view.root.position.x + 3.3, view.root.position.z + 1.8) <= 1.15);
+      assert.ok(Math.hypot(view.root.position.x - target[0], view.root.position.z - target[2]) <= 1.15);
       for (let i = 0; i < fps; i++) view.frame(1 / fps);
       assert.equal(performed, 1);
     } finally { view.dispose(); }

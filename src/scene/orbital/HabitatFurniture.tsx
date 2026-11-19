@@ -64,7 +64,8 @@ function FurnitureChair({ world, lounge = false }: { world: WorldModelProps; lou
 
 function FurnitureLamp({ world }: { world: WorldModelProps }) {
   const state = world.objects.lamp ?? CLOSED_OBJECT;
-  return <group position={[-1.1, 0, -2.85]}>
+  const bedside = world.sceneId === 'habitat';
+  return <group position={bedside ? [-2.79, .829, -1.04] : [-1.1, 0, -2.85]} scale={bedside ? .48 : 1}>
     <SuppliedAsset name="lamp.parts" part="body" size={[.72, 2.02, .48]} fit="contact" position={[.22, 0, 0]} rotation={[0, Math.PI, 0]} fallback={<>    <Cylinder radius={0.23} height={0.065} position={[0, 0.0325, 0]} color={C.ink} />
     <Tube points={[[0, 0.06, 0], [0, 1.5, 0], [0.03, 1.88, 0], [0.22, 2.01, 0], [0.37, 1.97, 0]]} radius={0.022} color={C.brass} />
     <mesh position={[0.37, 1.8, 0]} castShadow><cylinderGeometry args={[0.13, 0.26, 0.32, 32, 1, true]} /><meshStandardMaterial color="#ecd8a3" roughness={0.8} side={2} /></mesh>
@@ -82,15 +83,15 @@ function FurnitureLamp({ world }: { world: WorldModelProps }) {
 
 function FurniturePlant({ world, observatory }: { world: WorldModelProps; observatory: boolean }) {
   const state = world.objects.plant ?? CLOSED_OBJECT;
-  return <ObjectHandle id="plant" action="water" hint="照料盆栽 · 浇水" world={world} position={observatory ? [2.75, 0, 1.85] : [-3.55, 0, 2.55]}>
-    <SuppliedAsset name="plant" size={[1, observatory ? 1.02 : .85, 1]} fallback={<ReusableAsset path="plants/potted_plant_04.glb" height={observatory ? 1.02 : 0.85} />} />
+  return <ObjectHandle id="plant" action="water" hint="照料盆栽 · 浇水" world={world} position={observatory ? [2.75, 0, 1.85] : [-2.17, .829, -1.19]}>
+    <SuppliedAsset name="plant" size={observatory ? [1, 1.02, 1] : [.54, .88, .54]} fallback={<ReusableAsset path="plants/potted_plant_04.glb" height={observatory ? 1.02 : 0.85} />} />
     {state.value > 0 && <Orb position={[0.03, 0.31, 0.02]} scale={[0.028, 0.012, 0.028]} color="#83b9b1" />}
   </ObjectHandle>;
 }
 
 function FurnitureHatch() {
-  return <group position={[4.28, 0, -1.6]} rotation={[0, -Math.PI / 2, 0]} name="Furniture_Hatch">
-    <SuppliedAsset name="hatch" size={[1.22, 2.38, .23]} fit="contact" fallback={<>    {[-0.57, 0.57].map(x => <SoftBox key={x} dims={[0.12, 2.35, 0.18]} position={[x, 1.175, 0]} color="#6f8986" radius={0.06} />)}
+  return <group position={[3.98, 0, -1.6]} rotation={[0, -Math.PI / 2, 0]} name="Furniture_Hatch">
+    <SuppliedAsset name="hatch" size={[1.58, 2.89, .23]} fit="contact" fallback={<>    {[-0.57, 0.57].map(x => <SoftBox key={x} dims={[0.12, 2.35, 0.18]} position={[x, 1.175, 0]} color="#6f8986" radius={0.06} />)}
     <SoftBox dims={[1.22, 0.13, 0.18]} position={[0, 2.32, 0]} color="#6f8986" radius={0.055} />
     <SoftBox dims={[1.2, 0.055, 0.23]} position={[0, 0.0275, 0]} color={C.brass} radius={0.02} />
     <group position={[0, 1.16, 0]}>
@@ -109,7 +110,7 @@ export const HabitatFurniture: React.FC<WorldModelProps> = world => {
   const observatory = world.sceneId === 'observatory';
   return <group name={`Furniture_${world.sceneId}`}>
     <FurnitureDesk world={world} />
-    <FurnitureBookcase world={world} observatory={observatory} />
+    <FurnitureBookcase world={world} />
     {observatory ? <>
       <SoftBox dims={[2.9, 0.025, 2.2]} position={[-1.5, 0.013, 0.8]} radius={0.01} color="#748f8a" />
       <FurnitureChair world={world} lounge />
