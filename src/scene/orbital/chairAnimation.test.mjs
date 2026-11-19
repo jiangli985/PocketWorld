@@ -122,3 +122,43 @@ test('the raised front skirt covers both thighs during the scoot and deep seated
  }
  a.dispose();
 });
+
+test('palms face the armrests with aligned forearms and little axial wrist twist during sit and exit', () => {
+  const actor = instance();
+  const chains = ['Left', 'Right'].map(side => {
+    const joint = name => actor.asset.getObjectByName(`mixamorig${side}${name}`);
+    const wrist = joint('Hand');
+    const mesh = actor.asset.getObjectByProperty('isSkinnedMesh', true);
+    const index = mesh.skeleton.bones.indexOf(wrist);
+    const parent = mesh.skeleton.bones.indexOf(wrist.parent);
+    const bind = mesh.skeleton.boneInverses[parent].clone().multiply(mesh.skeleton.boneInverses[index].clone().invert());
+    const bindRotation = new THREE.Quaternion().setFromRotationMatrix(bind.extractRotation(bind));
+    const middle = joint('HandMiddle1');
+    return { side, wrist, middle, index: joint('HandIndex1'), pinky: joint('HandPinky1'),
+      bindRotation, palmAxis: middle.position.clone().normalize() };
+  });
+  const position = bone => bone.getWorldPosition(new THREE.Vector3());
+  try {
+    for (const reverse of [false, true]) for (let step = 0; step <= 2 * (89 - 55); step++) {
+      const frame = reverse ? 89 - step / 2 : 55 + step / 2;
+      actor.sample((frame - 1) / CHAIR_FPS);
+      for (const { side, wrist, middle, index, pinky, bindRotation, palmAxis } of chains) {
+        const label = `${side} at Blender frame ${frame} (${reverse ? 'exit' : 'sit'})`;
+        const forearm = position(wrist).sub(position(wrist.parent)).normalize();
+        const palm = position(middle).sub(position(wrist)).normalize();
+        assert(THREE.MathUtils.radToDeg(forearm.angleTo(palm)) < 58, `bent wrist: ${label}`);
+        const relative = bindRotation.clone().invert().multiply(wrist.quaternion).normalize();
+        const axial = new THREE.Vector3(relative.x, relative.y, relative.z).dot(palmAxis);
+        const twist = 2 * Math.atan2(Math.abs(axial), Math.abs(relative.w));
+        assert(THREE.MathUtils.radToDeg(twist) < 12, `twisted wrist: ${label}`);
+        if (frame >= 65 && frame <= 82) {
+          const across = position(index).sub(position(pinky));
+          const inwardNormal = palm.clone().cross(across).normalize().multiplyScalar(side === 'Left' ? 1 : -1);
+          assert(inwardNormal.y < -.97, `palm should face the rail: ${label}`);
+        }
+      }
+    }
+  } finally {
+    actor.dispose();
+  }
+});
