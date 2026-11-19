@@ -4,7 +4,7 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { WorldSceneProps } from '../../../types/world';
 import { useSchedule } from './ScheduleContext';
-import { discardSchedulePage, MAX_POSTED_SCHEDULES, postSchedulePage, turnSchedulePage, schedulePageError, SCHEDULE_FULL_MESSAGE } from './schedule';
+import { discardSchedulePage, tearSchedulePage, turnSchedulePage } from './schedule';
 import { BOOK_POSITION, FloorPaperBall, FlyingPaper, GLASS_POSITION, PostedPaper, type PaperFlight } from './SchedulePaper';
 import './schedule.css';
 
@@ -42,22 +42,15 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
     props.onGesture(false);
     props.onAction({ sceneId: props.sceneId, objectId: glassView ? 'schedule' : 'schedule-glass', kind: glassView ? 'plan' : 'inspect' });
   };
-  const post = (from: [number, number, number]) => {
+  const tear = (from: [number, number, number]) => {
     if (busy.current || !settled || !ready || !book.current.ready) return;
-    if (state.posted.length >= MAX_POSTED_SCHEDULES) {
-      setMessage('玻璃贴满了，先移除一张吧。');
-      props.onFeatureError(SCHEDULE_FULL_MESSAGE);
-      return;
-    }
-    const invalid = schedulePageError(state.current);
-    if (invalid) { setMessage(invalid); return; }
     const page = state.current;
-    if (!commit(postSchedulePage(state))) return;
+    (document.activeElement as HTMLElement)?.blur?.();
+    if (!commit(tearSchedulePage(state))) return;
     busy.current = true;
-    setMessage(''); setSelectedId(page.id);
-    setFlight({ kind: 'post', page, from });
+    book.current.ready = false;
+    setFlight({ kind: 'tear', page, from });
     props.onGesture(false);
-    props.onAction({ sceneId: props.sceneId, objectId: 'schedule-glass', kind: 'inspect' });
   };
   const resetDrag = () => {
     const held = drag.current;
@@ -69,6 +62,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
   useEffect(() => {
     if (!bookView) return;
     book.current.onTurn = turn;
+    book.current.onTear = () => tear(BOOK_POSITION);
     book.current.onPaperPointer = (page, u, v, kind, _shift, _delta, pointer) => {
       if (kind !== 'down') return false;
       if (v > 0.9 && (page % 2 ? u < 0.15 : u > 0.85)) { turn(page % 2 ? -1 : 1); return; }
@@ -85,10 +79,10 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
       if (!held || held.pointerId !== event.pointerId) return;
       const dx = event.clientX - held.x, dy = event.clientY - held.y;
       resetDrag();
-      if (held.pageId !== state.current.id || -dy < Math.max(32, Math.min(80, size.height * 0.08)) || -dy < Math.abs(dx) * 1.2) return;
+      if (held.pageId !== state.current.id || dy < Math.max(32, Math.min(80, size.height * 0.08)) || dy < Math.abs(dx) * 1.2) return;
       const from = new THREE.Vector3(...BOOK_POSITION).project(camera);
       from.x += dx * 2 / size.width; from.y -= dy * 2 / size.height; from.unproject(camera);
-      post(from.toArray() as [number, number, number]);
+      tear(from.toArray() as [number, number, number]);
     };
     const secondaryPointer = (event: PointerEvent) => { if (!event.isPrimary) resetDrag(); };
     window.addEventListener('pointerdown', secondaryPointer, true);
@@ -96,7 +90,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
     window.addEventListener('pointercancel', resetDrag);
     window.addEventListener('blur', resetDrag);
     return () => {
-      book.current.onTurn = undefined; book.current.onPaperPointer = undefined;
+      book.current.onTurn = undefined; book.current.onTear = undefined; book.current.onPaperPointer = undefined;
       window.removeEventListener('pointerdown', secondaryPointer, true);
       window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', resetDrag); window.removeEventListener('blur', resetDrag);
       resetDrag();
@@ -143,7 +137,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
     {flight && <FlyingPaper flight={flight} reducedMotion={props.reducedMotion} onComplete={() => { busy.current = false; setFlight(null); }} />}
     {focused && !flight && (glassView || message || error) && <Html center transform={!narrow} position={glassView ? [GLASS_POSITION[0], GLASS_POSITION[1] - 0.52, GLASS_POSITION[2] + 0.018] : BOOK_POSITION} distanceFactor={narrow ? undefined : 0.62} zIndexRange={[24, 21]}>
       <div className="schedule-paper-tools" onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
-        {glassView && (selected ? <nav aria-label="玻璃日程翻页"><button disabled={blocked || selectedIndex === 0} onClick={() => setSelectedId(state.posted[selectedIndex - 1].id)} aria-label="上一张安排">‹</button><span>{selectedIndex + 1} / {state.posted.length}</span><button disabled={blocked || selectedIndex >= state.posted.length - 1} onClick={() => setSelectedId(state.posted[selectedIndex + 1].id)} aria-label="下一张安排">›</button><button disabled={blocked} onClick={discard}>揉掉这张</button></nav> : <p>玻璃上还没有安排 · V 返回书本</p>)}
+        {glassView && (selected ? <nav aria-label="玻璃日程翻页"><button disabled={blocked || selectedIndex === 0} onClick={() => setSelectedId(state.posted[selectedIndex - 1].id)} aria-label="上一张安排">‹</button><span>{selectedIndex + 1} / {state.posted.length}</span><button disabled={blocked || selectedIndex >= state.posted.length - 1} onClick={() => setSelectedId(state.posted[selectedIndex + 1].id)} aria-label="下一张安排">›</button><button disabled={blocked} onClick={discard}>揉掉这张</button></nav> : <p>玻璃上没有贴过的日程 · V 返回书本</p>)}
         {message && <p role="status">{message}</p>}
         {error && <p role="alert">{error}<button onClick={retry}>{props.adapters?.schedule ? '重试同步' : '重试保存'}</button></p>}
       </div>
