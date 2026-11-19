@@ -226,6 +226,25 @@ test('walking after Space advances the resident and plays footsteps', () => {
   } finally { view.dispose(); }
 });
 
+test('the floor sofa blocks walking from the rug only inside the habitat', () => {
+  const [x, , z] = cabinLayout.FLOOR_SOFA.position;
+  for (const sceneId of ['habitat', 'observatory']) {
+    const view = mount('orbital', { sceneId });
+    try {
+      view.root.position.set(x, 0, z - 1.4);
+      view.key('KeyS');
+      for (let i = 0; i < 150; i++) view.frame(1 / 60);
+      const end = view.root.position.z;
+      if (sceneId === 'habitat') {
+        const edge = z + cabinLayout.FLOOR_SOFA.footprint.back;
+        assert.ok(end > z - 1.4 && end <= edge - .23);
+      } else {
+        assert.ok(end > z);
+      }
+    } finally { view.dispose(); }
+  }
+});
+
 test('the old bed shortcut no longer starts room interactions', () => {
   const view = mount('app');
   try {

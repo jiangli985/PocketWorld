@@ -1,4 +1,4 @@
-import { BED_ENTRY, BED_POSITION, CABIN_LEFT, NIGHTSTAND_X, NIGHTSTAND_Z } from './cabinLayout';
+import { BED_ENTRY, BED_POSITION, FLOOR_SOFA, CABIN_LEFT, NIGHTSTAND_X, NIGHTSTAND_Z } from './cabinLayout';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -53,12 +53,15 @@ const PUSH = 3.4, ROLL_DRAG = 2.4;
 
 function layout(observatory: boolean) {
   const [shelfX, , shelfZ] = shelfOrigin(observatory ? 'observatory' : 'habitat');
+  const [sofaX, , sofaZ] = FLOOR_SOFA.position;
+  const { left, right, back, front } = FLOOR_SOFA.footprint;
   const furniture: Box[] = [
     [-0.85, 2.95, -3.025, -1.675], // Desk, including the desktop overhang.
     observatory ? [shelfX - .59, shelfX + .59, shelfZ - .27, shelfZ + .27]
       : [shelfX - .27, shelfX + .31, shelfZ - .65, shelfZ + .65],
     ...(observatory ? [[-0.65, 0.15, 0.45, 1.25], [2.4, 3.1, 1.5, 2.2]] as Box[] : [
       [BED_POSITION[0] - .86, BED_POSITION[0] + .86, BED_POSITION[2] - 1.3, BED_POSITION[2] + 1.3],
+      [sofaX + left, sofaX + right, sofaZ + back, sofaZ + front],
       [-6.47, -4.97, -3.14, -2.31],
       [NIGHTSTAND_X - .61, NIGHTSTAND_X + .61, NIGHTSTAND_Z - .355, NIGHTSTAND_Z + .397],
       [-1.81, -.85, -3.03, -1.75],

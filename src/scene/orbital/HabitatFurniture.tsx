@@ -1,4 +1,4 @@
-import { BED_POSITION, LAMP_POSITION, PLANT_POSITION } from './cabinLayout';
+import { BED_POSITION, FLOOR_SOFA, LAMP_POSITION, PLANT_POSITION } from './cabinLayout';
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -121,7 +121,12 @@ export const HabitatFurniture: React.FC<WorldModelProps> = world => {
         <Cylinder radius={0.045} height={0.59} position={[0, 0.31, 0]} color={C.brass} />
         <Cylinder radius={0.25} height={0.035} position={[0, 0.018, 0]} color={C.ink} />
       </group>
-    </> : <><FurnitureBed world={world} /><FurnitureChair world={world} /></>}
+    </> : <>
+      <FurnitureBed world={world} />
+      <FurnitureChair world={world} />
+      <ReusableAsset name="Furniture_FloorSofa" path="furniture/floor-sofa.glb"
+        width={FLOOR_SOFA.width} position={FLOOR_SOFA.position} rotation={[0, FLOOR_SOFA.yaw, 0]} />
+    </>}
     <FurnitureLamp world={world} />
     <FurniturePlant world={world} observatory={observatory} />
     <FurnitureHatch />
