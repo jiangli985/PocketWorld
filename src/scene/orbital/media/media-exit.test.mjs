@@ -75,6 +75,7 @@ function mount({ game = null, modules = {}, focusedObject = 'computer', width = 
       if (name === './CartridgePickup') return { CartridgePickup: 'CartridgePickup' };
       if (name === './computerLayout') return computerLayout;
       if (name === './cartridge-motion') return cartridgeMotion;
+      if (name === '../cabinLayout') return { COMPUTER_STAND: [1.55, -1.36] };
       throw new Error(`Unexpected dependency: ${name}`);
     },
   };

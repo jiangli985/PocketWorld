@@ -3,6 +3,10 @@ export const CABIN_LEFT = -6.57;
 export const CABIN_RIGHT = 4.24;
 export const CABIN_CENTER_X = (CABIN_LEFT + CABIN_RIGHT) / 2;
 
+// Floor area shared by the resident walker and loose props such as the slippers.
+export const RESIDENT_RADIUS = 0.23;
+export const WALK_BOUNDS = { left: CABIN_LEFT + .25 + RESIDENT_RADIUS, right: 3.76, back: -2.96, front: 2.96 };
+
 export const BED_POSITION: [number, number, number] = [-4.05, 0, -1.897];
 export const BED_ENTRY: [number, number] = [BED_POSITION[0] + 1.12, BED_POSITION[2] - .27];
 
@@ -19,6 +23,7 @@ export const FLOOR_SOFA = {
 // The table top is a fixed part of the authored cabin mesh.
 export const NIGHTSTAND_X = -2.52;
 export const NIGHTSTAND_Z = -2.825;
+export const COMPUTER_STAND: [number, number] = [1.55, -1.36];
 export const LAMP_POSITION: [number, number, number] = [NIGHTSTAND_X - .31, .829, NIGHTSTAND_Z];
 export const PLANT_POSITION: [number, number, number] = [NIGHTSTAND_X + .31, .829, NIGHTSTAND_Z - .09];
 export const CLOCK_POSITION: [number, number, number] = [NIGHTSTAND_X + .34, 1.02, NIGHTSTAND_Z + .21];
