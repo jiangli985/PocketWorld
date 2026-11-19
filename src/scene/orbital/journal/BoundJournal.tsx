@@ -52,8 +52,8 @@ function paperEdges(geometry: THREE.BufferGeometry, leaves: ReturnType<typeof le
   geometry.computeVertexNormals(); geometry.computeBoundingSphere();
 }
 
-export function BoundJournal({ opened, control, reducedMotion, leafCount }: {
-  opened: boolean; control: MutableRefObject<BoundBookControl>; reducedMotion: boolean; leafCount: number;
+export function BoundJournal({ opened, control, reducedMotion, leafCount, coverTitle = '日  记', coverSubtitle = 'M O M E N T S', coverColor = '#45534a', coverStyle = 'journal' }: {
+  opened: boolean; control: MutableRefObject<BoundBookControl>; reducedMotion: boolean; leafCount: number; coverTitle?: string; coverSubtitle?: string; coverColor?: string; coverStyle?: 'journal' | 'daily';
 }) {
   const cover = useRef<THREE.Group>(null);
   const bookmark = useMemo(() => {
@@ -69,8 +69,8 @@ export function BoundJournal({ opened, control, reducedMotion, leafCount }: {
   const state = useRef({ opening: 0, cursor: 0 });
   const drawn = useRef({ opening: -1, cursor: -1, leafCount: 0 });
   const textureRevision = useRef(-1);
-  const cloth = useMemo(() => clothTexture(), []);
-  const title = useMemo(() => clothTexture(true), []);
+  const cloth = useMemo(() => clothTexture(false, coverColor), [coverColor]);
+  const title = useMemo(() => clothTexture(true, coverColor, coverTitle, coverSubtitle, coverStyle), [coverColor, coverTitle, coverSubtitle, coverStyle]);
   useEffect(() => () => { cloth.dispose(); title.dispose(); }, [cloth, title]);
   const data = useMemo(() => {
     const geometry = leafGeometry(leafCount);
@@ -125,6 +125,10 @@ export function BoundJournal({ opened, control, reducedMotion, leafCount }: {
   useFrame((_, delta) => {
     const current = state.current;
     const book = control.current;
+    if (book.resetToStart) {
+      current.opening = 0; current.cursor = 0;
+      book.spread = 0; book.resetToStart = false;
+    }
     const targetCursor = opened ? book.spread : 0;
     if (textureRevision.current !== book.revision || drawn.current.leafCount !== leafCount) {
       textureRevision.current = book.revision;
@@ -209,14 +213,14 @@ export function BoundJournal({ opened, control, reducedMotion, leafCount }: {
   return <group name="Journal_Binding">
     <mesh position={[0.045 + 1.49 / 2, B.board / 2, 0]} geometry={data.board} castShadow receiveShadow>{boardMaterial}</mesh>
     <mesh position={[0.78, B.board + 0.001, 0]} rotation-x={-Math.PI / 2} receiveShadow>
-      <planeGeometry args={[1.43, 2.01]} /><meshStandardMaterial color="#d7d8bc" roughness={1} />
+      <planeGeometry args={[1.43, 2.01]} /><meshStandardMaterial color={coverStyle === 'daily' ? '#e7ddc9' : '#d7d8bc'} roughness={1} />
     </mesh>
     <mesh position={[0, B.board / 2, 0]} castShadow receiveShadow>
       <boxGeometry args={[0.10, B.board, 2.08]} />
       {boardMaterial}
     </mesh>
     <mesh geometry={data.spine} castShadow><meshStandardMaterial map={cloth} roughness={0.95} side={THREE.DoubleSide} /></mesh>
-    <mesh geometry={data.lining}><meshStandardMaterial color="#b8b8a1" side={THREE.DoubleSide} roughness={1} /></mesh>
+    <mesh geometry={data.lining}><meshStandardMaterial color={coverStyle === 'daily' ? '#c5b69b' : '#b8b8a1'} side={THREE.DoubleSide} roughness={1} /></mesh>
     {data.sheets.map((mesh, i) => <primitive key={mesh.name} object={mesh} onPointerDown={(event: ThreeEvent<PointerEvent>) => pointer(i, event, 'down')} onPointerMove={(event: ThreeEvent<PointerEvent>) => pointer(i, event, 'move')} onPointerUp={(event: ThreeEvent<PointerEvent>) => pointer(i, event, 'up')} onWheel={(event: ThreeEvent<WheelEvent>) => pointer(i, event, 'wheel')} />)}
     <mesh name="Journal_PageEdges" geometry={data.edges} receiveShadow><meshStandardMaterial color="#e9e2d0" roughness={0.97} side={THREE.DoubleSide} /></mesh>
     <mesh position={[0.61, B.base + 0.001, 1.02]} rotation={[-Math.PI / 2, 0, 0.08]} receiveShadow>
@@ -229,7 +233,7 @@ export function BoundJournal({ opened, control, reducedMotion, leafCount }: {
         <planeGeometry args={[1.475, 2.064]} /><meshStandardMaterial map={title} roughness={0.86} />
       </mesh>
       <mesh position={[0.75, -B.board / 2 - 0.0005, 0]} rotation-x={Math.PI / 2} receiveShadow>
-        <planeGeometry args={[1.43, 2.01]} /><meshStandardMaterial color="#d7d8bc" roughness={1} />
+        <planeGeometry args={[1.43, 2.01]} /><meshStandardMaterial color={coverStyle === 'daily' ? '#e7ddc9' : '#d7d8bc'} roughness={1} />
       </mesh>
     </group>
   </group>;
