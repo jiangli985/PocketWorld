@@ -1,5 +1,5 @@
-.orbital-app { position: relative; width: 100%; height: 100%; overflow: hidden; background: #050a10; color: #ece6d8; font-family: 'Avenir Next', 'PingFang SC', sans-serif; }
-.orbital-canvas { position: absolute; inset: 0; touch-action: none; background: radial-gradient(ellipse at 45% 38%, #e2e1ec, #c8cada 65%, #adb3c7); }
+.orbital-app { position: relative; width: 100%; height: 100%; overflow: hidden; background: #080714; color: #ece6d8; font-family: 'Avenir Next', 'PingFang SC', sans-serif; }
+.orbital-canvas { position: absolute; inset: 0; touch-action: none; background: #080714; }
 .orbital-canvas canvas { display: block; outline: none; }
 .computer-game-layer { position: absolute; inset: 0; pointer-events: none; touch-action: auto; font-family: system-ui, 'Microsoft YaHei', sans-serif; }
 .computer-game-backdrop { position: absolute; inset: 0; background: #13121f; pointer-events: auto; touch-action: auto; }
@@ -7,15 +7,21 @@
 .computer-game-controls { position: absolute; z-index: 2; top: max(8px, env(safe-area-inset-top, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); display: flex; gap: 8px; pointer-events: auto; }
 .computer-game-controls button { min-height: 44px; padding: 8px 12px; border: 1px solid #ac94bb; background: #30283e; color: #f3e1b9; font: 700 15px/1.3 system-ui, 'Microsoft YaHei', sans-serif; cursor: pointer; touch-action: manipulation; }
 .computer-game-controls button:focus-visible { outline: 3px solid #e3cc8f; outline-offset: 2px; }
-.orbital-header { color: #51495a; position: absolute; top: 34px; left: 42px; right: 42px; display: flex; align-items: center; pointer-events: none; z-index: 4; }
+.orbital-header { position: absolute; top: 34px; left: 42px; right: 42px; display: flex; align-items: center; pointer-events: none; z-index: 4; }
 .orbital-wordmark { display: flex; align-items: center; gap: 13px; font-size: 25px; font-weight: 500; letter-spacing: -1.2px; }
 .orbital-wordmark-dot { color: #c4a879; }
-.orbital-emblem { display: block; width: 22px; height: 22px; border: 1px solid #6b6578; border-radius: 50%; position: relative; }
+.orbital-emblem { display: block; width: 22px; height: 22px; border: 1px solid #e5dcc4; border-radius: 50%; position: relative; }
 .orbital-emblem::after { content: ''; position: absolute; inset: 6px -5px; border: 1px solid #bca783; border-radius: 50%; transform: rotate(-35deg); }
-.orbital-edition { margin: 4px 0 0 27px; font-size: 8px; letter-spacing: 2.4px; color: #555465; }
+.orbital-edition { margin: 4px 0 0 27px; font-size: 8px; letter-spacing: 2.4px; color: #8c969b; }
 .orbital-dust-prompt { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 4; display: flex; justify-content: center; width: min(1040px, calc(100vw - 24px)); }
 .orbital-dust-canvas { display: block; pointer-events: none; }
 .orbital-app:has(.library-surface) .orbital-dust-prompt { display: none; }
+.orbital-flight-bar { position: absolute; right: 38px; bottom: max(30px, env(safe-area-inset-bottom)); z-index: 4; display: flex; align-items: center; gap: 10px; pointer-events: auto; }
+.orbital-flight-pill { min-height: 36px; padding: 7px 14px; border: 1px solid rgba(229, 220, 196, 0.24); border-radius: 999px; background: rgba(11, 12, 26, 0.56); backdrop-filter: blur(8px); color: #ece6d8; font: 500 11px/1.2 'Avenir Next', 'PingFang SC', sans-serif; letter-spacing: 1.4px; cursor: pointer; user-select: none; touch-action: manipulation; transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease; }
+.orbital-flight-pill:hover { background: rgba(24, 24, 46, 0.78); border-color: rgba(229, 220, 196, 0.48); }
+.orbital-flight-pill.is-primary { border-color: rgba(212, 178, 126, 0.48); color: #f6e7c8; }
+.orbital-flight-pill.is-boosting { background: rgba(34, 62, 98, 0.78); border-color: rgba(132, 206, 255, 0.72); color: #e2f4ff; box-shadow: 0 0 18px rgba(102, 188, 255, 0.32); }
+.orbital-flight-pill:focus-visible { outline: 2px solid #e5c690; outline-offset: 2px; }
 .orbital-now-playing { position: absolute; left: 42px; bottom: 36px; pointer-events: none; display: flex; align-items: center; gap: 12px; }
 .orbital-now-playing small { font-size: 8px; letter-spacing: 2px; color: #9b9d8b; }
 .orbital-now-playing p { margin: 5px 0 0; font-size: 11px; letter-spacing: 1px; }
@@ -69,6 +75,8 @@
   .orbital-dust-prompt { top: max(54px, calc(env(safe-area-inset-top) + 34px)); }
   .orbital-now-playing { left: 24px; bottom: max(28px, env(safe-area-inset-bottom)); }
   .orbital-now-playing p { max-width: 200px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .orbital-flight-bar { right: 16px; left: 16px; justify-content: center; bottom: max(22px, env(safe-area-inset-bottom)); }
+  .orbital-flight-pill { min-height: 44px; padding: 10px 16px; font-size: 12px; }
   .world-book-text { font-size: 22px; line-height: 1.6; }
   .world-page textarea { font-size: 22px; line-height: 29px; }
   .world-page h2 { font-size: 25px; }

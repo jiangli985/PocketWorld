@@ -117,6 +117,14 @@
       "processing": "Six joined collections with per-board vertex colors. The foot-of-bed rug and modeled slippers share the Rugs collection. Original wood and ivory pile textures are embedded. Export with scripts/export-open-cabin.py."
     },
     {
+      "file": "cabin/spacecraft-hull.glb",
+      "source": "PocketWorld original procedural Blender spacecraft hull, scripts/build-spacecraft-hull.py -> assets/models/cabin/spacecraft-hull.blend.",
+      "used": true,
+      "bytes": 2671068,
+      "sha256": "a4702f38400deabd0e993544cae562cf984230aedf70c75802c2afe2e7322663",
+      "processing": "Procedural Blender 5.2.3 LTS capsule spacecraft exterior enclosing open-cabin with packed 512px porcelain, apricot, solar-cell, interior window glow, and feathered plume gradient textures. Rebuild/export with scripts/build-spacecraft-hull.py."
+    },
+    {
       "file": "replaced/bed.glb",
       "source": "Repository-supplied replaced/bed.glb at b2df620.",
       "used": true,

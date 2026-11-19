@@ -5,11 +5,12 @@
 ## 职责分布
 
 - `orbital/OrbitalScene.tsx` 组合镜头、灯光、舱室、家具、住民与交互表面。
-- `orbital/HabitatShell.tsx` 载入两面实体舱壁、拼花地板和固定陈设，用窗洞蒙版显示实时地球。初始构图与横竖屏取景由 `orbital/cabinView.ts` 计算。
+- `orbital/HabitatShell.tsx` 载入两面实体舱壁、拼花地板和固定陈设；`orbital/SpacecraftHull.tsx` 与 `orbital/spacecraftFlight.ts` 负责轨道飞船外壳、开场推近运镜、长按加速绕地与时间倍速，以及 `orbit ↔ cabin` 剖面切入过渡；`orbital/Cosmos.tsx` 渲染完整 360° 宇宙星空、银河、太阳、地球与轨道微粒背景。初始构图与横竖屏取景由 `orbital/cabinView.ts` 计算。
 - `orbital/useWorldController.ts` 管理世界状态、动作适配器和转场生命周期。
 - `orbital/journal/` 管理实体翻页、纸面编辑、逐页日期和天气、存档及迁移。
 - `orbital/library/` 管理书柜存档、文本导入、实体书和取还书动作。
 - `orbital/schedule/` 管理日程迁移、同步、纸页、贴纸、纸团和相关测试。
+- `orbital/clock/` 管理床头黄铜闹钟的 3D 动态表盘指针、闹钟与倒计时设定、经典版合成闹铃与特供版内置音频开头铃声、本机持久化及相关测试。
 - `orbital/media/` 管理电脑屏幕布局、游戏卡带单击插入、拖放与加载、唱片交互、实体键盘和相关测试。
 - `orbital/` 根目录保留舱室、家具、住民、交互基础组件、材质与场景样式。
 - `orbital/chairMotion.ts` 管理坐下、升降、滑行和起身的顺序；`chairAnimation.ts` 采样坐姿与局部接触缓存。资源与复建方法见 [Luna 制作源](../../assets/models/resident/README.md)。
@@ -35,6 +36,12 @@ blender --background assets/models/cabin/open-cabin.blend --python scripts/expor
 
 ```sh
 blender --background assets/models/furniture/floor-sofa.blend --python scripts/export-floor-sofa.py
+```
+
+包裹生活舱的[轨道飞船外壳制作源](../../assets/models/cabin/spacecraft-hull.blend)由 `scripts/build-spacecraft-hull.py` 程序化生成并打包贴图，在仓库根目录运行以下命令可重建 `.blend` 并导出[运行时模型](../../assets/public/models/cabin/spacecraft-hull.glb)。
+
+```sh
+blender --background --factory-startup --python scripts/build-spacecraft-hull.py
 ```
 
 ## 验证

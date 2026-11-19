@@ -309,6 +309,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       // Select the bed along its open side, then board at the authored animation anchor.
       const bedsideZ = clamp(root.position.z, BED_ENTRY[1], BED_POSITION[2] + 1.1);
       targets.push({ id: 'bed', kind: 'sleep', hint: '躺下休息', point: [BED_ENTRY[0], bedsideZ], reach: .8 });
+      targets.push({ id: 'clock', kind: 'inspect', hint: '设置闹钟', point: [NIGHTSTAND_X + .22, NIGHTSTAND_Z + .64], reach: 0.65 });
     }
     if (p.drawerEnabled && canReachDrawer(root.position, drawerOpen)) targets.push({
       id: 'desk-drawer', kind: drawerOpen ? 'close' : 'open', hint: drawerOpen ? '推回抽屉' : '后退拉开抽屉',

@@ -21,3 +21,4 @@ export const NIGHTSTAND_X = -2.52;
 export const NIGHTSTAND_Z = -2.825;
 export const LAMP_POSITION: [number, number, number] = [NIGHTSTAND_X - .31, .829, NIGHTSTAND_Z];
 export const PLANT_POSITION: [number, number, number] = [NIGHTSTAND_X + .31, .829, NIGHTSTAND_Z - .09];
+export const CLOCK_POSITION: [number, number, number] = [NIGHTSTAND_X + .34, 1.02, NIGHTSTAND_Z + .21];

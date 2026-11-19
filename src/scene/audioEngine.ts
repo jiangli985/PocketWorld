@@ -91,6 +91,7 @@ class RoomAudioEngine {
   private playbackGain: GainNode | null = null;
   private musicLevel = 1;
   private voices = new Set<OscillatorNode>();
+  private thruster: { osc: OscillatorNode; sub: OscillatorNode; noise: AudioBufferSourceNode; filter: BiquadFilterNode; gain: GainNode } | null = null;
   private listeners = new Set<() => void>();
   private snapshot: RoomAudioSnapshot = { disc: this.currentDisc, isPlaying: false, isMuted: false, status: 'idle', error: null };
 
@@ -523,8 +524,87 @@ class RoomAudioEngine {
 
   public resumeMusic(): Promise<boolean> { return this.startMusic(this.currentDisc); }
 
+  /** Soft warm synthesized orbital thruster hum during spacecraft boost; obeys global mute. */
+  public setThrusterBoost(level: number): void {
+    const clamped = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0;
+    const ctx = this.ctx;
+    if (clamped < 0.015 || !ctx || ctx.state !== 'running' || !this.musicGain) {
+      if (this.thruster && ctx) {
+        this.thruster.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.06);
+      }
+      return;
+    }
+    if (!this.thruster) {
+      try {
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 180;
+        filter.Q.value = 1.2;
+        filter.connect(gain);
+        gain.connect(this.musicGain);
+
+        const osc = ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.value = 64;
+        const oscGain = ctx.createGain();
+        oscGain.gain.value = 0.28;
+        osc.connect(oscGain);
+        oscGain.connect(filter);
+
+        const sub = ctx.createOscillator();
+        sub.type = 'sine';
+        sub.frequency.value = 96;
+        const subGain = ctx.createGain();
+        subGain.gain.value = 0.16;
+        sub.connect(subGain);
+        subGain.connect(filter);
+
+        const noiseLen = Math.max(1, Math.floor(ctx.sampleRate * 1.5));
+        const noiseBuf = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+        const data = noiseBuf.getChannelData(0);
+        let prev = 0;
+        for (let i = 0; i < noiseLen; i++) {
+          prev = prev * 0.86 + (Math.random() * 2 - 1) * 0.14;
+          data[i] = prev * 2.4;
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuf;
+        noise.loop = true;
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.value = 0.55;
+        noise.connect(noiseGain);
+        noiseGain.connect(filter);
+
+        osc.start();
+        sub.start();
+        noise.start();
+        this.thruster = { osc, sub, noise, filter, gain };
+      } catch {
+        return;
+      }
+    }
+    const now = ctx.currentTime;
+    this.thruster.osc.frequency.setTargetAtTime(58 + clamped * 44, now, 0.08);
+    this.thruster.sub.frequency.setTargetAtTime(88 + clamped * 68, now, 0.08);
+    this.thruster.filter.frequency.setTargetAtTime(140 + clamped * 340, now, 0.08);
+    this.thruster.gain.gain.setTargetAtTime(0.055 * clamped, now, 0.06);
+  }
+
+  private stopThruster() {
+    if (!this.thruster) return;
+    const nodes = this.thruster;
+    this.thruster = null;
+    for (const src of [nodes.osc, nodes.sub, nodes.noise]) {
+      try { src.stop(); src.disconnect(); } catch { /* Already stopped. */ }
+    }
+    try { nodes.filter.disconnect(); nodes.gain.disconnect(); } catch { /* Already disconnected. */ }
+  }
+
   /** Legacy stop API releases playback resources; object URL ownership stays with the caller. */
   public stopMusic() {
+    this.stopThruster();
     this.pauseMusic();
     this.cancelPreparedMusic();
     if (this.htmlAudio) {

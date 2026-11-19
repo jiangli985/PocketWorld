@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { CABIN_LEFT, CABIN_RIGHT } from './cabinLayout';
 import { EARTH_RADIUS, earthPositionForAspect } from './cabinView';
+import type { SpacecraftFlightState } from './spacecraftFlight';
 import {
   skyVertex, skyFragment, starVertex, starFragment, particleVertex, particleFragment,
   planetVertex, earthFragment, cloudFragment, atmosphereFragment,
@@ -36,7 +38,6 @@ const GALACTIC_POLE = new THREE.Vector3(0.32, 0.88, -0.35).normalize();
 const STAR_COUNT = 12000;
 const STAR_RADIUS = 1400;
 const DRIFT_COUNT = 320;
-const WINDOW_STENCIL = { stencilWrite: true, stencilWriteMask: 0, stencilRef: 1, stencilFunc: THREE.EqualStencilFunc };
 const NO_RAYCAST = () => undefined;
 const STAR_COLORS = ['#7aa4ff', '#9cbaff', '#cadbff', '#f5f7ff', '#fff3e2', '#ffd7ab', '#ffb684'].map(hex => new THREE.Color(hex));
 const DRIFT_COLORS = ['#7fd4ff', '#a8e4ff', '#e6f4ff', '#9fb8ff', '#ffe8c8', '#b8f0e8'].map(hex => new THREE.Color(hex));
@@ -137,7 +138,7 @@ function createDriftGeometry() {
       const radius = 16 + random() * 28;
       point.set(Math.cos(theta) * radius + 4, -2.5 + random() * 16, Math.sin(theta) * radius);
     }
-    const nearFloor = point.y < 4.5 && Math.abs(point.z) < 6 && (Math.abs(point.x) < 6 || Math.abs(point.x - 14) < 6);
+    const nearFloor = point.y < 4.5 && Math.abs(point.z) < 6 && ((point.x > CABIN_LEFT - 1.5 && point.x < CABIN_RIGHT + 1.5) || Math.abs(point.x - 14) < 6);
     if (nearFloor) continue;
     point.toArray(positions, i * 3);
     const color = DRIFT_COLORS[Math.floor(random() * DRIFT_COLORS.length)];
@@ -157,20 +158,24 @@ function createDriftGeometry() {
 
 interface CosmicClock { value: number }
 
-function Drift({ clock, sun }: { clock: CosmicClock; sun: SunState }) {
+function Drift({ clock, sun, flight }: { clock: CosmicClock; sun: SunState; flight?: SpacecraftFlightState }) {
   const geometry = useMemo(createDriftGeometry, []);
   const dpr = useThree(state => state.viewport.dpr);
+  const zeroTravel = useMemo(() => ({ value: 0 }), []);
+  const zeroBoost = useMemo(() => ({ value: 0 }), []);
   const uniforms = useMemo(() => ({
     uTime: clock,
     uPixelRatio: { value: dpr },
     uSun: { value: sun.direction },
     uDaylight: sun.daylight,
     uWarmth: sun.warmthUniform,
-  }), [clock, sun]);
+    uTravel: flight ? flight.travelUniform : zeroTravel,
+    uBoost: flight ? flight.boostUniform : zeroBoost,
+  }), [clock, sun, flight, zeroTravel, zeroBoost]);
   useEffect(() => { uniforms.uPixelRatio.value = dpr; }, [dpr, uniforms]);
   return (
     <points geometry={geometry} raycast={NO_RAYCAST} frustumCulled={false}>
-      <shaderMaterial {...WINDOW_STENCIL} uniforms={uniforms} vertexShader={particleVertex} fragmentShader={particleFragment}
+      <shaderMaterial uniforms={uniforms} vertexShader={particleVertex} fragmentShader={particleFragment}
         transparent blending={THREE.AdditiveBlending} depthWrite={false} />
     </points>
   );
@@ -196,36 +201,40 @@ function CelestialSphere({ clock, sun, earthPosition, onBeforeRender }: { earthP
     <group ref={sphere}>
       <mesh renderOrder={-101} raycast={NO_RAYCAST} frustumCulled={false} onBeforeRender={onBeforeRender}>
         <sphereGeometry args={[1600, 64, 32]} />
-        <shaderMaterial {...WINDOW_STENCIL} uniforms={skyUniforms} vertexShader={skyVertex} fragmentShader={skyFragment} side={THREE.BackSide} depthWrite={false} />
+        <shaderMaterial uniforms={skyUniforms} vertexShader={skyVertex} fragmentShader={skyFragment} side={THREE.BackSide} depthWrite={false} />
       </mesh>
       <points geometry={starGeometry} renderOrder={-100} raycast={NO_RAYCAST} frustumCulled={false}>
-        <shaderMaterial {...WINDOW_STENCIL} uniforms={starUniforms} vertexShader={starVertex} fragmentShader={starFragment}
+        <shaderMaterial uniforms={starUniforms} vertexShader={starVertex} fragmentShader={starFragment}
           transparent blending={THREE.AdditiveBlending} depthWrite={false} />
       </points>
     </group>
   );
 }
 
-function Earth({ clock, sun, position }: { clock: CosmicClock; sun: SunState; position: [number, number, number] }) {
+function Earth({ clock, sun, position, flight }: { clock: CosmicClock; sun: SunState; position: [number, number, number]; flight?: SpacecraftFlightState }) {
   const spin = useRef<THREE.Group>(null);
   const radius = EARTH_RADIUS;
   const uniforms = useMemo(() => ({ uTime: clock, uSun: { value: sun.direction } }), [clock, sun]);
-  useFrame(() => { if (spin.current) spin.current.rotation.y = clock.value * 0.008; });
+  useFrame(() => {
+    if (!spin.current) return;
+    spin.current.rotation.y = flight ? flight.earthSpinAngle : clock.value * 0.008;
+    spin.current.rotation.z = flight ? flight.earthOrbitSweep * 0.35 : 0;
+  });
   return (
     <group position={position} rotation={[0.05, 2.05, 0.13]}>
       <group ref={spin}>
         <mesh renderOrder={-90} raycast={NO_RAYCAST}>
           <sphereGeometry args={[radius, 96, 64]} />
-          <shaderMaterial {...WINDOW_STENCIL} uniforms={uniforms} vertexShader={planetVertex} fragmentShader={earthFragment} />
+          <shaderMaterial uniforms={uniforms} vertexShader={planetVertex} fragmentShader={earthFragment} />
         </mesh>
         <mesh renderOrder={-89} raycast={NO_RAYCAST}>
           <sphereGeometry args={[radius * 1.0037, 96, 64]} />
-          <shaderMaterial {...WINDOW_STENCIL} uniforms={uniforms} vertexShader={planetVertex} fragmentShader={cloudFragment} transparent depthWrite={false} />
+          <shaderMaterial uniforms={uniforms} vertexShader={planetVertex} fragmentShader={cloudFragment} transparent depthWrite={false} />
         </mesh>
       </group>
       <mesh renderOrder={-88} raycast={NO_RAYCAST}>
         <sphereGeometry args={[radius * 1.0107, 96, 64]} />
-        <shaderMaterial {...WINDOW_STENCIL} uniforms={uniforms} vertexShader={planetVertex} fragmentShader={atmosphereFragment}
+        <shaderMaterial uniforms={uniforms} vertexShader={planetVertex} fragmentShader={atmosphereFragment}
           transparent blending={THREE.AdditiveBlending} depthWrite={false} />
       </mesh>
     </group>
@@ -239,7 +248,7 @@ function Earth({ clock, sun, position }: { clock: CosmicClock; sun: SunState; po
  * Also advances the compressed orbital day and writes it into `sun` (see sunCycle.ts).
  * Reduced motion keeps the Sun at its starting position unless `?sun=` pins a phase.
  */
-export const Cosmos: React.FC<{ reducedMotion: boolean; sun: SunState }> = ({ reducedMotion, sun }) => {
+export const Cosmos: React.FC<{ reducedMotion: boolean; sun: SunState; flight?: SpacecraftFlightState }> = ({ reducedMotion, sun, flight }) => {
   const distant = useRef<THREE.Group>(null);
   const worldPosition = useMemo(() => new THREE.Vector3(), []);
   const clock = useMemo<CosmicClock>(() => ({ value: 0 }), []);
@@ -256,9 +265,13 @@ export const Cosmos: React.FC<{ reducedMotion: boolean; sun: SunState }> = ({ re
   };
   useFrame(({ camera }, delta) => {
     const step = Math.min(delta, 0.1);
-    if (!reducedMotion) clock.value += step;
+    const boost = flight?.boost ?? 0;
+    const timeScale = flight?.timeScale ?? 1;
+    if (!reducedMotion) clock.value += step * (1 + boost * 4.5);
     if (phase.current === null) phase.current = overrides.phase ?? startPhase(orbit);
-    else if (!reducedMotion && overrides.phase === null) phase.current = (phase.current + step * overrides.speed / SUN_CYCLE_SECONDS) % 1;
+    else if (overrides.phase === null && (!reducedMotion || boost > 0.01)) {
+      phase.current = (phase.current + step * overrides.speed * timeScale / SUN_CYCLE_SECONDS) % 1;
+    }
     const sample = sampleSun(orbit, phase.current);
     sun.direction.set(...sample.direction);
     sun.light.set(...roomLightDirection(sample.direction));
@@ -271,9 +284,9 @@ export const Cosmos: React.FC<{ reducedMotion: boolean; sun: SunState }> = ({ re
     <>
       <group ref={distant} name="cosmos">
         <CelestialSphere earthPosition={earthPosition} clock={clock} sun={sun} onBeforeRender={(_renderer, _scene, camera) => { follow(camera); distant.current?.updateMatrixWorld(true); }} />
-        <Earth position={earthPosition} clock={clock} sun={sun} />
+        <Earth position={earthPosition} clock={clock} sun={sun} flight={flight} />
       </group>
-      <Drift clock={clock} sun={sun} />
+      <Drift clock={clock} sun={sun} flight={flight} />
     </>
   );
 };

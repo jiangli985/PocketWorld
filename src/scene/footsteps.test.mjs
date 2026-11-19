@@ -92,6 +92,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './library/catalog': catalog,
     './scene/orbital/useWorldController': { useWorldController: () => world },
     './scene/orbital/OrbitalDustPrompt': { DustPrompt: 'DustPrompt' },
+    './scene/orbital/spacecraftFlight': { readInitialViewMode: () => 'cabin' },
     './standingIdle': load('./orbital/standingIdle.ts', { three: THREE, 'three/examples/jsm/loaders/GLTFLoader.js': { GLTFLoader: class {
       loadAsync(url) { return idleLibrary ? Promise.resolve(idleLibrary[url]) : Promise.reject(new Error('Animation offline in controller tests')); }
     } } }),
@@ -455,6 +456,7 @@ test('E selects the bed along its open side and distinguishes the lamp and plant
       [x + 1.12, z + .90, 'bed'],
       [cabinLayout.NIGHTSTAND_X - .11, cabinLayout.NIGHTSTAND_Z + .77, 'lamp'],
       [cabinLayout.NIGHTSTAND_X + .32, cabinLayout.NIGHTSTAND_Z + .78, 'plant'],
+      [cabinLayout.NIGHTSTAND_X + .22, cabinLayout.NIGHTSTAND_Z + .64, 'clock'],
     ]) {
       view.root.position.set(px, 0, pz);
       view.key('KeyE');

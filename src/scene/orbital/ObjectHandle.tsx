@@ -17,6 +17,7 @@ function belongsToFocus(id: string, focused: string | null) {
   if (focused === 'computer') return id.startsWith('game-') || id === 'computer-exit' || id === 'music-mute';
   if (focused === 'music-player') return id.startsWith('music-');
   if (focused === 'cabinet') return id === 'cabinet-item';
+  if (focused === 'clock') return id.startsWith('clock-');
   return false;
 }
 

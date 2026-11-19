@@ -1,0 +1,374 @@
+.clock-surface {
+  position: absolute;
+  z-index: 8;
+  right: 28px;
+  top: 92px;
+  bottom: auto;
+  max-height: calc(100svh - 128px);
+  width: min(376px, 35vw);
+  padding: 22px 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: #f3ead4;
+  color: #454a40;
+  border-left: 1px solid #c5b998;
+  box-shadow: 0 14px 36px #050a1055;
+  font-family: 'Songti SC', 'Noto Serif SC', Georgia, serif;
+  touch-action: pan-y;
+  overflow-y: auto;
+  scrollbar-color: #a39477 #f3ead4;
+  pointer-events: auto;
+}
+
+.clock-surface:focus {
+  outline: none;
+}
+
+.clock-surface * {
+  box-sizing: border-box;
+}
+
+.clock-surface header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.clock-surface h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.5px;
+}
+
+.clock-now-time {
+  margin: 4px 0 0;
+  font: 12px/1.5 'PingFang SC', system-ui, sans-serif;
+  color: #6d624e;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock-surface button {
+  min-height: 40px;
+  padding: 7px 12px;
+  border: 1px solid #b5a788;
+  background: transparent;
+  color: #514c3a;
+  font: 13px/1.35 'PingFang SC', system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.clock-surface button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.clock-surface button:not(:disabled):hover {
+  background: #e7dbbf;
+}
+
+.clock-surface button:focus-visible,
+.clock-surface input:focus-visible {
+  outline: 2px solid #657c66;
+  outline-offset: 2px;
+}
+
+.clock-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.clock-tabs button {
+  flex: 1;
+  font-weight: 500;
+}
+
+.clock-tabs button[aria-pressed="true"] {
+  background: #d6ddc9;
+  border-color: #7c8b70;
+  color: #2f422d;
+}
+
+.clock-ringing-alert {
+  padding: 12px 14px;
+  background: #efe0be;
+  border: 1px solid #c48a47;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clock-ringing-alert strong {
+  font: 600 14px/1.4 'PingFang SC', system-ui, sans-serif;
+  color: #7d3c20;
+}
+
+.clock-ringing-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.clock-ringing-actions button {
+  flex: 1;
+}
+
+.clock-display-card {
+  padding: 14px 16px;
+  background: #faf3e2;
+  border: 1px solid #cbbd9e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.clock-big-digits {
+  font: 600 40px/1.1 'Avenir Next', 'PingFang SC', monospace;
+  letter-spacing: 2px;
+  color: #363b32;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock-time-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.clock-time-input {
+  padding: 6px 10px;
+  border: 1px solid #b5a788;
+  background: #f3ead4;
+  color: #363b32;
+  font: 500 15px/1.3 'PingFang SC', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock-steppers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  justify-content: center;
+}
+
+.clock-steppers button {
+  min-height: 34px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock-substatus {
+  margin: 0;
+  font: 12px/1.5 'PingFang SC', system-ui, sans-serif;
+  color: #6d624e;
+  text-align: center;
+}
+
+.clock-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.clock-section-label {
+  margin: 0;
+  font: 600 12px/1.4 'PingFang SC', system-ui, sans-serif;
+  color: #615846;
+  letter-spacing: 0.5px;
+}
+
+.clock-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.clock-preset-grid button {
+  min-height: 36px;
+  padding: 5px 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock-preset-grid button[aria-pressed="true"] {
+  background: #dfd3b6;
+  border-color: #8f7e5e;
+  color: #383327;
+  font-weight: 600;
+}
+
+.clock-action-row {
+  display: flex;
+  gap: 8px;
+}
+
+.clock-action-row button {
+  flex: 1;
+}
+
+.clock-surface .clock-primary {
+  background: #566e5e;
+  border-color: #566e5e;
+  color: #fff9e9;
+  font-weight: 500;
+}
+
+.clock-surface .clock-primary:not(:disabled):hover {
+  background: #405b48;
+}
+
+.clock-surface .clock-danger {
+  background: #9e4b33;
+  border-color: #9e4b33;
+  color: #fff9e9;
+  font-weight: 500;
+}
+
+.clock-surface .clock-danger:not(:disabled):hover {
+  background: #843b26;
+}
+
+.clock-ringtones {
+  padding-top: 10px;
+  border-top: 1px solid #d2c5aa;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clock-ringtone-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.clock-ringtone-header button {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.clock-ringtone-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.clock-ringtone-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 3px;
+  padding: 9px 10px;
+  min-height: 54px;
+}
+
+.clock-ringtone-option strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.clock-ringtone-option small {
+  font-size: 11px;
+  color: #6d624e;
+  line-height: 1.3;
+}
+
+.clock-ringtone-option[aria-pressed="true"] {
+  background: #d6ddc9;
+  border-color: #657c66;
+  color: #27392c;
+}
+
+.clock-ringtone-option[aria-pressed="true"] small {
+  color: #3f5443;
+}
+
+.clock-floating-toast {
+  position: absolute;
+  z-index: 9;
+  top: 84px;
+  right: 28px;
+  width: min(320px, calc(100vw - 32px));
+  padding: 14px 16px;
+  background: #f3ead4;
+  color: #454a40;
+  border: 1px solid #c48a47;
+  box-shadow: 0 12px 28px #050a1066;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+  font-family: 'PingFang SC', system-ui, sans-serif;
+}
+
+.clock-floating-toast strong {
+  font-size: 14px;
+  color: #7d3c20;
+}
+
+.clock-floating-toast p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #615846;
+}
+
+.clock-floating-toast-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.clock-floating-toast-actions button {
+  flex: 1;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid #b5a788;
+  background: #faf3e2;
+  color: #454a40;
+  font: 12px/1.3 'PingFang SC', system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.clock-floating-toast-actions button.clock-toast-stop {
+  background: #9e4b33;
+  border-color: #9e4b33;
+  color: #fff9e9;
+}
+
+@media (max-width: 720px) {
+  .clock-surface {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    top: auto;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    max-height: 52svh;
+    padding: 16px 18px;
+    gap: 10px;
+  }
+  .clock-surface h2 {
+    font-size: 19px;
+  }
+  .clock-big-digits {
+    font-size: 32px;
+  }
+  .clock-floating-toast {
+    top: auto;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}

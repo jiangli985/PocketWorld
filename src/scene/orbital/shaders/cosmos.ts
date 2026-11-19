@@ -122,42 +122,42 @@ export const skyFragment = /* glsl */ `
     float dustAbsorption = clamp(primaryRift * 0.82 + dustTendrils * 0.45, 0.0, 0.92);
 
     // Deep space background with subtle eye-adaptation between orbital noon and eclipse shadow
-    float darkAdapt = mix(1.30, 0.88, uDaylight);
+    float darkAdapt = mix(1.30, 0.92, uDaylight);
     float rise = smoothstep(-0.80, 0.88, worldDir.y);
-    vec3 color = mix(vec3(0.0025, 0.0040, 0.013), vec3(0.0065, 0.0090, 0.026), rise);
-    color = mix(color, vec3(0.011, 0.008, 0.028), smoothstep(-0.25, 0.85, warp) * 0.42);
+    vec3 color = mix(vec3(0.0055, 0.0042, 0.016), vec3(0.012, 0.0095, 0.029), rise);
+    color = mix(color, vec3(0.022, 0.012, 0.034), smoothstep(-0.25, 0.85, warp) * 0.50);
 
-    // Unresolved Milky Way star clouds: cool sapphire outer arms + warm amber-gold core bulge
+    // Unresolved Milky Way star clouds: dusky lavender outer arms + warm honey-gold core bulge
     float starCloudDensity = (0.28 + 0.72 * smoothstep(-0.42, 0.62, cloud * 0.75 + fineCloud * 0.35)) * spiralMod;
-    vec3 armColor = mix(vec3(0.065, 0.095, 0.19), vec3(0.11, 0.15, 0.26), smoothstep(-0.2, 0.5, fineCloud));
-    vec3 coreColor = mix(vec3(0.22, 0.18, 0.24), vec3(0.35, 0.26, 0.19), pow(max(coreAlign, 0.0), 2.0));
+    vec3 armColor = mix(vec3(0.085, 0.085, 0.19), vec3(0.14, 0.13, 0.25), smoothstep(-0.2, 0.5, fineCloud));
+    vec3 coreColor = mix(vec3(0.28, 0.20, 0.24), vec3(0.42, 0.30, 0.20), pow(max(coreAlign, 0.0), 2.0));
     vec3 milky = mix(armColor, coreColor, clamp(bulge * 1.4, 0.0, 1.0));
-    color += milky * band * starCloudDensity * 0.25 * (1.0 - dustAbsorption) * darkAdapt;
+    color += milky * band * starCloudDensity * 0.30 * (1.0 - dustAbsorption) * darkAdapt;
 
     // Bright inner galactic ridge and forward-scattered golden dust rims along dark lanes
     float dustRim = primaryRift * (1.0 - primaryRift) * 4.0 * thinDisc;
-    color += vec3(0.28, 0.22, 0.17) * dustRim * (0.4 + 0.6 * bulge) * 0.11 * darkAdapt;
-    color += vec3(0.36, 0.29, 0.24) * bulge * (0.35 + 0.65 * smoothstep(-0.18, 0.52, cloud)) * (1.0 - primaryRift * 0.65) * 0.10 * darkAdapt;
+    color += vec3(0.32, 0.24, 0.17) * dustRim * (0.4 + 0.6 * bulge) * 0.15 * darkAdapt;
+    color += vec3(0.42, 0.32, 0.24) * bulge * (0.35 + 0.65 * smoothstep(-0.18, 0.52, cloud)) * (1.0 - primaryRift * 0.65) * 0.14 * darkAdapt;
 
-    // Emission nebulae (H-alpha rose-magenta knots & O-III teal-cyan veils)
+    // Emission nebulae (H-alpha rose-magenta knots & soft indigo-teal veils)
     float nebulaMask = smoothstep(0.18, 0.70, cloud) * (0.30 + 0.70 * smoothstep(-0.25, 0.55, warp));
     float hAlpha = smoothstep(0.46, 0.78, filaments) * smoothstep(-0.1, 0.6, fineCloud) * (band * 0.85 + 0.15);
-    vec3 reflectionHue = mix(vec3(0.11, 0.09, 0.36), vec3(0.03, 0.21, 0.34), smoothstep(-0.35, 0.35, warp));
-    vec3 emissionHue = mix(vec3(0.38, 0.09, 0.20), vec3(0.44, 0.17, 0.14), smoothstep(-0.2, 0.5, cloud));
-    color += reflectionHue * nebulaMask * wideHalo * 0.048 * darkAdapt;
-    color += emissionHue * hAlpha * (1.0 - primaryRift * 0.5) * 0.058 * darkAdapt;
+    vec3 reflectionHue = mix(vec3(0.14, 0.10, 0.34), vec3(0.07, 0.17, 0.30), smoothstep(-0.35, 0.35, warp));
+    vec3 emissionHue = mix(vec3(0.42, 0.12, 0.22), vec3(0.48, 0.22, 0.16), smoothstep(-0.2, 0.5, cloud));
+    color += reflectionHue * nebulaMask * wideHalo * 0.056 * darkAdapt;
+    color += emissionHue * hAlpha * (1.0 - primaryRift * 0.5) * 0.075 * darkAdapt;
 
     // Dynamic Earthshine & atmospheric airglow halo locked to Earth's world direction
     float earthAlign = max(dot(worldDir, uEarthGlow), 0.0);
     float halo = pow(earthAlign, 28.0);
     float innerHalo = pow(earthAlign, 72.0);
-    vec3 dayEarthGlow = vec3(0.045, 0.12, 0.24);
-    vec3 duskEarthGlow = vec3(0.22, 0.10, 0.05);
-    vec3 nightEarthGlow = vec3(0.025, 0.065, 0.14);
+    vec3 dayEarthGlow = vec3(0.055, 0.095, 0.20);
+    vec3 duskEarthGlow = vec3(0.25, 0.12, 0.06);
+    vec3 nightEarthGlow = vec3(0.035, 0.055, 0.14);
     vec3 earthHaloTint = mix(nightEarthGlow, dayEarthGlow, uDaylight);
     earthHaloTint = mix(earthHaloTint, duskEarthGlow, uWarmth * 0.6);
-    color += earthHaloTint * halo * 0.44;
-    color += mix(vec3(0.06, 0.15, 0.25), vec3(0.28, 0.14, 0.07), uWarmth * 0.65) * innerHalo * (0.20 + 0.22 * uDaylight);
+    color += earthHaloTint * halo * 0.42;
+    color += mix(vec3(0.07, 0.12, 0.22), vec3(0.30, 0.15, 0.08), uWarmth * 0.65) * innerHalo * (0.18 + 0.20 * uDaylight);
 
     // Solar disc and radial coronal streamers (hidden behind Earth during eclipse)
     float sun = max(dot(worldDir, uSun), 0.0);
@@ -194,8 +194,8 @@ export const starVertex = /* glsl */ `
     float twinkle = mix(0.58, 1.16, pulse * 0.65 + flicker * 0.25 + microScint * 0.10);
     vProminence = clamp((aSize - 0.85) / 4.8, 0.0, 1.0);
     vAngle = aTwinkle.x;
-    // Eyes adapt: stars read dimmer in sunlight and brighter inside Earth's shadow.
-    float exposure = mix(1.38, 0.82, uDaylight);
+    // Eyes adapt: stars read slightly softer in sunlight and brighter inside Earth's shadow.
+    float exposure = mix(1.42, 0.96, uDaylight);
     vColor = aColor * twinkle * exposure;
     gl_PointSize = aSize * uPixelRatio * (0.85 + 0.32 * pulse);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -236,6 +236,8 @@ export const particleVertex = /* glsl */ `
   uniform vec3 uSun;
   uniform float uDaylight;
   uniform float uWarmth;
+  uniform float uTravel;
+  uniform float uBoost;
   varying vec3 vColor;
   varying float vFade;
   varying float vShape;
@@ -243,7 +245,11 @@ export const particleVertex = /* glsl */ `
   varying float vRotation;
   void main() {
     float layerSpeed = mix(0.70, 1.25, aSeed.w);
-    vec3 drifted = position + vec3(
+    // Stream orbital ice crystals aft (-X) smoothly during orbital cruise & thruster boost
+    float spanX = 64.0;
+    float streamedX = mod(position.x - uTravel * mix(0.55, 1.35, aSeed.w) + 28.0, spanX) - 28.0;
+    vec3 basePos = vec3(streamedX, position.y, position.z);
+    vec3 drifted = basePos + vec3(
       sin(uTime * 0.11 * layerSpeed + aSeed.x) + 0.32 * cos(uTime * 0.05 + aSeed.y),
       sin(uTime * 0.08 * layerSpeed + aSeed.y) + 0.24 * sin(uTime * 0.04 + aSeed.z),
       cos(uTime * 0.09 * layerSpeed + aSeed.z) + 0.32 * sin(uTime * 0.06 + aSeed.x)
@@ -266,17 +272,20 @@ export const particleVertex = /* glsl */ `
     vec3 sunLitTint = mix(vec3(1.0, 0.96, 0.88), vec3(1.0, 0.66, 0.36), uWarmth * 0.85);
     vec3 shadowTint = aColor * vec3(0.88, 1.02, 1.25);
     vec3 baseTint = mix(shadowTint, mix(aColor, sunLitTint, 0.35 + forwardScatter * 0.48), uDaylight);
-    vColor = baseTint * pulse * (1.1 + forwardScatter * (0.55 * uDaylight + 0.40 * uWarmth));
+    vec3 boostTint = mix(baseTint, vec3(0.76, 0.92, 1.0), uBoost * 0.32);
+    vColor = boostTint * pulse * (1.1 + forwardScatter * (0.55 * uDaylight + 0.40 * uWarmth) + uBoost * 0.65);
 
     // Smooth depth attenuation across near-cabin and deep-orbital layers
     float nearFade = smoothstep(1.5, 4.2, dist);
-    float farFade = 1.0 - smoothstep(22.0, 62.0, dist);
-    vFade = nearFade * farFade;
+    float farFade = 1.0 - smoothstep(22.0, 68.0, dist);
+    // Softly fade wrapped particles near the corridor edges so entry/exit is invisible
+    float edgeFade = smoothstep(-28.0, -21.0, streamedX) * (1.0 - smoothstep(29.0, 36.0, streamedX));
+    vFade = nearFade * farFade * mix(1.0, edgeFade, step(0.001, uTravel));
     vShape = aSeed.w;
     vGlint = glint;
     vRotation = uTime * (0.35 - 0.7 * aSeed.w) + aSeed.z;
 
-    gl_PointSize = aSize * uPixelRatio * (21.0 / dist) * (0.94 + 0.30 * glint);
+    gl_PointSize = aSize * uPixelRatio * (21.0 / dist) * (0.94 + 0.30 * glint + uBoost * 0.28);
     gl_Position = projectionMatrix * view;
   }
 `;
@@ -389,45 +398,45 @@ export const earthFragment = /* glsl */ `
     float bumpedSun = dot(normalize(p + reliefOffset), vObjectSun);
     float diffuse = max(mix(sunHeight, bumpedSun, 0.62 * land), 0.0);
 
-    // Bathymetry: abyssal ocean -> continental shelf -> turquoise coastal lagoons
-    vec3 ocean = mix(vec3(0.008, 0.042, 0.135), vec3(0.026, 0.125, 0.28), shallow);
-    ocean = mix(ocean, vec3(0.05, 0.28, 0.38), coast * 0.72);
+    // Bathymetry: serene twilight-sapphire ocean -> muted shelf -> soft coastal lagoons
+    vec3 ocean = mix(vec3(0.010, 0.032, 0.105), vec3(0.026, 0.088, 0.205), shallow);
+    ocean = mix(ocean, vec3(0.055, 0.175, 0.245), coast * 0.60);
 
-    // Terrestrial biomes: tropical/temperate forest -> savannah -> desert -> alpine rock -> snow
-    vec3 forest = mix(vec3(0.055, 0.165, 0.075), vec3(0.11, 0.22, 0.10), humedad);
-    vec3 desert = mix(vec3(0.31, 0.24, 0.16), vec3(0.39, 0.31, 0.20), smoothstep(0.4, 0.85, humedad));
+    // Terrestrial biomes: muted sage forest -> warm savannah -> ochre desert -> alpine rock -> soft snow
+    vec3 forest = mix(vec3(0.068, 0.132, 0.078), vec3(0.125, 0.172, 0.098), humedad);
+    vec3 desert = mix(vec3(0.30, 0.22, 0.15), vec3(0.38, 0.29, 0.19), smoothstep(0.4, 0.85, humedad));
     vec3 ground = mix(forest, desert, arid);
-    ground = mix(ground, vec3(0.24, 0.24, 0.23), alpine);
-    ground = mix(ground, vec3(0.72, 0.80, 0.90), snowPeak * 0.62);
-    vec3 albedo = mix(mix(ocean, ground, land), vec3(0.64, 0.76, 0.90), polar);
+    ground = mix(ground, vec3(0.24, 0.22, 0.22), alpine);
+    ground = mix(ground, vec3(0.64, 0.69, 0.77), snowPeak * 0.58);
+    vec3 albedo = mix(mix(ocean, ground, land), vec3(0.58, 0.65, 0.76), polar);
 
     // Parallax-projected cloud shadows cast along the incoming sunlight vector
     float shadowSlide = 0.0052 / max(sunHeight + 0.22, 0.09);
     vec3 shadowSamplePos = normalize(p + vObjectSun * shadowSlide);
     float cloudShadow = cloudDensity(shadowSamplePos, uTime);
 
-    // Day/twilight/night surface illumination (controlled highlights to keep top-left brand text crisp)
-    vec3 sunColor = mix(vec3(0.98, 0.96, 0.93), vec3(1.0, 0.52, 0.24), twilight * 0.82);
-    vec3 day = albedo * (vec3(0.15, 0.17, 0.21) + diffuse * sunColor * 0.95);
-    day += vec3(0.24, 0.09, 0.04) * albedo * twilight * (0.42 + 0.58 * diffuse);
-    vec3 night = albedo * vec3(0.06, 0.10, 0.24) * 0.45;
+    // Day/twilight/night surface illumination (soft warm-toned daylight so the cabin remains the cozy focal point)
+    vec3 sunColor = mix(vec3(1.0, 0.91, 0.80), vec3(1.0, 0.54, 0.26), twilight * 0.82);
+    vec3 day = albedo * (vec3(0.12, 0.13, 0.18) + diffuse * sunColor * 0.72);
+    day += vec3(0.30, 0.12, 0.055) * albedo * twilight * (0.42 + 0.58 * diffuse);
+    vec3 night = albedo * vec3(0.07, 0.09, 0.22) * 0.48;
     vec3 color = mix(night, day, daylight);
     color *= 1.0 - cloudShadow * daylight * 0.34;
 
     // Dual-lobe ocean solar glint (tight specular core + subtle wave scatter)
     vec3 halfway = normalize(uSun + viewDirection);
     float waveRipple = 0.88 + 0.12 * snoise(p * 42.0 + vec3(uTime * 0.02, 0.0, -uTime * 0.02));
-    float specTight = pow(max(dot(n, halfway), 0.0), 95.0) * 0.26;
-    float specBroad = pow(max(dot(n, halfway), 0.0), 28.0) * 0.07 * waveRipple;
+    float specTight = pow(max(dot(n, halfway), 0.0), 95.0) * 0.20;
+    float specBroad = pow(max(dot(n, halfway), 0.0), 28.0) * 0.06 * waveRipple;
     float waterMask = (1.0 - land) * (1.0 - polar * 0.9) * (1.0 - cloudShadow * 0.78);
-    vec3 glintHue = mix(vec3(0.90, 0.95, 1.0), vec3(1.0, 0.66, 0.36), twilight * 0.8);
+    vec3 glintHue = mix(vec3(0.96, 0.92, 0.88), vec3(1.0, 0.66, 0.36), twilight * 0.8);
     color += glintHue * (specTight + specBroad) * waterMask * daylight;
 
     // Atmospheric Rayleigh limb scatter on surface
     float facing = max(dot(n, viewDirection), 0.0);
     float limb = pow(1.0 - facing, 3.2);
-    vec3 limbHue = mix(vec3(0.07, 0.24, 0.54), vec3(0.52, 0.30, 0.22), twilight * 0.6);
-    color += limbHue * limb * (0.22 + daylight * 0.42);
+    vec3 limbHue = mix(vec3(0.10, 0.22, 0.48), vec3(0.56, 0.32, 0.22), twilight * 0.65);
+    color += limbHue * limb * (0.22 + daylight * 0.36);
 
     // Night-side city networks: metropolitan cores + coastal/basin corridors
     float nightMask = 1.0 - smoothstep(-0.16, 0.03, sunHeight);
@@ -436,8 +445,8 @@ export const earthFragment = /* glsl */ `
     float fineTowns = smoothstep(0.56, 0.84, snoise(p * 52.0) * 0.5 + 0.5) * 0.42;
     float cities = (metroHubs + fineTowns * smoothstep(0.45, 0.82, popBasin)) * clamp(popBasin, 0.0, 1.0);
     cities *= land * (1.0 - polar) * (1.0 - arid * 0.72) * (1.0 - alpine * 0.6) * nightMask;
-    vec3 cityGlow = mix(vec3(1.0, 0.64, 0.28), vec3(1.0, 0.86, 0.64), metroHubs);
-    color += cityGlow * cities * (0.50 - cloudShadow * 0.20);
+    vec3 cityGlow = mix(vec3(1.0, 0.62, 0.24), vec3(1.0, 0.88, 0.62), metroHubs);
+    color += cityGlow * cities * (0.58 - cloudShadow * 0.20);
 
     // High-latitude polar aurora oval (70°–76° magnetic latitude near the polar rim)
     float magLat = abs(p.y + 0.035 * sin(p.x * 2.5 - p.z * 2.0));
@@ -478,18 +487,18 @@ export const cloudFragment = /* glsl */ `
     float day = smoothstep(-0.14, 0.18, sunHeight);
     float sunsetBand = smoothstep(-0.15, 0.02, sunHeight) * (1.0 - smoothstep(0.02, 0.26, sunHeight));
 
-    vec3 dayTint = mix(vec3(0.68, 0.77, 0.90), vec3(0.91, 0.94, 0.99), 1.0 - selfShadow * 0.65);
-    vec3 sunsetTint = mix(vec3(0.94, 0.36, 0.18), vec3(1.0, 0.70, 0.40), ridgeHighlight * 0.7 + 0.3);
-    vec3 nightTint = vec3(0.10, 0.15, 0.32);
+    vec3 dayTint = mix(vec3(0.64, 0.65, 0.78), vec3(0.94, 0.90, 0.86), 1.0 - selfShadow * 0.65);
+    vec3 sunsetTint = mix(vec3(0.95, 0.40, 0.22), vec3(1.0, 0.74, 0.44), ridgeHighlight * 0.7 + 0.3);
+    vec3 nightTint = vec3(0.11, 0.14, 0.28);
 
     vec3 tint = mix(nightTint, dayTint, day);
-    tint = mix(tint, sunsetTint, sunsetBand * (0.62 + 0.38 * ridgeHighlight));
+    tint = mix(tint, sunsetTint, sunsetBand * (0.64 + 0.36 * ridgeHighlight));
 
-    float illumination = 0.07 + day * (0.24 + max(sunHeight, 0.0) * 0.92 * (1.0 - selfShadow * 0.42) + ridgeHighlight * 0.18);
-    float forwardRim = pow(1.0 - max(dot(n, viewDirection), 0.0), 3.2) * day * 0.10;
-    vec3 color = tint * illumination + sunsetTint * sunsetBand * ridgeHighlight * 0.22 + vec3(0.70, 0.82, 0.98) * forwardRim;
+    float illumination = 0.06 + day * (0.20 + max(sunHeight, 0.0) * 0.66 * (1.0 - selfShadow * 0.42) + ridgeHighlight * 0.16);
+    float forwardRim = pow(1.0 - max(dot(n, viewDirection), 0.0), 3.2) * day * 0.09;
+    vec3 color = tint * illumination + sunsetTint * sunsetBand * ridgeHighlight * 0.24 + vec3(0.84, 0.84, 0.94) * forwardRim;
 
-    gl_FragColor = vec4(color, density * 0.90);
+    gl_FragColor = vec4(color, density * 0.78);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -510,8 +519,8 @@ export const atmosphereFragment = /* glsl */ `
     float twilight = (1.0 - smoothstep(0.0, 0.32, abs(sunHeight))) * 0.34;
 
     // Rayleigh day scatter + Chappuis ozone twilight violet-amber transition
-    vec3 blue = mix(vec3(0.08, 0.30, 0.84), vec3(0.36, 0.68, 1.0), facing);
-    vec3 duskBand = mix(vec3(0.88, 0.42, 0.20), vec3(0.38, 0.48, 0.92), smoothstep(-0.12, 0.18, sunHeight));
+    vec3 blue = mix(vec3(0.11, 0.26, 0.68), vec3(0.42, 0.62, 0.92), facing);
+    vec3 duskBand = mix(vec3(0.92, 0.46, 0.24), vec3(0.44, 0.46, 0.86), smoothstep(-0.12, 0.18, sunHeight));
     vec3 color = mix(blue, duskBand, twilight);
 
     // High-altitude nightglow (airglow layer ~90 km) visible on the dark limb
