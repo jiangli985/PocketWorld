@@ -6,6 +6,15 @@ export const CABIN_CENTER_X = (CABIN_LEFT + CABIN_RIGHT) / 2;
 export const BED_POSITION: [number, number, number] = [-4.05, 0, -1.897];
 export const BED_ENTRY: [number, number] = [BED_POSITION[0] + 1.12, BED_POSITION[2] - .27];
 
+// Armless floor sofa at the open corner in front of the bedside rug.
+export const FLOOR_SOFA = {
+  position: [-5.39, 0, 1.95] as [number, number, number],
+  yaw: .22,
+  width: 1.49,
+  // X/Z offsets measured after scaling and turning the entire GLB, including its fringe.
+  footprint: { left: -.83, right: .76, back: -.75, front: .69 },
+};
+
 // The table top is a fixed part of the authored cabin mesh.
 export const NIGHTSTAND_X = -2.52;
 export const NIGHTSTAND_Z = -2.825;

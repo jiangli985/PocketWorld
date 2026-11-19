@@ -31,6 +31,12 @@
 blender --background assets/models/cabin/open-cabin.blend --python scripts/export-open-cabin.py
 ```
 
+生活舱左前角的[落地沙发制作源](../../assets/models/furniture/floor-sofa.blend)独立保存了坐靠软包、滚边、搭毯和流苏。布料贴图已打包，修改后在仓库根目录重新导出即可。
+
+```sh
+blender --background assets/models/furniture/floor-sofa.blend --python scripts/export-floor-sofa.py
+```
+
 ## 验证
 
 在项目根目录运行 `npm test`，统一入口自动准备生产产物与引擎测试包，再运行功能回归。开发时可用 `node --test src/scene/orbital/media/*.test.mjs src/scene/orbital/schedule/*.test.mjs` 单独检查媒体和日程。

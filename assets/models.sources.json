@@ -4,6 +4,14 @@
   "runtimeNetwork": "All models are self-hosted under assets/public/models/.",
   "assets": [
     {
+      "file": "furniture/floor-sofa.glb",
+      "source": "Original PocketWorld model and woven textures, authored in Blender from the user's visual reference.",
+      "used": true,
+      "bytes": 1213184,
+      "sha256": "d9fab81b3ab17ff26018d2b8dad3b627acca024e86a87f2535165a071cf4f1fc",
+      "processing": "Editable source assets/models/furniture/floor-sofa.blend with packed linen and twill maps. scripts/export-floor-sofa.py converts the piping, topstitching and fringe to mesh and reduces the runtime geometry."
+    },
+    {
       "file": "furniture/throw_pillows_01.glb",
       "sourcePage": "https://polyhaven.com/a/throw_pillows_01",
       "license": "CC0-1.0",
