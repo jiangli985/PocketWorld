@@ -72,6 +72,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     '../audioEngine': { roomAudio: audio },
     './ObjectHandle': { ObjectHandle: 'ObjectHandle' },
     './Cat': { Cat: 'Cat' },
+    './Slippers': { SlipperPair: 'SlipperPair' },
     './ResidentModel': { HIP_HEIGHT: 0.69, ResidentModel: 'ResidentModel' },
     './residentRig': residentRig,
     './cabinLayout': cabinLayout,
@@ -463,6 +464,35 @@ test('E selects the bed along its open side and distinguishes the lamp and plant
       for (let i = 0; i < 240 && !actions.length; i++) view.frame(1 / 60);
       assert.deepEqual(actions.splice(0), [id]);
     }
+  } finally { view.dispose(); }
+});
+
+test('crowded nightstand items map E, Q and R to the three nearest props', () => {
+  const performed = [];
+  const view = mount('orbital', { onAction: action => performed.push(action.objectId) });
+  try {
+    for (const [key, id] of [['KeyE', 'clock'], ['KeyQ', 'plant'], ['KeyR', 'lamp']]) {
+      performed.length = 0;
+      view.root.position.set(cabinLayout.NIGHTSTAND_X + .22, 0, cabinLayout.NIGHTSTAND_Z + .70);
+      view.key(key);
+      assert.deepEqual(performed, [id], `${key} selects ${id}`);
+    }
+  } finally { view.dispose(); }
+});
+
+test('desk interaction range keeps the next prop reachable without cross-room selection', () => {
+  const performed = [];
+  const view = mount('orbital', { onAction: action => performed.push(action.objectId) });
+  try {
+    view.root.position.set(0.77, 0, -0.92);
+    view.key('KeyE');
+    assert.deepEqual(performed, [], 'a step outside the schedule reach selects nothing');
+    view.root.position.set(1.05, 0, -1.42);
+    view.key('KeyQ');
+    assert.deepEqual(performed, ['computer'], 'Q reaches the second nearest prop at the desk');
+    performed.length = 0;
+    view.key('KeyE');
+    assert.deepEqual(performed, ['schedule'], 'E still takes the nearest prop');
   } finally { view.dispose(); }
 });
 

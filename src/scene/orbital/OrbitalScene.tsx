@@ -4,7 +4,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import type { OrbitControls as Controls } from 'three-stdlib';
 import * as THREE from 'three';
-import { SCENE_ORIGINS, type WorldObjectState, type WorldSceneId, type WorldSceneProps } from '../../types/world';
+import { SCENE_ORIGINS, type WorldAction, type WorldObjectState, type WorldSceneId, type WorldSceneProps } from '../../types/world';
 import { roomAudio } from '../audioEngine';
 import { CAMERA_FOV, HOME_DIRECTION, HOME_TARGET, HOME_ZOOM, homeDistanceForAspect } from './cabinView';
 import { Cosmos, createSunState, type SunState } from './Cosmos';
@@ -383,6 +383,12 @@ function WorldContent(props: OrbitalSceneProps) {
           if (!inCabin || id !== props.sceneId || drawerInteraction.current?.busy) return;
           if (action.objectId === 'desk-drawer') drawerInteraction.current?.request(action);
           else props.onAction(action);
+        },
+        // A panorama click is a request to walk over; once focused, the props are already in reach.
+        onApproach: (point: [number, number, number], action: WorldAction, perform: () => void) => {
+          if (!inCabin || id !== props.sceneId || drawerInteraction.current?.busy) return false;
+          if (focusedObject) { perform(); return true; }
+          return interaction.current?.(point, action, perform) ?? false;
         },
       };
       return <group key={id} position={SCENE_ORIGINS[id]} visible={id === props.sceneId || (props.transition.action?.kind === 'travel' && props.transition.phase !== 'active' && props.transition.phase !== 'error')}>

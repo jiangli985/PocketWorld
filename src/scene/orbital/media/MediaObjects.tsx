@@ -12,6 +12,7 @@ import { ComputerScreen } from './ComputerScreen';
 import { CartridgePickup } from './CartridgePickup';
 import { RecordPlayer } from './RecordPlayer';
 import { CARTRIDGE_HEIGHT, CARTRIDGE_SLOT as SLOT, cartridgePosition, cartridgeTransferPoint } from './cartridge-motion';
+import { COMPUTER_STAND } from '../cabinLayout';
 
 type Point = [number, number, number];
 const gameModules = import.meta.glob<{ default: React.ComponentType<GameCartridgeProps> }>('../../../games/*/index.tsx');
@@ -162,7 +163,7 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
       setQueuedInsertion({ game, beforeFocus: latest.current.transition.id });
       latest.current.onAction(action);
     };
-    if (world.onApproach) world.onApproach(from, action, openComputer);
+    if (world.onApproach) world.onApproach([COMPUTER_STAND[0], from[1], COMPUTER_STAND[1]], action, openComputer);
     else openComputer();
   };
   const eject = useCallback(() => {
