@@ -1,3 +1,4 @@
+import { BED_POSITION, LAMP_POSITION } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer, OrbitControls, PerspectiveCamera } from '@react-three/drei';
@@ -29,7 +30,7 @@ const FOCUS: Record<string, { target: [number, number, number]; offset: [number,
   'schedule-glass': { target: [0.69, 2.53, -3.13], offset: [0, 0.02, 1.75] },
   'book-01': { target: [-.07, 1.03, .9], offset: [1.35, 1.12, 2.5] },
   cabinet: { target: [0, 0.48, .32], offset: [0.9, 0.71, 2.35] },
-  bed: { target: [-2.5, 0.7, 1.0], offset: [3.2, 3.2, 4.0] },
+  bed: { target: [BED_POSITION[0] + .1, .7, BED_POSITION[2]], offset: [3.2, 3.2, 4.0] },
 };
 interface OrbitalSceneProps extends WorldSceneProps {
   sceneObjects: Record<WorldSceneId, Record<string, WorldObjectState>>;
@@ -191,7 +192,7 @@ function OrbitalLighting({ objects, sun }: Pick<WorldSceneProps, 'objects'> & { 
       shadow-mapSize={[2048, 2048]} shadow-camera-left={-8} shadow-camera-right={8} shadow-camera-top={8} shadow-camera-bottom={-8}
       shadow-camera-near={0.1} shadow-camera-far={60} shadow-normalBias={0.012} shadow-bias={-0.0001} />
     <directionalLight ref={earthshine} target={sunTarget} color="#9ec5f0" intensity={0.28} position={[-11, 4.5, -10]} />
-    <pointLight ref={lamp} position={[-2.71, 1.74, -.97]} color="#ffca8b" intensity={4} distance={8} decay={2} />
+    <pointLight ref={lamp} position={[LAMP_POSITION[0] + .08, 1.74, LAMP_POSITION[2] + .07]} color="#ffca8b" intensity={4} distance={8} decay={2} />
     <pointLight position={[2.3, 2.0, 0.5]} color="#c7dded" intensity={2.2} distance={7} decay={2} />
   </>;
 }

@@ -1,3 +1,4 @@
+import { BED_ENTRY, BED_POSITION, CABIN_LEFT, NIGHTSTAND_X, NIGHTSTAND_Z } from './cabinLayout';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -17,7 +18,7 @@ import { HIP_HEIGHT as HIP, ResidentModel, type ResidentLeg, type ResidentRig } 
 import { WALK_SPEED } from './residentRig';
 import { createIdlePlayer, createIdleState, loadYawn, loadLookingAround, stepIdle, STANDING_IDLE } from './standingIdle';
 import { CHAIR_SIT_SECONDS, createChairMotion, stepChairMotion } from './chairMotion';
-import { BED_ENTRY, BED_YAW, BED_DURATION, advanceBedTime, createBedPlayer, loadBedClip } from './bedMotion';
+import { BED_YAW, BED_DURATION, advanceBedTime, createBedPlayer, loadBedClip } from './bedMotion';
 import { canReachDrawer, drawerObstacle, DRAWER_CLEAR_Z, DRAWER_TRAVEL, type DrawerInteraction } from './drawerInteraction';
 
 type Point = [number, number];
@@ -35,6 +36,7 @@ type ResidentsProps = WorldModelProps & {
 };
 type Approach = { point: Point; action: WorldAction; perform: () => void; elapsed: number; chairTarget: Point | null };
 const RADIUS = 0.23;
+const WALK_LEFT = CABIN_LEFT + .25 + RADIUS;
 // Leave full clearance when navigating or sitting; only the nearer body contact pushes the chair.
 const CHAIR_CONTACT = 0.52;
 const CHAIR_REACH = 0.95;
@@ -55,7 +57,12 @@ function layout(observatory: boolean) {
     [-0.85, 2.95, -3.025, -1.675], // Desk, including the desktop overhang.
     observatory ? [shelfX - .59, shelfX + .59, shelfZ - .27, shelfZ + .27]
       : [shelfX - .27, shelfX + .31, shelfZ - .65, shelfZ + .65],
-    ...(observatory ? [[-0.65, 0.15, 0.45, 1.25], [2.4, 3.1, 1.5, 2.2]] as Box[] : [[-3.46, -1.74, -0.32, 2.31], [-4.13, -2.63, -3.14, -2.31], [-3.09, -1.87, -1.43, -.65], [-1.81, -.85, -3.03, -1.75]] as Box[]),
+    ...(observatory ? [[-0.65, 0.15, 0.45, 1.25], [2.4, 3.1, 1.5, 2.2]] as Box[] : [
+      [BED_POSITION[0] - .86, BED_POSITION[0] + .86, BED_POSITION[2] - 1.3, BED_POSITION[2] + 1.3],
+      [-6.47, -4.97, -3.14, -2.31],
+      [NIGHTSTAND_X - .61, NIGHTSTAND_X + .61, NIGHTSTAND_Z - .355, NIGHTSTAND_Z + .397],
+      [-1.81, -.85, -3.03, -1.75],
+    ] as Box[]),
   ];
   const grow = (by: number) => furniture.map(([a, b, c, d]) => [a - by, b + by, c - by, d + by] as Box);
   const chairRadius = observatory ? 0.55 : 0.5;
@@ -78,7 +85,7 @@ function chairEntry(room: Room, pose: ChairPose): Point {
 }
 function chairOpen(room: Room, x: number, z: number, blocker: Point | null) {
   const r = room.chairRadius;
-  return Math.abs(x) <= 3.99 - r && Math.abs(z) <= 3.19 - r && !room.chairBoxes.some(([a, b, c, d]) => x > a && x < b && z > c && z < d)
+  return x >= CABIN_LEFT + .25 + r && x <= 3.99 - r && Math.abs(z) <= 3.19 - r && !room.chairBoxes.some(([a, b, c, d]) => x > a && x < b && z > c && z < d)
     && (!blocker || Math.hypot(x - blocker[0], z - blocker[1]) >= CHAIR_CONTACT);
 }
 function rollChair(room: Room, pose: ChairPose, dt: number, driven: boolean, blocker: Point | null) {
@@ -99,17 +106,17 @@ function legReach(leg: ResidentLeg, ahead: number, below: number): [number, numb
   return [-hip, knee];
 }
 function free(point: Point, boxes: Box[]) {
-  return point[0] >= -3.76 && point[0] <= 3.76 && point[1] >= -2.96 && point[1] <= 2.96 && !boxes.some(([a, b, c, d]) => point[0] > a && point[0] < b && point[1] > c && point[1] < d);
+  return point[0] >= WALK_LEFT && point[0] <= 3.76 && point[1] >= -2.96 && point[1] <= 2.96 && !boxes.some(([a, b, c, d]) => point[0] > a && point[0] < b && point[1] > c && point[1] < d);
 }
 function reachable(point: Point, boxes: Box[]): Point {
-  let result: Point = [clamp(point[0], -3.76, 3.76), clamp(point[1], -2.96, 2.96)];
+  let result: Point = [clamp(point[0], WALK_LEFT, 3.76), clamp(point[1], -2.96, 2.96)];
   for (let pass = 0; pass < 8; pass++) {
     const box = boxes.find(([a, b, c, d]) => result[0] > a && result[0] < b && result[1] > c && result[1] < d);
     if (!box) break;
     const [a, b, c, d] = box;
     const candidates: Point[] = [[a - 0.015, result[1]], [b + 0.015, result[1]], [result[0], c - 0.015], [result[0], d + 0.015]];
     candidates.sort((p, q) => Math.hypot(p[0] - result[0], p[1] - result[1]) - Math.hypot(q[0] - result[0], q[1] - result[1]));
-    result = candidates.find(p => free(p, boxes)) ?? candidates.find(p => p[0] >= -3.76 && p[0] <= 3.76 && p[1] >= -2.96 && p[1] <= 2.96) ?? [0.25, 0.5];
+    result = candidates.find(p => free(p, boxes)) ?? candidates.find(p => p[0] >= WALK_LEFT && p[0] <= 3.76 && p[1] >= -2.96 && p[1] <= 2.96) ?? [0.25, 0.5];
   }
   return result;
 }
@@ -290,12 +297,16 @@ export function OrbitalResidents(props: ResidentsProps) {
       { id: 'music-player', kind: 'inspect', hint: '使用唱机', point: [-0.30, -1.42], reach: 0.43 },
       { id: 'book-01', kind: 'inspect', hint: '查看藏书', point: [bookX, bookZ], reach: 0.75 },
       { id: 'cabinet', kind: 'open', hint: '打开柜门', point: [cabinetX, cabinetZ], reach: 0.55 },
-      { id: 'lamp', kind: 'toggle', hint: '开关灯', point: p.sceneId === 'habitat' ? [-3.28, -.78] : [-1.42, -2.55], reach: 0.70 },
-      { id: 'plant', kind: 'water', hint: '给盆栽浇水', point: p.sceneId === 'habitat' ? [-1.69, -.95] : [2.75, 1.85], reach: 0.85 },
+      { id: 'lamp', kind: 'toggle', hint: '开关灯', point: p.sceneId === 'habitat' ? [NIGHTSTAND_X - .11, NIGHTSTAND_Z + .77] : [-1.42, -2.55], reach: 0.70 },
+      { id: 'plant', kind: 'water', hint: '给盆栽浇水', point: p.sceneId === 'habitat' ? [NIGHTSTAND_X + .32, NIGHTSTAND_Z + .78] : [2.75, 1.85], reach: 0.85 },
       { id: 'pet', kind: 'pet', hint: '摸摸团子', point: CAT, reach: 0.85 },
       { id: 'chair', kind: 'sit', hint: '坐下', point: [pose.x, pose.z], reach: CHAIR_REACH },
     ];
-    if (p.sceneId === 'habitat') targets.push({ id: 'bed', kind: 'sleep', hint: '躺下休息', point: BED_ENTRY, reach: 0.8 });
+    if (p.sceneId === 'habitat') {
+      // Select the bed along its open side, then board at the authored animation anchor.
+      const bedsideZ = clamp(root.position.z, BED_ENTRY[1], BED_POSITION[2] + 1.1);
+      targets.push({ id: 'bed', kind: 'sleep', hint: '躺下休息', point: [BED_ENTRY[0], bedsideZ], reach: .8 });
+    }
     if (p.drawerEnabled && canReachDrawer(root.position, drawerOpen)) targets.push({
       id: 'desk-drawer', kind: drawerOpen ? 'close' : 'open', hint: drawerOpen ? '推回抽屉' : '后退拉开抽屉',
       point: [0.35, drawerOpen ? -0.78 : -1.34], reach: 0.7,
@@ -698,7 +709,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       }
       const yaw = bed ? 0 : seatYaw(pose);
       const forward = 0.1 + s.perch * 0.23;
-      const destination: Point = bed ? [-2.6, 0.94] : [pose.x + Math.sin(yaw) * forward, pose.z + Math.cos(yaw) * forward];
+      const destination: Point = bed ? [BED_POSITION[0], BED_POSITION[2] - .06] : [pose.x + Math.sin(yaw) * forward, pose.z + Math.cos(yaw) * forward];
       const slide = bed ? ease(clamp((t - 0.2) / 0.8, 0, 1)) : t;
       root.position.x = THREE.MathUtils.lerp(entry[0], destination[0], slide);
       root.position.z = THREE.MathUtils.lerp(entry[1], destination[1], slide);

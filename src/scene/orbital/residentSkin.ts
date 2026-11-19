@@ -21,16 +21,15 @@ function warmSkin(material: MeshStandardMaterial) {
         float hair = smoothstep(0.07, 0.24, base.b - base.r) * smoothstep(0.015, 0.09, base.g - base.r);
         float hem = smoothstep(0.17, 0.24, vRestHeight) * (1.0 - smoothstep(0.49, 0.56, vRestHeight));
         float skirt = hem * smoothstep(0.24, 0.55, base.b) * (1.0 - skin) * (1.0 - hair);
-        vec3 palette = skinTint * mix(vec3(1.0), vec3(.085, .245, .53), hair)
-                                * mix(vec3(1.0), vec3(1.0, .46, .44), skirt);
+        vec3 palette = skinTint * mix(vec3(1.0), vec3(1.0, .46, .44), skirt);
         diffuseColor.rgb *= palette;
       `)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         // The fill uses the same atlas; keep its effect around the eyes and hairline.
-        totalEmissiveRadiance *= palette * mix(.55, .43, skin);
+        totalEmissiveRadiance *= palette * mix(mix(1.0, .90, skin), .55, skirt);
       `);
   };
-  copy.customProgramCacheKey = () => 'luna-cabin-palette-v2';
+  copy.customProgramCacheKey = () => 'luna-original-hair-rose-skirt';
   return copy;
 }
 

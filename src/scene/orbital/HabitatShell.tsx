@@ -1,3 +1,4 @@
+import { CABIN_LEFT, CABIN_RIGHT, CABIN_CENTER_X } from './cabinLayout';
 import React, { Suspense, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
@@ -27,8 +28,8 @@ function CabinModel({ variant }: Pick<HabitatShellProps, 'variant'>) {
 
 /** A soft contact shadow sits beneath the plinth and is culled when seen from below. */
 function PlinthShadow() {
-  return <mesh position={[.05, -.285, .03]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => undefined}>
-    <planeGeometry args={[11.5, 9.6]} />
+  return <mesh position={[CABIN_CENTER_X + .05, -.285, .03]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => undefined}>
+    <planeGeometry args={[CABIN_RIGHT - CABIN_LEFT + 3, 9.6]} />
     <shaderMaterial transparent depthWrite={false} vertexShader={`
       varying vec2 local;
       void main() {
@@ -37,7 +38,7 @@ function PlinthShadow() {
       }`} fragmentShader={`
       varying vec2 local;
       void main() {
-        vec2 edge = abs(local) - vec2(3.97, 3.03);
+        vec2 edge = abs(local) - vec2(${(CABIN_RIGHT - CABIN_LEFT) / 2 - .27}, 3.03);
         float d = max(0.0, length(max(edge, 0.0)) + min(max(edge.x, edge.y), 0.0) - .24);
         gl_FragColor = vec4(.23, .21, .29, .24 * exp(-4.6 * d * d) + .15 * exp(-18.0 * d));
       }`} />
@@ -47,8 +48,8 @@ function PlinthShadow() {
 export function HabitatShell({ variant, onFloorClick }: HabitatShellProps) {
   const root = useRef<THREE.Group>(null);
   const floorPointer = useRef<number | null>(null);
-  const fallback = <mesh name="Floor_Parquet" position={[0, -.12, 0]} receiveShadow>
-    <boxGeometry args={[8.4, .24, 6.45]} /><meshStandardMaterial color="#cb9c74" />
+  const fallback = <mesh name="Floor_Parquet" position={[CABIN_CENTER_X, -.12, 0]} receiveShadow>
+    <boxGeometry args={[CABIN_RIGHT - CABIN_LEFT, .24, 6.45]} /><meshStandardMaterial color="#cb9c74" />
   </mesh>;
   const onFloor = (event: ThreeEvent<MouseEvent>) => {
     const startedOnFloor = floorPointer.current !== null;

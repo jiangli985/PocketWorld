@@ -14,8 +14,8 @@ for (const [width, height] of [[1400, 950], [390, 844], [844, 390]]) {
     camera.updateProjectionMatrix();
     // Four base corners, the back wall and the front end of the right wall.
     const corners = [
-      [-4.24, -.23, -3.41], [-4.24, -.23, 3.18], [4.24, -.23, -3.41], [4.24, -.23, 3.18],
-      [-4.24, 3.78, -3.41], [4.24, 3.78, -3.41], [4.24, 3.78, 3.18],
+      [-6.57, -.23, -3.41], [-6.57, -.23, 3.18], [4.24, -.23, -3.41], [4.24, -.23, 3.18],
+      [-6.57, 3.78, -3.41], [4.24, 3.78, -3.41], [4.24, 3.78, 3.18],
     ];
     for (const point of corners) {
       const { x, y } = new THREE.Vector3(...point).project(camera);

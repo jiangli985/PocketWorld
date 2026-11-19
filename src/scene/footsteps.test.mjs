@@ -22,6 +22,7 @@ function load(path, dependencies, globals = {}) {
   return context.exports;
 }
 
+const cabinLayout = load('./orbital/cabinLayout.ts', {});
 const catalog = load('./orbital/library/catalog.ts', {});
 
 function libraryDependencies(residentRig) {
@@ -73,7 +74,8 @@ function mount(kind, overrides = {}, idleLibrary) {
     './Cat': { Cat: 'Cat' },
     './ResidentModel': { HIP_HEIGHT: 0.69, ResidentModel: 'ResidentModel' },
     './residentRig': residentRig,
-    './bedMotion': load('./orbital/bedMotion.ts', { three: THREE, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
+    './cabinLayout': cabinLayout,
+    './bedMotion': load('./orbital/bedMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './journalLayout': load('./orbital/journalLayout.ts', {}),
     './schedule/bookLayout': load('./orbital/schedule/bookLayout.ts', {}),
     './chairPose': load('./orbital/chairPose.ts', {}),
@@ -418,10 +420,28 @@ test('clicking the far corner of the bed still uses its safe entry', () => {
   const view = mount('orbital');
   let performed = 0;
   try {
-    view.props.interaction.current([-3.4, 0.8, -0.25], { sceneId: 'habitat', objectId: 'bed', kind: 'sleep' }, () => performed++);
+    view.props.interaction.current([cabinLayout.BED_POSITION[0] - .8, .8, cabinLayout.BED_POSITION[2] - 1.25], { sceneId: 'habitat', objectId: 'bed', kind: 'sleep' }, () => performed++);
     for (let i = 0; i < 900 && !performed; i++) view.frame(1 / 60);
     assert.equal(performed, 1);
-    assert.ok(Math.hypot(view.root.position.x + 1.48, view.root.position.z - 0.73) < 0.06);
+    assert.ok(Math.hypot(view.root.position.x - cabinLayout.BED_ENTRY[0], view.root.position.z - cabinLayout.BED_ENTRY[1]) < 0.06);
+  } finally { view.dispose(); }
+});
+
+test('E selects the bed along its open side and distinguishes the lamp and plant at the table', () => {
+  const actions = [];
+  const view = mount('orbital', { onAction: action => actions.push(action.objectId) });
+  try {
+    const [x, , z] = cabinLayout.BED_POSITION;
+    for (const [px, pz, id] of [
+      [x + 1.12, z + .90, 'bed'],
+      [cabinLayout.NIGHTSTAND_X - .11, cabinLayout.NIGHTSTAND_Z + .77, 'lamp'],
+      [cabinLayout.NIGHTSTAND_X + .32, cabinLayout.NIGHTSTAND_Z + .78, 'plant'],
+    ]) {
+      view.root.position.set(px, 0, pz);
+      view.key('KeyE');
+      for (let i = 0; i < 240 && !actions.length; i++) view.frame(1 / 60);
+      assert.deepEqual(actions.splice(0), [id]);
+    }
   } finally { view.dispose(); }
 });
 

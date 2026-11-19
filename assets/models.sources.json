@@ -104,8 +104,8 @@
       "file": "cabin/open-cabin.glb",
       "source": "PocketWorld original Blender scene, assets/models/cabin/open-cabin.blend.",
       "used": true,
-      "bytes": 3103552,
-      "sha256": "277a8913ee2b183ed42fc7725fa2aa30a0972b06339bd036bc0c575fec89d705",
+      "bytes": 3142772,
+      "sha256": "bb4e86fa5a8c035cdf9255d963ddca6fbb2cf41a1c5d23b41d07f569e974d31f",
       "processing": "Six joined collections with a packed original wood texture and per-board vertex colors. Export with scripts/export-open-cabin.py."
     },
     {

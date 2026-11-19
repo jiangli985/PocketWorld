@@ -1,8 +1,9 @@
+import { CABIN_LEFT, CABIN_RIGHT, CABIN_CENTER_X } from './cabinLayout.ts';
 import * as THREE from 'three';
 
 export const CAMERA_FOV = 34;
 export const HOME_ZOOM = 1.55;
-export const HOME_TARGET = new THREE.Vector3(0, 1.08, -.10);
+export const HOME_TARGET = new THREE.Vector3(CABIN_CENTER_X, 1.08, -.10);
 export const HOME_DIRECTION = new THREE.Vector3(-7.8, 7.6, 13.5).normalize();
 export const EARTH_RADIUS = 195;
 const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), HOME_DIRECTION).normalize();
@@ -12,7 +13,7 @@ const verticalSlope = Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2)) / HOME_
 /** Fit the plinth and the two standing walls against both view frustum axes. */
 export function homeDistanceForAspect(aspect: number) {
   let distance = 0;
-  for (const x of [-4.24, 4.24]) for (const z of [-3.41, 3.18]) for (const y of [-.23, 3.78]) {
+  for (const x of [CABIN_LEFT, CABIN_RIGHT]) for (const z of [-3.41, 3.18]) for (const y of [-.23, 3.78]) {
     if (x < 0 && z > 0 && y > 0) continue;
     const corner = new THREE.Vector3(x, y, z).sub(HOME_TARGET);
     distance = Math.max(distance, corner.dot(HOME_DIRECTION) + Math.max(
