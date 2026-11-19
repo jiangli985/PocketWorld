@@ -9,7 +9,7 @@ const source = fs.readFileSync(new URL('./schedule.ts', import.meta.url), 'utf8'
 const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const context = { exports: {}, crypto: webcrypto };
 vm.runInNewContext(output, context);
-const { migrateSchedule, openSchedulePage, updateSchedulePage, turnSchedulePage, postSchedulePage, discardSchedulePage, schedulePageError, isScheduleNotebook, flattenSchedule, readScheduleNotebook, SCHEDULE_KEY, MAX_POSTED_SCHEDULES } = context.exports;
+const { migrateSchedule, openSchedulePage, updateSchedulePage, turnSchedulePage, tearSchedulePage, discardSchedulePage, createSchedulePage, isScheduleNotebook, flattenSchedule, readScheduleNotebook, SCHEDULE_KEY } = context.exports;
 const entry = (id, time = '09:00') => ({ id, title: `任务 ${id}`, time, completed: false, content: `正文 ${id}` });
 
 test('editing the turned left sheet updates its queued record without switching or overwriting the right sheet', () => {
@@ -24,7 +24,7 @@ test('editing the turned left sheet updates its queued record without switching 
   assert.equal(turnSchedulePage(state, -1).current.notes, '左页备注');
 });
 
-test('reopening selects the first available sheet and retains later drafts without recreating posted pages', () => {
+test('reopening selects the first draft and tearing it advances to the next queued sheet', () => {
   let state = migrateSchedule([entry('first')]);
   const firstId = state.current.id;
   state = turnSchedulePage(state, 1);
@@ -38,11 +38,10 @@ test('reopening selects the first available sheet and retains later drafts witho
   assert.equal(opened.queued.find(page => page.id === secondId).notes, '第二页的正文');
   assert.equal(opened.queued.find(page => page.id === lastId).todos[2].text, '第三页待办');
   assert.equal(openSchedulePage(opened), opened);
-  const posted = postSchedulePage(opened);
-  const after = openSchedulePage(turnSchedulePage(posted, 1));
-  assert.equal(after.current.id, secondId);
-  assert.equal(after.posted[0].id, firstId);
-  assert.equal([after.current, ...after.queued].some(page => page.id === firstId), false);
+  const torn = tearSchedulePage(opened);
+  assert.equal(torn.current.id, secondId);
+  assert.equal(torn.discarded[0].id, firstId);
+  assert.equal([torn.current, ...torn.queued].some(page => page.id === firstId), false);
 });
 
 test('turning forward and back preserves drafts and revisits the same next page', () => {
@@ -60,9 +59,9 @@ test('turning forward and back preserves drafts and revisits the same next page'
   assert.equal(previous.current.todos[0].text, '今天的待办');
   assert.equal(turnSchedulePage(previous, 1).current.id, next.current.id);
   assert.equal(turnSchedulePage(previous, 1).current.notes, '第二页备注');
-  const posted = postSchedulePage(previous);
-  assert.equal(posted.posted[0].id, first.current.id);
-  assert.equal(posted.current.id, next.current.id);
+  const torn = tearSchedulePage(previous);
+  assert.equal(torn.discarded[0].id, first.current.id);
+  assert.equal(torn.current.id, next.current.id);
 });
 
 test('legacy schedules retain every task and completion when a planner fills up', () => {
@@ -70,34 +69,42 @@ test('legacy schedules retain every task and completion when a planner fills up'
   let state = migrateSchedule(legacy);
   assert.equal(state.current.entries.length, 8);
   assert.equal(state.queued[0].entries[0].id, '8');
-  state = postSchedulePage(state);
-  assert.equal(state.posted[0].entries[1].completed, true);
+  state = tearSchedulePage(state);
+  assert.equal(state.discarded[0].seed, 1);
   assert.equal(state.current.entries[0].content, '正文 8');
   assert.equal(state.current.number, 2);
   assert.equal(legacy.length, 9);
 });
 
-test('fresh hourly labels do not make an empty planner postable', () => {
-  const state = migrateSchedule();
-  assert.equal(state.current.entries[0].time, '08:00');
-  assert.equal(state.current.entries[7].time, '22:00');
-  assert.ok(schedulePageError(state.current));
-  assert.equal(postSchedulePage(state), state);
+test('tearing removes the current sheet into a paper ball and keeps drafts moving forward', () => {
+  let state = migrateSchedule(Array.from({ length: 9 }, (_, i) => entry(`t${i}`)));
+  const firstId = state.current.id;
+  const secondId = state.queued[0].id;
+  state = tearSchedulePage(state);
+  assert.equal(state.discarded.length, 1);
+  assert.equal(state.discarded[0].id, firstId);
+  assert.equal(state.discarded[0].seed, 1);
+  assert.equal(state.current.id, secondId);
+  assert.equal(state.queued.length, 0);
+  assert.equal([state.current, ...state.queued].some(page => page.id === firstId), false);
+  const tornId = state.current.id;
+  state = tearSchedulePage(state);
+  assert.equal(state.discarded.length, 2);
+  assert.equal(state.current.number, 3);
+  assert.equal(state.current.id !== tornId, true);
+  assert.equal(state.current.entries.every(item => !item.title), true);
+  assert.equal(isScheduleNotebook(JSON.parse(JSON.stringify(state))), true);
 });
 
-test('to-dos, tomorrow plans and notes survive posting independently of timed tasks', () => {
-  for (const field of ['todos', 'tomorrow', 'notes']) {
-    const state = migrateSchedule();
-    if (field === 'todos') state.current.todos[2] = { text: '读完这一章', completed: true };
-    if (field === 'tomorrow') state.current.tomorrow[1] = '给薄荷浇水';
-    if (field === 'notes') state.current.notes = '留一点时间看地球';
-    assert.equal(schedulePageError(state.current), null);
-    const posted = postSchedulePage(state);
-    assert.equal(posted.posted.length, 1);
-    assert.deepEqual(posted.posted[0][field], state.current[field]);
-    assert.equal(schedulePageError(posted.current) !== null, true);
-    assert.equal(isScheduleNotebook(JSON.parse(JSON.stringify(posted))), true);
-  }
+test('tearing leaves legacy glass posters untouched and bounds the paper-ball litter', () => {
+  let state = migrateSchedule([entry('a')]);
+  state.posted = Array.from({ length: 6 }, (_, i) => createSchedulePage(10 + i));
+  const posters = JSON.stringify(state.posted);
+  for (let i = 0; i < 30; i++) state = tearSchedulePage(state);
+  assert.equal(JSON.stringify(state.posted), posters);
+  assert.equal(state.discarded.length, 24);
+  assert.equal(state.current.number > 15, true);
+  assert.equal(isScheduleNotebook(JSON.parse(JSON.stringify(state))), true);
 });
 
 test('v1 notebook migration preserves page identity, old text and the original storage value', () => {
@@ -156,7 +163,7 @@ test('empty legacy rows are removed when reducing density rather than creating e
   assert.equal(state.current.entries.length, 8);
   assert.equal(state.current.todos.length, 3);
   assert.equal(state.queued.length, 0);
-  assert.ok(schedulePageError(state.current));
+  assert.equal(state.current.entries.every(item => !item.title && !item.content), true);
 });
 
 test('corrupt new planner storage does not silently fall back and overwrite saved content', () => {
@@ -167,74 +174,26 @@ test('corrupt new planner storage does not silently fall back and overwrite save
   assert.equal(isScheduleNotebook(state), false);
 });
 
-test('five posted sheets fill the glass and rejection preserves the current draft', () => {
-  let state = migrateSchedule([entry('a'), entry('b')]);
-  const original = JSON.stringify(state.current);
-  for (let i = 0; i < MAX_POSTED_SCHEDULES; i++) {
-    state.current.entries[0] = entry(`page-${i}`);
-    state = postSchedulePage(state);
-  }
-  assert.equal(state.posted.length, 5);
-  assert.equal(state.current.number, 6);
-  assert.equal(state.current.entries[0].title, '');
-  assert.equal(JSON.parse(original).entries[1].id, state.posted[0].entries[1].id);
-  assert.equal(new Set(state.posted.map(p => p.id)).size, 5);
-  state.current.entries[0] = entry('sixth');
-  const before = JSON.stringify(state);
-  assert.equal(postSchedulePage(state), state);
-  assert.equal(JSON.stringify(state), before);
-  state = discardSchedulePage(state, state.posted[2].id);
-  state = postSchedulePage(state);
-  assert.equal(state.posted.length, 5);
-  assert.equal(state.posted[4].entries[0].title, '任务 sixth');
-  assert.equal(state.current.number, 7);
-});
-
-test('older over-capacity saves remain readable and cannot receive more sheets', () => {
-  const state = migrateSchedule([entry('current')]);
+test('older over-capacity glass saves remain readable and survive tearing', () => {
+  let state = migrateSchedule([entry('current')]);
   state.posted = Array.from({ length: 10 }, (_, i) => migrateSchedule([entry(`old-${i}`)]).current);
-  const before = JSON.stringify(state);
-  assert.equal(isScheduleNotebook(JSON.parse(before)), true);
-  assert.equal(postSchedulePage(state), state);
-  assert.equal(JSON.stringify(state), before);
+  assert.equal(isScheduleNotebook(JSON.parse(JSON.stringify(state))), true);
+  const posters = JSON.stringify(state.posted);
+  state = tearSchedulePage(state);
+  assert.equal(JSON.stringify(state.posted), posters);
+  assert.equal(isScheduleNotebook(JSON.parse(JSON.stringify(state))), true);
 });
 
-test('empty and incomplete sheets cannot be posted; one complete task is enough', () => {
-  let state = migrateSchedule();
-  assert.ok(schedulePageError(state.current));
-  assert.equal(postSchedulePage(state), state);
-  state.current.entries[0].content = '仅内容也不能丢掉';
-  assert.ok(schedulePageError(state.current));
-  state.current.entries[0] = entry('a', '25:60');
-  assert.ok(schedulePageError(state.current));
-  state.current.entries[0].time = '23:59';
-  assert.equal(schedulePageError(state.current), null);
-  assert.equal(postSchedulePage(state).posted.length, 1);
-});
-
-test('direct time entry accepts unpadded hours and Chinese colons, and rejects invalid times', () => {
-  const state = migrateSchedule([entry('typed-time')]);
-  for (const time of ['9:30', '09:30', '9：30', ' 9:30 ']) {
-    state.current.entries[0].time = time;
-    assert.equal(schedulePageError(state.current), null);
-  }
-  for (const time of ['25:00', '09:70', 'later', '9:3']) {
-    state.current.entries[0].time = time;
-    assert.ok(schedulePageError(state.current));
-  }
-});
-
-test('discard targets one posted page, retains the draft and bounds physical litter', () => {
+test('discard targets one poster, retains the current draft and bounds physical litter', () => {
   let state = migrateSchedule([entry('a')]);
   for (let i = 0; i < 30; i++) {
-    state.current.entries[0] = entry(`task-${i}`);
-    state = postSchedulePage(state);
+    const poster = { ...createSchedulePage(i + 10), id: `poster-${i}` };
+    state = { ...state, posted: [poster] };
     const currentId = state.current.id;
-    const removed = state.posted[0].id;
-    state = discardSchedulePage(state, removed);
+    state = discardSchedulePage(state, poster.id);
     assert.equal(state.current.id, currentId);
     assert.equal(state.posted.length, 0);
-    assert.equal(discardSchedulePage(state, removed), state);
+    assert.equal(discardSchedulePage(state, poster.id), state);
   }
   assert.equal(state.discarded.length, 24);
 });
