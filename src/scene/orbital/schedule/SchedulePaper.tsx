@@ -113,41 +113,33 @@ export function FloorPaperBall({ ball }: { ball: PaperBall }) {
     <meshStandardMaterial color="#e7ddc3" roughness={1} side={THREE.DoubleSide} flatShading />
   </mesh>;
 }
-export interface PaperFlight { kind: 'post' | 'discard'; page: SchedulePage; from?: [number, number, number] }
+export interface PaperFlight { kind: 'tear' | 'discard'; page: SchedulePage; from?: [number, number, number] }
 export function FlyingPaper({ flight, reducedMotion, onComplete }: { flight: PaperFlight; reducedMotion: boolean; onComplete: () => void }) {
   const mesh = useRef<THREE.Mesh>(null);
   const elapsed = useRef(0);
   const data = useMemo(() => paperGeometry(), []);
   const texture = useMemo(() => pageTexture(flight.page), [flight.page]);
-  const start = useMemo(() => new THREE.Vector3(...(flight.kind === 'post' ? flight.from ?? BOOK_POSITION : GLASS_POSITION)), [flight]);
-  const end = useMemo(() => new THREE.Vector3(...(flight.kind === 'post' ? GLASS_POSITION : paperBallPosition(flight.page.number))), [flight]);
+  const start = useMemo(() => new THREE.Vector3(...(flight.kind === 'tear' ? flight.from ?? BOOK_POSITION : GLASS_POSITION)), [flight]);
+  const end = useMemo(() => new THREE.Vector3(...paperBallPosition(flight.page.number)), [flight]);
   useEffect(() => () => data.geometry.dispose(), [data]);
   useEffect(() => () => texture.dispose(), [texture]);
   useFrame((_, delta) => {
     if (!mesh.current) return;
-    const duration = reducedMotion ? 0.12 : flight.kind === 'post' ? 1.25 : 1.65;
+    const duration = reducedMotion ? 0.12 : 1.65;
     elapsed.current += Math.min(delta, 0.05);
     const progress = Math.min(1, elapsed.current / duration);
-    if (flight.kind === 'post') {
-      const t = ease(progress);
-      mesh.current.position.lerpVectors(start, end, t);
-      if (!reducedMotion) { mesh.current.position.y += Math.sin(progress * Math.PI) * 0.25; mesh.current.position.z += Math.sin(progress * Math.PI) * 0.16; }
-      mesh.current.rotation.set(-Math.PI / 2 * (1 - t), 0, 0.08 * (1 - t));
-      mesh.current.scale.setScalar(0.45 + 0.55 * t);
-    } else {
-      const fold = reducedMotion ? 1 : ease(Math.min(1, progress / 0.32));
-      const positions = data.geometry.attributes.position;
-      for (let i = 0; i < data.flat.length; i++) positions.array[i] = THREE.MathUtils.lerp(data.flat[i], data.folded[i], fold);
-      positions.needsUpdate = true; data.geometry.computeVertexNormals();
-      const fall = reducedMotion ? progress : Math.max(0, (progress - 0.32) / 0.68);
-      mesh.current.position.lerpVectors(start, end, fall);
-      mesh.current.position.y = THREE.MathUtils.lerp(start.y, end.y, fall * fall);
-      if (fall > 0.85) mesh.current.position.y += Math.sin((fall - 0.85) / 0.15 * Math.PI) * 0.08;
-      mesh.current.rotation.set(fall * 5, fall * 4, fall * 2);
-    }
+    const fold = reducedMotion ? 1 : ease(Math.min(1, progress / 0.32));
+    const positions = data.geometry.attributes.position;
+    for (let i = 0; i < data.flat.length; i++) positions.array[i] = THREE.MathUtils.lerp(data.flat[i], data.folded[i], fold);
+    positions.needsUpdate = true; data.geometry.computeVertexNormals();
+    const fall = reducedMotion ? progress : Math.max(0, (progress - 0.32) / 0.68);
+    mesh.current.position.lerpVectors(start, end, fall);
+    mesh.current.position.y = THREE.MathUtils.lerp(start.y, end.y, fall * fall);
+    if (fall > 0.85) mesh.current.position.y += Math.sin((fall - 0.85) / 0.15 * Math.PI) * 0.08;
+    mesh.current.rotation.set(fall * 5, fall * 4, fall * 2);
     if (progress >= 1) onComplete();
   });
   return <mesh ref={mesh} geometry={data.geometry} castShadow receiveShadow>
-    <meshStandardMaterial map={texture} color="#f6eddb" roughness={1} side={THREE.DoubleSide} flatShading={flight.kind === 'discard'} />
+    <meshStandardMaterial map={texture} color="#f6eddb" roughness={1} side={THREE.DoubleSide} flatShading />
   </mesh>;
 }

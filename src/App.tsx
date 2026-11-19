@@ -143,7 +143,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
   }, []);
   const onToggleMute = useCallback(() => { roomAudio.setMuted(!roomAudio.getSnapshot().isMuted); }, []);
   const focusGuide = world.focusedObject === 'journal' ? '点击书页书写 · ← / → 翻页 · 自动保存 · Esc 返回'
-    : world.focusedObject === 'schedule' ? '← / → 翻页 · 上拖纸页贴出 · V 切换视角 · Esc 返回'
+    : world.focusedObject === 'schedule' ? '← / → 翻页 · 下拖纸页撕下 · V 切换视角 · Esc 返回'
     : world.focusedObject === 'schedule-glass' ? '左右键浏览 · V 切换视角 · Esc 返回'
     : world.focusedObject === 'clock' ? '设定闹钟或倒计时 · 可试听经典版与特供版铃声 · Esc 返回' : '';
   const orbitGuide = viewMode === 'approach' ? '宇宙很大。这里，刚刚好。'
