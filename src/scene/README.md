@@ -25,7 +25,7 @@
 
 ## 舱体模型
 
-[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，木纹贴图已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出按集合合并网格。可交互家具由运行时挂在各自的动作节点上。
+[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，木纹贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出按集合合并网格。可交互家具由运行时挂在各自的动作节点上。
 
 ```sh
 blender --background assets/models/cabin/open-cabin.blend --python scripts/export-open-cabin.py
