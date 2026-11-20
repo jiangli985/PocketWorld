@@ -3,7 +3,15 @@ import * as THREE from 'three';
 export const SLIPPER_MODEL_URL = `${import.meta.env.BASE_URL}models/cabin/open-cabin.glb`;
 
 export interface SlipperPart { geometry: THREE.BufferGeometry; material: THREE.Material }
-export interface SlipperSide { parts: SlipperPart[]; center: [number, number]; radius: number }
+export interface SlipperSide {
+  parts: SlipperPart[];
+  center: [number, number];
+  radius: number;
+  baseY: number;
+  halfHeight: number;
+  halfWidth: number;
+  halfLength: number;
+}
 export interface SlipperModel { left: SlipperSide; right: SlipperSide }
 
 export function isSlipperMaterial(material: THREE.Material | THREE.Material[] | undefined) {
@@ -125,11 +133,20 @@ function build(scene: THREE.Object3D): SlipperModel | null {
     for (const part of meshes) { part.geometry.computeBoundingBox(); bounds.union(part.geometry.boundingBox!); }
     const size = bounds.getSize(new THREE.Vector3());
     const center = bounds.getCenter(new THREE.Vector3());
-    for (const part of meshes) part.geometry.translate(-center.x, 0, -center.z);
+    // Center all three axes so roll/pitch tumbling rotates cleanly around the slipper's volume center.
+    for (const part of meshes) {
+      part.geometry.translate(-center.x, -center.y, -center.z);
+      part.geometry.computeBoundingBox();
+      part.geometry.computeBoundingSphere();
+    }
     return {
       parts: meshes,
       center: [center.x, center.z] as [number, number],
       radius: THREE.MathUtils.clamp(Math.max(size.x, size.z) * 0.35, 0.09, 0.16),
+      baseY: bounds.min.y,
+      halfHeight: size.y * 0.5,
+      halfWidth: size.x * 0.5,
+      halfLength: size.z * 0.5,
     };
   });
   if (!sides[0] || !sides[1]) return null;

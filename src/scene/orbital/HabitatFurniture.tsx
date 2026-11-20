@@ -1,4 +1,4 @@
-import { BED_POSITION, LAMP_POSITION, PLANT_POSITION } from './cabinLayout';
+import { BED_POSITION, LAMP_POSITION, PLANT_POSITION, TRASH_CAN } from './cabinLayout';
 import React, { Suspense, useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { CLOSED_OBJECT, type WorldModelProps } from '../../types/world';
@@ -133,6 +133,8 @@ export const HabitatFurniture: React.FC<WorldModelProps & { sofaTime: React.RefO
         hint={world.objects.sofa?.active ? '起身' : '坐进懒人沙发'} world={world}>
         <AssetBoundary><Suspense fallback={null}><FloorSofa sample={world.sofaTime} /></Suspense></AssetBoundary>
       </ObjectHandle>
+      <ReusableAsset name="Furniture_TrashCan" path="furniture/trash-can.glb"
+        height={TRASH_CAN.height} position={TRASH_CAN.position} rotation={[0, TRASH_CAN.yaw, 0]} />
     </>}
     <FurnitureLamp world={world} />
     <FurniturePlant world={world} observatory={observatory} />
