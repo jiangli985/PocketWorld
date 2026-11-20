@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { createResidentRig } from './residentRig';
 import { applyResidentSkin } from './residentSkin';
 import { createChairAnimation } from './chairAnimation';
+import { createSleeveContact } from './wardrobe/sleeveContact';
 import { loadResidentAssets, type ResidentAssets } from './wardrobe/residentAssets';
 import type { ResidentOutfit } from './wardrobe/outfit';
 
@@ -30,6 +31,7 @@ export interface ResidentRig {
   applyPose: (phase: number, walkWeight: number) => void;
   followMotion: (dt: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => void;
   fitted?: ResidentAssets['fitted'];
+  updateSleeveContact?: () => void;
   applyChairPose?: (time: number, weight: number) => void;
   dispose: () => void;
 }
@@ -43,6 +45,7 @@ function LoadedResident({ assets, rig }: { assets: ResidentAssets; rig: MutableR
     const chair = createChairAnimation(asset, assets.sit, assets.contact);
     resident.fitted = assets.fitted;
     resident.applyChairPose = chair.apply;
+    if (assets.outfit === 'cloudhoodie') resident.updateSleeveContact = createSleeveContact(asset);
     resident.mesh.userData.outfit = assets.outfit;
     const restoreSkin = assets.outfit === 'everyday' ? applyResidentSkin(resident.mesh) : undefined;
     group.add(resident.mesh);

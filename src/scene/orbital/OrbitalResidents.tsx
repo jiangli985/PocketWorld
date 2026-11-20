@@ -863,6 +863,7 @@ export function OrbitalResidents(props: ResidentsProps) {
         root.rotation.y, root.position.x - frameX, root.position.z - frameZ, s.walkTime);
     }
     if (library && rig.current) library.tick(dt);
+    rig.current?.updateSleeveContact?.();
     root.userData.posture = s.exiting ? 'standing-up' : s.posture;
     root.userData.standingIdle = { elapsed: idle.current.elapsed, weight: idle.current.weight, yawnTime: idle.current.yawnTime,
       nextYawn: idle.current.nextYawn, lookTime: idle.current.lookTime, nextLook: idle.current.nextLook };

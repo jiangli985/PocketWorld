@@ -225,3 +225,38 @@ test('云朵连帽衫的两个待机动作均可绑定，并驱动两侧手腕',
     state[gesture + 'Weight'] = 0;
   }
 });
+
+test('云朵装两侧 Shape Keys 随各自的手臂受压和回弹', async () => {
+  const { createSleeveContact } = compile('./wardrobe/sleeveContact.ts');
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-cloudhoodie.glb', import.meta.url));
+  const rig = createResidentRig(gltf.scene, gltf.animations.find(a => a.name === 'Walk_Grounded_Loop'), true);
+  try {
+    const update = createSleeveContact(gltf.scene);
+    const cloth = gltf.scene.getObjectByProperty('isSkinnedMesh', true);
+    const left = cloth.morphTargetDictionary.SleeveContact_L, right = cloth.morphTargetDictionary.SleeveContact_R;
+    const offsets = cloth.geometry.morphAttributes.position;
+    assert.ok(offsets[left].array.some(value => value < -.01));
+    assert.ok(offsets[right].array.some(value => value > .01));
+    rig.applyPose(0, 0);
+    update();
+    assert.deepEqual([cloth.morphTargetInfluences[left], cloth.morphTargetInfluences[right]], [1, 1]);
+    const yawn = gltf.animations.find(a => a.name === 'Luna_Yawn');
+    const gesture = createIdlePlayer(rig.mesh, yawn);
+    const state = createIdleState(random);
+    let asymmetric = false, intermediate = false;
+    for (let i = 0; i <= 60; i++) {
+      rig.applyPose(0, 0);
+      state.yawnTime = i / 60 * yawn.duration;
+      state.yawnWeight = 1;
+      gesture(state);
+      update();
+      const a = cloth.morphTargetInfluences[left], b = cloth.morphTargetInfluences[right];
+      if (Math.abs(a - b) > .45) asymmetric = true;
+      if ([a, b].some(value => value > .05 && value < .95)) intermediate = true;
+    }
+    assert.ok(asymmetric && intermediate);
+    rig.applyPose(0, 0);
+    update();
+    assert.deepEqual([cloth.morphTargetInfluences[left], cloth.morphTargetInfluences[right]], [1, 1]);
+  } finally { rig.dispose(); }
+});
