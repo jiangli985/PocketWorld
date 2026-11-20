@@ -130,9 +130,9 @@
       "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the arm-supported scoot from the cushion edge to the resting pose; Walk and 2K data maps from repository commit 6f6df88; original 4K base color from the user-supplied Tripo GLB, also preserved in commit 2e1ff72.",
       "license": "User-supplied; no separate license declaration supplied.",
       "used": true,
-      "bytes": 10406152,
-      "sha256": "c0f0e434f5af09d87880e016489c611aab0b79a154f02e9dde9c657254319a03",
-      "processing": "The seated clip and detailed contact mesh are baked from Blender. The walk channels and existing compressed textures are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. See assets/models/resident/README.md."
+      "bytes": 10506732,
+      "sha256": "46a09d5ea671caee8ebb25d1597af6430874247cff0d787ea58a7470d38e2dcd",
+      "processing": "The seated clip and detailed contact mesh are baked from Blender. Luna-ArmContact.blend adds independent sparse skirt and underarm morph targets driven by arm pose. The original vertex mapping, walk channels and existing compressed textures are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. See assets/models/resident/README.md."
     },
     {
       "file": "resident/luna-seat-contact.bin",
