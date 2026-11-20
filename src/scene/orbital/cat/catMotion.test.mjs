@@ -96,3 +96,23 @@ test('a natural wake makes the retargeted four-paw walk available with a seamles
     motion.dispose();
   }
 });
+
+test('a cat sent to its bed stays to rest before naturally leaving again', () => {
+  const { motion, pelvis, rest } = setup();
+  try {
+    motion.settleAtHome(7);
+    advance(motion, 3.5);
+    assert(pelvis.position.y < rest - .18, 'the cat lies down soon after reaching the bed');
+    for (let i = 0; i < 330; i++) {
+      const pose = motion.update(1 / 60, false, false, false, () => {});
+      assert(!pose.walkReady, 'the cat stays during its scheduled rest');
+    }
+    let departed = false;
+    for (let i = 0; i < 180 && !departed; i++) {
+      departed = motion.update(1 / 60, false, false, false, () => {}).walkReady;
+    }
+    assert(departed, 'the cat leaves after its rest and get-up animation');
+  } finally {
+    motion.dispose();
+  }
+});

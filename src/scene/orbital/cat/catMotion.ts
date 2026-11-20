@@ -42,6 +42,8 @@ export function createCatMotion(root: Object3D, clips: AnimationClip[]) {
   let phase: Phase = 'standing';
   let time = 0;
   let sleepAtWake = 0;
+  let sleepFor = SLEEP_TIME;
+  let restPending = false;
   let naturalWake = false;
   let next: 'stretch' | 'lieDown' = 'stretch';
   let standingFor = BEFORE_STRETCH;
@@ -51,7 +53,13 @@ export function createCatMotion(root: Object3D, clips: AnimationClip[]) {
     phase = 'standing';
     time = 0;
     blendIn = comingFromAnimation;
-    standingFor = next === 'stretch' ? BEFORE_STRETCH : BEFORE_SLEEP;
+    if (restPending) {
+      next = 'lieDown';
+      standingFor = .75;
+      restPending = false;
+    } else {
+      standingFor = next === 'stretch' ? BEFORE_STRETCH : BEFORE_SLEEP;
+    }
     mixer.stopAllAction();
   }
 
@@ -64,6 +72,16 @@ export function createCatMotion(root: Object3D, clips: AnimationClip[]) {
   }
 
   return {
+    settleAtHome(seconds: number) {
+      sleepFor = phase === 'sleep' ? time + seconds : seconds;
+      if (phase === 'standing') {
+        next = 'lieDown';
+        standingFor = .75;
+        time = 0;
+      } else if (phase !== 'lieDown' && phase !== 'sleep') {
+        restPending = true;
+      }
+    },
     walk: walk ? {
       sample(cycles: number, weight: number) {
         walk.play();
@@ -97,8 +115,9 @@ export function createCatMotion(root: Object3D, clips: AnimationClip[]) {
         onStart();
       } else if (phase === 'lieDown' && pet) {
         phase = 'riseEarly';
-      } else if (phase === 'sleep' && (pet || time >= SLEEP_TIME)) {
+      } else if (phase === 'sleep' && (pet || time >= sleepFor)) {
         naturalWake = !pet;
+        sleepFor = SLEEP_TIME;
         sleepAtWake = time % duration('sleep');
         phase = 'getUp';
         time = 0;
@@ -134,7 +153,7 @@ export function createCatMotion(root: Object3D, clips: AnimationClip[]) {
               sample('sleep', 0);
             } else {
               next = phase === 'stretch' ? 'lieDown' : 'stretch';
-              const walkReady = phase === 'getUp' && naturalWake && !petActive;
+              const walkReady = phase === 'getUp' && naturalWake && !petActive && !restPending;
               stand(true);
               return { idle: 0, standing: true, walkReady };
             }

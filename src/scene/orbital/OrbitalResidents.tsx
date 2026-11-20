@@ -34,6 +34,7 @@ type ResidentsProps = WorldModelProps & {
   onArrive: () => void;
   enabled: boolean;
   drawerEnabled: boolean;
+  catMenuOpen: boolean;
   sofaTime: React.MutableRefObject<number | null>;
   drawerInteraction: React.MutableRefObject<DrawerInteraction | null>;
   onDrawerAction: (action: WorldAction) => void;
@@ -288,7 +289,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       { id: 'cabinet', kind: 'open', hint: '打开柜门', point: [cabinetX, cabinetZ], reach: 0.55 },
       { id: 'lamp', kind: 'toggle', hint: '开关灯', point: p.sceneId === 'habitat' ? [NIGHTSTAND_X - .11, NIGHTSTAND_Z + .77] : [-1.42, -2.55], reach: 0.46 },
       { id: 'plant', kind: 'water', hint: '给盆栽浇水', point: p.sceneId === 'habitat' ? [NIGHTSTAND_X + .32, NIGHTSTAND_Z + .78] : [2.75, 1.85], reach: 0.55 },
-      { id: 'pet', kind: 'pet', hint: '摸摸团子', point: catLocation.current, reach: PET_REACH },
+      { id: 'pet', kind: 'pet', hint: '和团子互动', point: catLocation.current, reach: PET_REACH },
       { id: 'chair', kind: 'sit', hint: '坐下', point: [pose.x, pose.z], reach: CHAIR_REACH },
     ];
     if (p.sceneId === 'habitat') {
@@ -873,7 +874,7 @@ export function OrbitalResidents(props: ResidentsProps) {
 
   const canCatWalk = (x: number, z: number) => {
     const luna = resident.current?.position;
-    return approach.current?.action.objectId !== 'pet'
+    return !props.catMenuOpen && approach.current?.action.objectId !== 'pet'
       && free([x, z], room.boxes)
       && (!luna || Math.hypot(x - luna.x, z - luna.z) > RADIUS + .28)
       && plushBodies.current.every(plush => Math.hypot(x - plush.x, z - plush.z) > plush.radius + .28);
@@ -886,9 +887,9 @@ export function OrbitalResidents(props: ResidentsProps) {
     </group>
     {props.sceneId === 'habitat' && <Suspense fallback={null}><SlipperPair resident={resident} room={slipperRoom.current} reducedMotion={props.reducedMotion} /></Suspense>}
     {props.sceneId === 'habitat' && <PlushDolls bodies={plushBodies} />}
-    <ObjectHandle id="pet" action="pet" hint="摸摸团子" world={props} position={[CAT_HOME[0], CAT_MAT_Y, CAT_HOME[1]]}
+    <ObjectHandle id="pet" action="pet" hint="和团子互动" world={props} panorama position={[CAT_HOME[0], CAT_MAT_Y, CAT_HOME[1]]}
       onClick={event => event.stopPropagation()}>
-      <Cat resident={resident} value={props.objects.pet?.value ?? 0} reducedMotion={props.reducedMotion}
+      <Cat resident={resident} value={props.objects.pet?.value ?? 0} command={props.objects.pet?.itemId} reducedMotion={props.reducedMotion}
         location={catLocation} canWalk={props.sceneId === 'habitat' ? canCatWalk : undefined} />
     </ObjectHandle>
   </group>;

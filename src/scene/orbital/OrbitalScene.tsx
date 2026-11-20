@@ -36,6 +36,7 @@ import { ScheduleSurfaces } from './schedule/ScheduleSurfaces';
 import { BOOK_POSITION } from './schedule/SchedulePaper';
 import { SCHEDULE_BOOK_POSITION } from './schedule/bookLayout';
 import { OrbitalResidents } from './OrbitalResidents';
+import { CatInteraction } from './cat/CatInteraction';
 import type { DrawerInteraction } from './drawerInteraction';
 import { shelfPoint, shelfVector } from './library/catalog';
 import { sideLibraryCamera } from './library/sideCamera';
@@ -348,7 +349,7 @@ function OrbitalLighting({ objects, sun }: Pick<WorldSceneProps, 'objects'> & { 
     <pointLight ref={roomWarm} position={[2.1, 2.2, 0.2]} color="#ffdcb5" intensity={2.8} distance={9} decay={1.9} />
   </>;
 }
-function WorldContent(props: OrbitalSceneProps) {
+function WorldContent(props: OrbitalSceneProps & { catMenuOpen: boolean }) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
   const [hullReady, setHullReady] = useState(false);
   const sofaTime = useRef<number | null>(null);
@@ -396,14 +397,14 @@ function WorldContent(props: OrbitalSceneProps) {
         {id === props.sceneId && <OrbitalLighting objects={world.objects} sun={sun} />}
         {id === 'habitat' && <SpacecraftHull flight={flight} sun={sun} reducedMotion={props.reducedMotion} onEnterCabin={props.onEnterCabin} onReady={() => setHullReady(true)} />}
         <group visible={showInterior}>
-          <HabitatShell variant={id} onFloorClick={point => { if (inCabin && (!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy && (!props.library || props.library.flow.current.phase === 'idle')) { void roomAudio.unlock(); setWalkTarget(point); } }} />
+          <HabitatShell variant={id} onFloorClick={point => { if (inCabin && !props.catMenuOpen && (!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy && (!props.library || props.library.flow.current.phase === 'idle')) { void roomAudio.unlock(); setWalkTarget(point); } }} />
           {id === 'habitat' && <ScheduleSurfaces {...world} visible={inCabin && props.sceneId === 'habitat'} />}
           {id === 'habitat' && <AlarmClock3D {...world} />}
           <Suspense fallback={null}><HabitatFurniture {...world} sofaTime={sofaTime} /><MediaObjects {...world} /></Suspense>
           <FeatureSurfaces {...world} />
           {id === props.sceneId && <>
-            <OrbitalResidents {...world} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} drawerInteraction={drawerInteraction} interaction={interaction}
-              drawerEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} onDrawerAction={props.onAction} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={inCabin && (!props.focusedObject || props.focusedObject === 'bed') && (!props.library || props.library.view.phase === 'idle') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
+            <OrbitalResidents {...world} catMenuOpen={props.catMenuOpen} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} drawerInteraction={drawerInteraction} interaction={interaction}
+              drawerEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} onDrawerAction={props.onAction} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={inCabin && !props.catMenuOpen && (!props.focusedObject || props.focusedObject === 'bed') && (!props.library || props.library.view.phase === 'idle') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
           </>}
         </group>
       </group>;
@@ -412,6 +413,7 @@ function WorldContent(props: OrbitalSceneProps) {
 }
 export function OrbitalScene(props: OrbitalSceneProps) {
   const container = useRef<HTMLDivElement>(null);
+  const [catMenu, setCatMenu] = useState<WorldAction | null>(null);
   const current = useRef(props);
   current.current = props;
   useEffect(() => {
@@ -458,8 +460,15 @@ export function OrbitalScene(props: OrbitalSceneProps) {
     onDoubleClick={e => { if ((e.target as HTMLElement).tagName === 'CANVAS' && props.focusedObject && !props.activeGame) props.onReturn(); }}>
     <Canvas shadows dpr={[1, 1.6]} gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.0 }}
       onCreated={({ gl }) => { gl.outputColorSpace = THREE.SRGBColorSpace; gl.shadowMap.type = THREE.PCFSoftShadowMap; }}>
-      <WorldContent {...props} />
+      <WorldContent {...props} catMenuOpen={!!catMenu} onAction={action => {
+        if (action.kind === 'pet' && action.objectId === 'pet') setCatMenu(action);
+        else props.onAction(action);
+      }} />
     </Canvas>
+    {catMenu && <CatInteraction onChoose={choice => {
+      setCatMenu(null);
+      if (choice) props.onAction({ ...catMenu, payload: { itemId: choice } });
+    }} />}
     <AlarmClockSurface
       focused={props.viewMode === 'cabin' && props.sceneId === 'habitat' && props.focusedObject === 'clock' && ['active', 'error'].includes(props.transition.phase)}
       isMuted={props.isMuted}

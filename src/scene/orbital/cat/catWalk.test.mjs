@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Vector3 } from 'three';
 import { CAT_HOME, CAT_MAT_Y, CAT_CUSHION_TOP, CAT_YAW, PLUSH_DOLLS, RESIDENT_RADIUS } from '../cabinLayout.ts';
-import { planCatWalk, sampleCatWalk } from './catWalk.ts';
+import { chooseCatReturnDirection, planCatWalk, sampleCatWalk } from './catWalk.ts';
 
 const start = [2.52, 1.10];
 const penguin = PLUSH_DOLLS.find(doll => doll.id === 'plush-penguin');
@@ -45,4 +45,18 @@ test('the cat tries a nearby route when the longer route is blocked and stays pu
   assert(route);
   assert(route.length < 3.2);
   assert.equal(planCatWalk(() => false, seeded(1)), null);
+});
+
+test('returning takes the shorter direction and avoids a blockage along that part of the route', () => {
+  const route = planCatWalk(() => true, seeded(3));
+  assert(route);
+  const distance = route.length * .30;
+  assert.equal(chooseCatReturnDirection(route, distance, () => true), -1);
+  assert.equal(chooseCatReturnDirection(route, route.length * .75, () => true), 1);
+  const barrier = route.curve.getPointAt(.16);
+  const clearAround = (x, z) => Math.hypot(x - CAT_HOME[0] - barrier.x, z - CAT_HOME[1] - barrier.z) > .09;
+  assert.equal(chooseCatReturnDirection(route, distance, clearAround), 1);
+  const point = new Vector3(), tangent = new Vector3();
+  sampleCatWalk(route, 0, point, tangent, -1);
+  assert(point.distanceTo(new Vector3(0, CAT_MAT_Y + CAT_CUSHION_TOP, 0)) < 1e-7);
 });

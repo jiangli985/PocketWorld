@@ -42,6 +42,24 @@ export function planCatWalk(isClear: (x: number, z: number) => boolean, random =
   return null;
 }
 
+export function chooseCatReturnDirection(
+  { curve, length }: CatRoute, distance: number, isClear: (x: number, z: number) => boolean,
+): -1 | 1 {
+  const closest = distance < length - distance ? -1 : 1;
+  const point = new Vector3();
+  function clearTo(end: number) {
+    const segments = Math.ceil(Math.abs(end - distance) / .04);
+    for (let i = 1; i <= segments; i++) {
+      curve.getPointAt(MathUtils.lerp(distance, end, i / segments) / length, point);
+      if (!isClear(CAT_HOME[0] + point.x, CAT_HOME[1] + point.z)) return false;
+    }
+    return true;
+  }
+  if (clearTo(closest < 0 ? 0 : length)) return closest;
+  if (clearTo(closest < 0 ? length : 0)) return closest < 0 ? 1 : -1;
+  return closest;
+}
+
 export const CAT_WALK_SPEED = .30;
 // Travel per cycle, calibrated from the rearward sweep of the source paws.
 export const CAT_WALK_STRIDE = .22;
@@ -52,13 +70,13 @@ function ground(x: number, z: number) {
   return (CAT_MAT_Y + CAT_CUSHION_TOP) * (1 - MathUtils.smoothstep(Math.hypot(x, z), .28, .41));
 }
 
-export function sampleCatWalk({ curve, length }: CatRoute, distance: number, position: Vector3, tangent: Vector3) {
+export function sampleCatWalk({ curve, length }: CatRoute, distance: number, position: Vector3, tangent: Vector3, direction: -1 | 1 = 1) {
   const progress = MathUtils.clamp(distance / length, 0, 1);
   curve.getPointAt(progress, position);
   curve.getTangentAt(progress, tangent);
   const weight = MathUtils.smoothstep(Math.min(distance, length - distance), 0, BLEND_DISTANCE);
   position.y = ground(position.x, position.z);
-  const direction = Math.atan2(tangent.x, tangent.z);
-  const yaw = CAT_YAW + Math.atan2(Math.sin(direction - CAT_YAW), Math.cos(direction - CAT_YAW)) * weight;
+  const heading = Math.atan2(direction * tangent.x, direction * tangent.z);
+  const yaw = CAT_YAW + Math.atan2(Math.sin(heading - CAT_YAW), Math.cos(heading - CAT_YAW)) * weight;
   return { yaw, weight };
 }
