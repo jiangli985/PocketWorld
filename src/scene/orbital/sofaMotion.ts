@@ -35,7 +35,7 @@ export function sofaPlayer(root: Object3D, clip: AnimationClip) {
 
 // Loaded cushion deflection in millimetres, sampled against Luna's skinned
 // triangles every two 30 Hz bake frames. The last sample is the held pose.
-const compression = [0, 4, 14, 22, 30, 39, 42, 48, 52, 55, 59, 67, 74, 76, 76, 74, 74, 72, 69, 65, 62, 58, 57, 56, 56];
+const compression = [0, 0, 1, 10, 20, 30, 35, 44, 49, 53, 57, 69, 76, 79, 78, 77, 76, 75, 72, 68, 61, 57, 55, 54, 54];
 export function sofaPressure(time: number | null) {
   if (time === null || time <= 1.2) return 0;
   const frame = MathUtils.clamp((time * 30 - 36) / 2, 0, compression.length - 1);

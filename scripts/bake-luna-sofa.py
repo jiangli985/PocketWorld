@@ -96,12 +96,39 @@ for frame_index in range(first, last + 1, 2):
             # higher upholstered lip while preserving captured spine motion.
             world = Matrix.LocRotScale(world.translation, rest.to_quaternion().slerp(world.to_quaternion(), .5), rest.to_scale())
             world.translation += Vector((delta.x*.028, delta.y*.0142, delta.z*.058*min(1., .25+weight*1.6)))
-        if name.startswith('Dress_') and name.endswith('_01'):
-            front = 'Front' in name
-            pitch = -1.18 if front else -.52 if ('Left' in name or 'Right' in name) else 1.10
-            side = 1 if ('Left' in name or '_L_' in name) else -1 if ('Right' in name or '_R_' in name) else 0
-            flare = Quaternion((0,0,1), side * (.52 if 'Back' in name or front else 1.12) * weight)
-            world = Matrix.LocRotScale(world.translation, Quaternion((1,0,0), pitch*weight) @ flare @ rest.to_quaternion(), rest.to_scale())
+        if name.startswith('Dress_'):
+            _, panel, *suffix = name.split('_')
+            level = int(suffix[-1]) - 1
+            left = panel == 'Left' or 'L' in suffix
+            right = panel == 'Right' or 'R' in suffix
+            side = int(left) - int(right)
+            # Each tier has its own tangent: the upper cloth clears the thighs,
+            # then the free hem curls down. Lateral panels gather toward the knees.
+            if panel == 'Front':
+                pitch = (-1.23, -.99, -.68)[level]
+                flare = (.31, .23, .14)[level]
+                sweep = -.17
+            elif panel == 'Back':
+                # Keep the rear hem lifted as it crosses the lip, then let it
+                # settle into the hollow once the cushion takes Luna's weight.
+                settle = min(1., max(0., (frame_index - 174) / 36))
+                settle = settle * settle * (3 - 2 * settle)
+                pitch = (1.18, .76, .12)[level] - (.20, .34, .30)[level] * settle
+                flare = (.52, .40, .26)[level]
+                sweep = .04
+            else:
+                pitch = (-.82, -.90, -.76)[level]
+                flare = (1.08, .92, .70)[level]
+                sweep = -.34
+            # The hem follows a few capture frames behind the hip. Blend back
+            # to the held sample so reversal uses exactly the same cloth pose.
+            earlier = frames[max(first, frame_index - level * 3)]['root'][1]
+            lag = min(1., max(0., (start.y - earlier) / 13.6))
+            bend = (weight + lag) * .5
+            roll = Quaternion((0, 0, 1), side * flare * bend)
+            turn = Quaternion((0, 1, 0), side * sweep * bend)
+            fold = turn @ Quaternion((1, 0, 0), pitch * bend) @ roll
+            world = Matrix.LocRotScale(world.translation, fold @ rest.to_quaternion(), rest.to_scale())
         worlds[name] = world
 
     # Two-link IK keeps each ankle and sole at its own calibrated standing
@@ -126,7 +153,7 @@ for frame_index in range(first, last + 1, 2):
 
     for bone in bones:
         name = key(bone.name)
-        if name.removeprefix('mixamorig') not in mapping and not name.endswith('Foot') and not (name.startswith('Dress_') and name.endswith('_01')):
+        if name.removeprefix('mixamorig') not in mapping and not name.endswith('Foot') and not name.startswith('Dress_'):
             continue
         world = worlds[name]
         local = worlds[key(bone.parent.name)].inverted() @ world if bone.parent else world

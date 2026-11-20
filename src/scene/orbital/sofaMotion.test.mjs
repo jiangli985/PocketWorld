@@ -56,6 +56,6 @@ test('the cushion stays unloaded during approach and follows the seated sample i
   assert.equal(sofaPressure(-.6), 0);
   assert.equal(sofaPressure(1.2), 0);
   assert(sofaPressure(2.1) > sofaPressure(2.76));
-  assert.equal(sofaPressure(10), .7);
+  assert.equal(sofaPressure(10), 54 / 80);
   assert.equal(sofaPressure(0), 0);
 });

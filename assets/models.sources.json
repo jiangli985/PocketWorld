@@ -8,7 +8,7 @@
       "source": "Original PocketWorld model and woven textures, authored in Blender from the user's visual reference.",
       "used": true,
       "bytes": 1633536,
-      "sha256": "215108c62faa0ae11809fa63ca60c56487c7e2177b5e909c965f1699423e1863",
+      "sha256": "b2cd89965fc90005d68b479e4f6b61fde198954f77dc47da25d5d53fbd91eb4e",
       "processing": "Editable source assets/models/furniture/floor-sofa.blend with packed linen and twill maps. scripts/export-floor-sofa.py converts the piping, topstitching and fringe to mesh and reduces the runtime geometry. The Seated morph compresses the cushion, piping and throw together under Luna."
     },
     {
@@ -30,8 +30,8 @@
         }
       ],
       "processing": "scripts/bake-luna-sofa.py retargets the captured descent and seated recoil to the room skeleton in Blender, with foot IK and fitted skirt bones. Bone animation only, sampled at 30 Hz.",
-      "bytes": 77012,
-      "sha256": "dc39b8316a7f770f0b95adb67d2e685e74ba45dca944c45063865dde01796421"
+      "bytes": 101984,
+      "sha256": "6de95fb63aec6482bb84d627f69535a4207935923daa40dda178b2d060742718"
     },
     {
       "file": "furniture/throw_pillows_01.glb",

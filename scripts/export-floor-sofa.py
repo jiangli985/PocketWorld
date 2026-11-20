@@ -48,6 +48,7 @@ for vertex, point in zip(loaded.data, points):
     depth = ramp((z+.24)/.25) * ramp((.73-z)/.16)
     # The tuft under the pelvis carries weight earlier than the raised front lip.
     tuft = 1 - .38 * exp(-((x+.18)/.12)**2 - ((z-.255)/.09)**2)
+    tuft -= .17 * exp(-((x+.245)/.065)**2 - ((z-.335)/.050)**2)
     vertex.co += down * (sides * depth * tuft * ramp(y/.20))
 bpy.ops.export_scene.gltf(
     filepath=str(root / "assets/public/models/furniture/floor-sofa.glb"),

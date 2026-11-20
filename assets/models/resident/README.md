@@ -2,7 +2,7 @@
 
 ## 地毯旁的懒人沙发
 
-落座主段取自 CMU Graphics Lab 的 75_20「low sit」。源动作为 60 Hz，烘焙使用第 95–261 帧（从 1 计数），保留下降和落座后的回稳段，以 30 Hz 导出。骨盆位移按 Luna 身形和座面校准，双腿 IK 固定原站姿脚掌，裙摆适配座垫，起身从当前样本逆放。坐垫的承重形变由同一播放时间驱动。[官方动作目录](https://mocap.cs.cmu.edu/search.php?subjectnumber=75) · [免费使用条件](https://mocap.cs.cmu.edu/)
+落座主段取自 CMU Graphics Lab 的 75_20「low sit」。源动作为 60 Hz，烘焙使用第 95–261 帧（从 1 计数），保留下降和落座后的回稳段，以 30 Hz 导出。骨盆位移按 Luna 身形和座面校准，双腿 IK 固定原站姿脚掌，前裙三段裙骨沿腿面逐段弯折，两侧朝膝盖收拢，后摆越过软垫前缘后下垂，起身从当前样本逆放。坐垫的承重形变由同一播放时间驱动。[官方动作目录](https://mocap.cs.cmu.edu/search.php?subjectnumber=75) · [免费使用条件](https://mocap.cs.cmu.edu/)
 
 将[主体骨架](https://mocap.cs.cmu.edu/subjects/75/75.asf)和[原始角度数据](https://mocap.cs.cmu.edu/subjects/75/75_20.amc)放入同一个仓库外目录。将环境变量 `CMU_SUBJECT_75` 设为该目录，再从仓库根目录运行下列命令，以实际运行站姿为基准复建动作。文件校验值与致谢见[素材登记](../../models.sources.json)。
 
