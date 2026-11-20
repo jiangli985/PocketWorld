@@ -6,28 +6,47 @@ export const PLAYER: Point = [-.35, 1.2, -2.25];
 export const PLATTER: Point = [-.48, 1.295, -2.25];
 export const RECORD_CENTER: Point = [PLATTER[0], PLATTER[1] + .0125 + .007, PLATTER[2]];
 export const DISC_RADIUS = .17;
-export const DISC_LEAN = -.12;
+export const RACK_ORIGIN: Point = [-1.135, 1.12, -2.815];
+export const RACK_SLOT_X0 = -.380;
+export const RACK_SLOT_PITCH_X = .146;
+export const RACK_SLOT_CENTER_Y = .222;
+export const RACK_DIVIDER_X0 = -.447;
+export const DISC_YAW = Math.PI / 6;
+export const DISC_LEAN = -.14;
 export const ARM_REST = .1, ARM_PLAY = -1.03;
-// Separate the entire label/hub thickness, not only the black vinyl faces.
-export const discPosition = (slot: number): Point => [-1.51 + (slot % 6) * .155, 1.36, -2.93 + (slot % 6) * .035];
+// Unit up-vector along the tilted 30-degree angled rack slot plane (Euler 'YXZ': lean then yaw).
+export const RACK_UP: Point = [
+  Math.sin(DISC_LEAN) * Math.sin(DISC_YAW),
+  Math.cos(DISC_LEAN),
+  Math.sin(DISC_LEAN) * Math.cos(DISC_YAW),
+];
+// Six angled felt-lined grooves centered symmetrically inside vinyl-rack.glb.
+export const discPosition = (slot: number): Point => [
+  RACK_ORIGIN[0] + RACK_SLOT_X0 + (slot % 6) * RACK_SLOT_PITCH_X,
+  RACK_ORIGIN[1] + RACK_SLOT_CENTER_Y,
+  RACK_ORIGIN[2],
+];
 export const smooth = (t: number) => { const x = Math.max(0, Math.min(1, t)); return x * x * x * (x * (x * 6 - 15) + 10); };
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 const lerp = (a: Point, b: Point, t: number): Point => a.map((v, i) => mix(v, b[i], t)) as Point;
 const bezier = (a: Point, b: Point, c: Point, d: Point, t: number): Point => a.map((v, i) => (1-t)**3*v + 3*(1-t)**2*t*b[i] + 3*(1-t)*t*t*c[i] + t**3*d[i]) as Point;
 
-/** Reversible, collision-cleared path. Tilt is interpolated by quaternion in the view. */
+/** Reversible, collision-cleared path. Slides straight up out of the angled walnut groove & brass dividers before tilting. */
 export function recordPath(slot: number, progress: number): { position: Point; tilt: number } {
   const t = Math.max(0, Math.min(1, progress));
   const home = discPosition(slot);
-  const pop: Point = [home[0], home[1] + .004, home[2] + .002];
-  // First slide within the rack plane; only rotate after clearing neighbours and the lamp.
-  const clear: Point = [Math.max(home[0], -1.03), 1.78, pop[2] - (1.78 - pop[1]) * Math.tan(-DISC_LEAN)];
+  const pop: Point = [home[0] + RACK_UP[0] * .010, home[1] + RACK_UP[1] * .010, home[2] + RACK_UP[2] * .010];
+  // Extract strictly along the slot's tilted plane until completely clear of the grooves, brass dividers, and neighbours.
+  const liftDist = (1.78 - pop[1]) / RACK_UP[1];
+  const liftClear: Point = [pop[0] + RACK_UP[0] * liftDist, 1.78, pop[2] + RACK_UP[2] * liftDist];
+  const clear: Point = [Math.max(liftClear[0], -1.03), 1.78, liftClear[2]];
   const above: Point = [RECORD_CENTER[0], 1.53, RECORD_CENTER[2]];
   if (t < .1) return { position: lerp(home, pop, smooth(t / .1)), tilt: 0 };
-  const aside: Point = [clear[0], pop[1], pop[2]];
-  if (t < .24) return { position: lerp(pop, aside, smooth((t - .1) / .14)), tilt: 0 };
-  if (t < .4) return { position: lerp(aside, clear, smooth((t - .24) / .16)), tilt: 0 };
-  if (t < .58) return { position: clear, tilt: smooth((t - .4) / .18) };
+  if (t < .4) return { position: lerp(pop, liftClear, smooth((t - .1) / .3)), tilt: 0 };
+  if (t < .58) {
+    const s = smooth((t - .4) / .18);
+    return { position: lerp(liftClear, clear, s), tilt: s };
+  }
   if (t < .85) return { position: bezier(clear, [clear[0], 1.84, -2.32], [above[0], 1.68, above[2]], above, smooth((t - .58) / .27)), tilt: 1 };
   return { position: lerp(above, RECORD_CENTER, smooth((t - .85) / .15)), tilt: 1 };
 }

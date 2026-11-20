@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { JOURNAL_POSITION, JOURNAL_SCALE, JOURNAL_YAW } from '../journalLayout.ts';
+import { PLAYER, RACK_ORIGIN } from '../media/record-motion.ts';
 import { BOOK, coverPose, leafPose } from './bookModel.ts';
 import { journalPages, loadLocalJournal, saveLocalJournal } from './journalStorage.ts';
 
@@ -45,9 +47,28 @@ test('expanded legacy books retain their closed cover clearance and turning shee
           const a = points[joint - 1];
           const b = points[joint];
           assert.ok(Math.abs(Math.hypot(b.x - a.x, b.y - a.y) - BOOK.width / BOOK.segments) < 1e-9);
-          assert.ok(b.y > BOOK.board, `leaf ${index}, frame ${frame}, joint ${joint}`);
+                  assert.ok(b.y > BOOK.board, `leaf ${index}, frame ${frame}, joint ${joint}`);
         }
       }
     }
   }
+});
+
+test('enlarged open journal clears desk edges, vinyl rack, and turntable', () => {
+  const halfOpenX = 1.535 * JOURNAL_SCALE;
+  const halfBackZ = 1.04 * JOURNAL_SCALE;
+  const halfFrontZ = 1.14 * JOURNAL_SCALE; // includes ribbon bookmark tip
+  const cos = Math.cos(JOURNAL_YAW), sin = Math.sin(JOURNAL_YAW);
+  const corners = [
+    [-halfOpenX, -halfBackZ], [halfOpenX, -halfBackZ],
+    [-halfOpenX, halfFrontZ], [halfOpenX, halfFrontZ],
+  ].map(([x, z]) => [JOURNAL_POSITION[0] + x * cos + z * sin, JOURNAL_POSITION[2] - x * sin + z * cos]);
+  const minX = Math.min(...corners.map(c => c[0]));
+  const maxX = Math.max(...corners.map(c => c[0]));
+  const minZ = Math.min(...corners.map(c => c[1]));
+  const maxZ = Math.max(...corners.map(c => c[1]));
+  assert.ok(minX > -1.77, `open journal overhangs desk left edge: ${minX}`);
+  assert.ok(maxX < PLAYER[0] - 0.44 - 0.10, `open journal crowds turntable: ${maxX}`);
+  assert.ok(minZ > RACK_ORIGIN[2] + 0.155 + 0.10, `open journal crowds vinyl rack: ${minZ}`);
+  assert.ok(maxZ < -1.79, `open journal overhangs desk front edge: ${maxZ}`);
 });

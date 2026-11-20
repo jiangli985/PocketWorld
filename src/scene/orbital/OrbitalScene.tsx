@@ -44,7 +44,7 @@ import { JOURNAL_PAGE_POSITION } from './journalLayout';
 const FOCUS: Record<string, { target: [number, number, number]; offset: [number, number, number] }> = {
   computer: { target: [1.77, 1.68, -2.30], offset: [0, 0.30, 3.5] },
   'music-player': { target: [-0.45, 1.2, -2.0], offset: [.4, 2.5, 3.1] },
-  journal: { target: JOURNAL_PAGE_POSITION, offset: [0, 0.60, 0.28] },
+  journal: { target: JOURNAL_PAGE_POSITION, offset: [0, 0.97, 0.45] },
   schedule: { target: [SCHEDULE_BOOK_POSITION[0] + 0.02, SCHEDULE_BOOK_POSITION[1] + 0.079, SCHEDULE_BOOK_POSITION[2]], offset: [0, 0.88, 0.48] },
   'schedule-glass': { target: [0.69, 2.53, -3.13], offset: [0, 0.02, 1.75] },
   'book-01': { target: [-.07, 1.03, .9], offset: [1.35, 1.12, 2.5] },

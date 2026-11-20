@@ -44,6 +44,18 @@ blender --background assets/models/furniture/floor-sofa.blend --python scripts/e
 blender --background --factory-startup --python scripts/build-trash-can.py
 ```
 
+书桌左后方的[桌面黑胶唱片架制作源](../../assets/models/furniture/vinyl-rack.blend)由 `scripts/build-vinyl-rack.py` 程序化生成并打包贴图（胡桃木 30° 斜铣凹槽、炭灰羊毛毡垫、7 根拉丝黄铜弓形分隔杆与双后横杆、镂空铜框胡桃木端板与锥形铜套支脚，与 `record-motion.ts` 共用六架位坐标），在仓库根目录运行以下命令可重建 `.blend` 并导出[运行时模型](../../assets/public/models/furniture/vinyl-rack.glb)。
+
+```sh
+blender --background --factory-startup --python scripts/build-vinyl-rack.py
+```
+
+电脑右侧的复古游戏卡带套件（[奶娃滑雪大冒险卡带](../../assets/models/furniture/cartridge-mario.blend)、[团团魔法录卡带](../../assets/models/furniture/cartridge-shooter.blend)、[双槽斜倾胡桃木展示架](../../assets/models/furniture/cartridge-stand.blend)与[奶油胡桃木卡带扩展坞](../../assets/models/furniture/cartridge-dock.blend)）由 `scripts/build-game-cartridges.py` 程序化生成并打包 16-bit 像素封绘与 PBR 贴图，在仓库根目录运行以下命令可一次重建全部 `.blend` 并导出 `assets/public/models/furniture/cartridge-*.glb`。
+
+```sh
+blender --background --factory-startup --python scripts/build-game-cartridges.py
+```
+
 舱内三只坐姿毛绒娃娃的制作源（[奶油垂耳兔](../../assets/models/furniture/plush-bunny.blend)、[焦糖泰迪熊](../../assets/models/furniture/plush-bear.blend)、[雾蓝胖企鹅](../../assets/models/furniture/plush-penguin.blend)）由 `scripts/build-plush-dolls.py` 程序化生成并打包贴图，在仓库根目录运行以下命令可一次重建全部 `.blend` 并导出对应的 `assets/public/models/furniture/plush-*.glb` 运行时模型（也支持 `-- --only bunny|bear|penguin` 单独生成）。
 
 ```sh

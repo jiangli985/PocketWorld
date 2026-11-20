@@ -73,6 +73,7 @@ function mount({ game = null, modules = {}, focusedObject = 'computer', width = 
       if (name === './RecordPlayer') return { RecordPlayer: 'RecordPlayer' };
       if (name === './ComputerScreen') return { ComputerScreen: 'ComputerScreen' };
       if (name === './CartridgePickup') return { CartridgePickup: 'CartridgePickup' };
+      if (name === './CartridgeHardware') return { GameCartridgeModel: 'GameCartridgeModel', CartridgeStandModel: 'CartridgeStandModel', CartridgeDockModel: 'CartridgeDockModel', PauseToggleLever: 'PauseToggleLever' };
       if (name === './computerLayout') return computerLayout;
       if (name === './cartridge-motion') return cartridgeMotion;
       if (name === '../cabinLayout') return { COMPUTER_STAND: [1.55, -1.36] };
