@@ -6,6 +6,7 @@ import { CARTRIDGE_SLOT, cartridgeDragState, type CartridgePoint } from './cartr
 
 interface Props {
   id: string;
+  hint?: string;
   position: CartridgePoint;
   enabled: boolean;
   world: WorldModelProps;
@@ -103,7 +104,7 @@ export function CartridgePickup(props: Props) {
   };
   return <group ref={root} position={props.position} name={`Interactable_${props.id}`} userData={{ objectId: props.id, action: 'insert', sceneId: props.world.sceneId }}
     onPointerDown={down}
-    onPointerOver={event => { if (props.enabled) { event.stopPropagation(); props.world.onHover(props.id, '点击卡带，自动插入'); } }}
+    onPointerOver={event => { if (props.enabled) { event.stopPropagation(); props.world.onHover(props.id, props.hint ?? '点击卡带，自动插入'); } }}
     onPointerOut={() => { if (!held.current) props.world.onHover(null); }}>
     <group ref={movable}>{props.children}</group>
   </group>;

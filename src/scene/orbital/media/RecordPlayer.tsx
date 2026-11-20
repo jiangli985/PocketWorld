@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Html } from '@react-three/drei';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Html, useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { WorldAction, WorldSceneProps } from '../../../types/world';
@@ -7,19 +7,52 @@ import type { MusicDisc } from '../../../types/interactable';
 import { roomAudio } from '../../audioEngine';
 import { ObjectHandle } from '../ObjectHandle';
 import { SoftBox } from '../Primitives';
+import { AssetBoundary } from '../ReusableAsset';
 import { SuppliedAsset } from '../SuppliedAsset';
-import { RecordTransport, PLAYER, PLATTER, DISC_LEAN, DISC_RADIUS, discPosition, type Point } from './record-motion';
+import { RecordTransport, PLAYER, PLATTER, RACK_ORIGIN, DISC_YAW, DISC_LEAN, DISC_RADIUS, discPosition, type Point } from './record-motion';
 
 const IMPORT_DISC: Point = [.28, 1.128, -2.44];
-const rackRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(DISC_LEAN, 0, 0));
+const rackRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(DISC_LEAN, DISC_YAW, 0, 'YXZ'));
 const flatRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
 const phaseText = { paused: '唱针已抬起', playing: '播放中', raise: '抬起唱臂', brake: '转盘减速', return: '唱片归架', extract: '正在取放唱片', settle: '唱片就位', spinup: '转盘启动', swing: '唱臂移向外圈', lower: '唱针缓缓落下', starting: '准备播放', fadein: '音乐渐入', park: '唱臂归位' };
+
+function VinylRackModel() {
+  const { scene } = useGLTF(`${import.meta.env.BASE_URL}models/furniture/vinyl-rack.glb`);
+  const model = useMemo(() => {
+    const clone = scene.clone(true);
+    clone.traverse(object => {
+      if (!(object instanceof THREE.Mesh)) return;
+      object.castShadow = object.receiveShadow = true;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      object.material = materials.map(material => material.clone());
+      if (object.material.length === 1) object.material = object.material[0];
+    });
+    return clone;
+  }, [scene]);
+  useEffect(() => () => {
+    model.traverse(object => {
+      if (!(object instanceof THREE.Mesh)) return;
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) material.dispose();
+    });
+  }, [model]);
+  return <primitive object={model} name="VinylRack_Model" dispose={null} />;
+}
+
+function VinylRackFallback() {
+  return <group name="VinylRack_Fallback">
+    <SoftBox position={[0, .045, 0]} dims={[1.22, .046, .30]} color="#6f4326" />
+    {[-1, 1].map(side => <SoftBox key={side} position={[side * .594, .165, 0]} dims={[.028, .28, .296]} color="#6f4326" />)}
+  </group>;
+}
+
 function Disc({ colors, radius = 0.17 }: { colors: [string, string]; radius?: number }) {
   return <group rotation={[Math.PI / 2, 0, 0]}>
-    <mesh castShadow><cylinderGeometry args={[radius, radius, 0.014, 48]} /><meshStandardMaterial color="#24282b" roughness={0.32} metalness={0.35} /></mesh>
-    {[0.76, 0.88].map(r => <mesh key={r} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.008, 0]}><ringGeometry args={[radius * r, radius * r + 0.002, 48]} /><meshStandardMaterial color="#606263" /></mesh>)}
-    <mesh position={[0, 0.01, 0]}><cylinderGeometry args={[radius * 0.4, radius * 0.4, 0.008, 32]} /><meshStandardMaterial color={colors[0]} /></mesh>
-    <mesh position={[0, 0.016, 0]}><cylinderGeometry args={[0.018, 0.018, 0.009, 16]} /><meshStandardMaterial color={colors[1]} metalness={0.5} /></mesh>
+    <mesh castShadow receiveShadow><cylinderGeometry args={[radius, radius, 0.014, 48]} /><meshStandardMaterial color="#191c20" roughness={0.22} metalness={0.42} /></mesh>
+    {[0.54, 0.66, 0.78, 0.89].map(r => <mesh key={r} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.0076, 0]}><ringGeometry args={[radius * r, radius * r + 0.0018, 48]} /><meshStandardMaterial color="#43484e" roughness={0.34} metalness={0.55} /></mesh>)}
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.0079, 0]}><ringGeometry args={[radius * 0.39, radius * 0.425, 36]} /><meshStandardMaterial color="#e8dcc0" roughness={0.5} /></mesh>
+    <mesh position={[0, 0.01, 0]}><cylinderGeometry args={[radius * 0.4, radius * 0.4, 0.008, 32]} /><meshStandardMaterial color={colors[0]} roughness={0.48} /></mesh>
+    <mesh position={[0, 0.016, 0]}><cylinderGeometry args={[0.018, 0.018, 0.009, 16]} /><meshStandardMaterial color={colors[1]} metalness={0.55} roughness={0.32} /></mesh>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.0207, 0]}><circleGeometry args={[0.0062, 16]} /><meshStandardMaterial color="#15171a" roughness={0.7} /></mesh>
   </group>;
 }
 
@@ -140,11 +173,19 @@ export function RecordPlayer(props: WorldSceneProps) {
         </group></group>
       </ObjectHandle>
     </group>
-    <SoftBox position={[-1.13, 1.16, -2.80]} dims={[1.24, .06, .33]} color="#765b43" />
+    <group name="VinylRack" position={RACK_ORIGIN}>
+      <AssetBoundary fallback={<VinylRackFallback />}>
+        <Suspense fallback={<VinylRackFallback />}>
+          <VinylRackModel />
+        </Suspense>
+      </AssetBoundary>
+    </group>
     {records.slice(visiblePage * 6, visiblePage * 6 + 6).map((disc, index) => disc.id === transport.disc.id ? null : <ObjectHandle key={disc.id} id={`music-disc-${disc.id}`} action="insert" hint={`拿取《${disc.title}》${disc.isUserUploaded ? ' · 我的唱片' : ''}`} world={world} payload={{ itemId: disc.id }} position={discPosition(index)}>
-      <group rotation={[DISC_LEAN, 0, 0]}><Disc colors={disc.discThemeColor} /></group>
+      <group quaternion={rackRotation}><Disc colors={disc.discThemeColor} /></group>
     </ObjectHandle>)}
-    {[-1, 1].map(direction => <ObjectHandle key={direction} id="music-rack" action="select" hint={pages > 1 ? '翻动唱片架，查看更多唱片' : '唱片架'} payload={{ direction }} world={world} position={[-1.13 + direction * .6, 1.31, -2.81]}><SoftBox dims={[.035, .29, .21]} color="#765b43" /></ObjectHandle>)}
+    {[-1, 1].map(direction => <ObjectHandle key={direction} id="music-rack" action="select" hint={pages > 1 ? '翻动唱片架，查看更多唱片' : '胡桃木黄铜唱片架'} payload={{ direction }} world={world} position={[RACK_ORIGIN[0] + direction * .594, RACK_ORIGIN[1] + .165, RACK_ORIGIN[2]]}>
+      <mesh><boxGeometry args={[.044, .29, .30]} /><meshBasicMaterial visible={false} /></mesh>
+    </ObjectHandle>)}
     <ObjectHandle id="music-import" action="insert" hint="空白唱片 · 导入本地音乐" world={world} position={IMPORT_DISC} onClick={event => {
       event.stopPropagation(); if (!enabled || transport.busy || event.delta >= 9) return;
       props.onImportMusic();
