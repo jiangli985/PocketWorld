@@ -157,12 +157,12 @@
       "processing": "Adjusted embedded albedo for the warm cabin palette. Reuses the supplied geometry and attachment pivots."
     },
     {
-      "file": "replaced/rolling-chair.parts.glb",
-      "source": "Repository-supplied replaced/rolling-chair.parts.glb at b2df620.",
+      "file": "furniture/fixed-desk-chair.glb",
+      "source": "Original PocketWorld floor-mounted desk chair authored in Blender.",
       "used": true,
-      "bytes": 3556372,
-      "sha256": "687046c86dec6f5ed85bc64210c0624f5898077576647a254a707191dd705fe0",
-      "processing": "Adjusted embedded albedo for the warm cabin palette. Reuses the supplied geometry and attachment pivots."
+      "bytes": 374564,
+      "sha256": "df7fd11c0aafeeaa0c168e463992944b905eb13752f989a97ad0eac5b7e1ded3",
+      "processing": "Built in metres with a floor origin by scripts/build-fixed-desk-chair.py. Editable source: assets/models/furniture/fixed-desk-chair.blend. The six static meshes share the authored footprint and seat contacts."
     },
     {
       "file": "replaced/computer.fitted.glb",
