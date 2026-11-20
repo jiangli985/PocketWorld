@@ -7,7 +7,7 @@ import { AssetBoundary } from './ReusableAsset';
 import { extractSlipperModel, isSlipperMaterial } from './slipperModel';
 
 import { ObjectHandle } from './ObjectHandle';
-import { outfitHint } from './wardrobe/outfit';
+import { outfitHint, readOutfit } from './wardrobe/outfit';
 import type { WorldModelProps } from '../../types/world';
 
 interface HabitatShellProps {
@@ -39,7 +39,7 @@ function CabinModel({ world }: Pick<HabitatShellProps, 'world'>) {
   return <>
     <primitive object={cabin.shell} />
     {cabin.wardrobe && <ObjectHandle id="wardrobe" action="toggle" panorama world={world}
-      hint={outfitHint(!!world.objects.wardrobe?.active)} acceptsHit={point => point.x <= WARDROBE_FOOTPRINT[1]}
+      hint={outfitHint(readOutfit(world.objects.wardrobe?.itemId))} acceptsHit={point => point.x <= WARDROBE_FOOTPRINT[1]}
       onClick={event => event.stopPropagation()}>
       <primitive object={cabin.wardrobe} />
     </ObjectHandle>}

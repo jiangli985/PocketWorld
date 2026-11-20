@@ -86,6 +86,24 @@
       "processing": "Existing locally packaged glTF binary; runtime clones the scene and normalizes scale. Packaging recipe from the earlier work session is not retained."
     },
     {
+      "file": "resident/luna-cloudhoodie.glb",
+      "source": "User-supplied Tripo model 1115d436-5d3e-444c-be63-a6141e1f346c.glb. Motion sources are shared with the existing Luna walk, chair, low-sofa, bed and library assets.",
+      "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
+      "used": true,
+      "bytes": 8949416,
+      "sha256": "e97016e467db28dbb440b523ce37924e6716575c8b777581dbc310516aff5cde",
+      "processing": "Fitted Luna skeleton, lined sleeve openings, reworked flat sock feet, retouched facial albedo and rebaked grounded walk. Includes outfit-specific chair IDs, support vertices and book marker tracks."
+    },
+    {
+      "file": "resident/luna-cloudhoodie-seat.bin",
+      "source": "Cloud hoodie mesh, its fitted Luna chair action, and the PocketWorld fixed desk chair.",
+      "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
+      "used": true,
+      "bytes": 542156,
+      "sha256": "1314ded22883575b36585839c9c611c54d1a1886661348ad854ff60daec6d38f",
+      "processing": "98 frames of pre-skin corrections to the seat cushion and armrest tops. 922 contact IDs on the hoodie mesh."
+    },
+    {
       "file": "resident/luna-snowflower.glb",
       "source": "User-supplied Tripo model ab1c7402-ed3c-428e-bf63-d4d73a8b9d7d.glb and 蓝发少女与雪花裙装.png. Animation sources are shared with the Luna wardrobe, book, bed and low-sofa assets.",
       "license": "User-supplied character and artwork; no separate license declaration supplied.",

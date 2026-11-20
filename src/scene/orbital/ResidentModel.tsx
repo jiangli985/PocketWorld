@@ -39,7 +39,7 @@ function LoadedResident({ assets, rig }: { assets: ResidentAssets; rig: MutableR
   useLayoutEffect(() => {
     const group = container.current!;
     const asset = clone(assets.scene);
-    const resident = createResidentRig(asset, assets.walk, assets.outfit === 'snowflower');
+    const resident = createResidentRig(asset, assets.walk, !!assets.fitted);
     const chair = createChairAnimation(asset, assets.sit, assets.contact);
     resident.fitted = assets.fitted;
     resident.applyChairPose = chair.apply;

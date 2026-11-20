@@ -15,6 +15,7 @@ export interface ResidentAssets {
 
 const files = {
   everyday: ['luna-walk-room.glb', 'luna-seat-contact.bin'],
+  cloudhoodie: ['luna-cloudhoodie.glb', 'luna-cloudhoodie-seat.bin'],
   snowflower: ['luna-snowflower.glb', 'luna-snowflower-seat.bin'],
 } as const;
 const pending = new Map<ResidentOutfit, Promise<ResidentAssets>>();
@@ -36,7 +37,7 @@ export function loadResidentAssets(outfit: ResidentOutfit): Promise<ResidentAsse
     return {
       outfit, scene: gltf.scene, walk: clip('Walk_Grounded_Loop'), sit: clip('ChairSit_Contact'),
       contact: readSeatContactCache(buffer as ArrayBuffer),
-      fitted: outfit === 'snowflower' ? {
+      fitted: outfit !== 'everyday' ? {
         bed: clip('Luna_Bed_V3_DirectSeat'), sofa: clip('Luna_CMU_75_20'), library: readLibraryMotion(gltf.animations),
       } : undefined,
     };

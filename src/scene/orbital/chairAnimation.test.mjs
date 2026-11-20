@@ -201,3 +201,36 @@ test('雪花裙装使用自己的接触索引，坐起只变形接触网格，�
     assert.deepEqual(posed, rest);
   } finally { seat.dispose(); rig.dispose(); }
 });
+
+test('云朵连帽衫的坐姿缓存匹配新网格，包脚袜在站定和步态混合中贴地', async () => {
+  const root = new URL('../../../assets/public/models/resident/', import.meta.url);
+  const { gltf } = await load(new URL('luna-cloudhoodie.glb', root));
+  const bytes = readFileSync(new URL('luna-cloudhoodie-seat.bin', root));
+  const contact = readSeatContactCache(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+  const rig = createResidentRig(clone(gltf.scene), gltf.animations.find(a => a.name === 'Walk_Grounded_Loop'), true);
+  const surfaces = [];
+  rig.mesh.traverse(node => { if (node.isSkinnedMesh) surfaces.push(node); });
+  const sock = surfaces.find(node => node.geometry.userData.soleContacts);
+  const body = surfaces.find(node => node !== sock);
+  const ids = new Set(body.geometry.attributes._contact_id.array);
+  ids.delete(-1);
+  assert.equal(ids.size, contact.count);
+  assert.equal(Math.min(...ids), 0);
+  assert.equal(Math.max(...ids), contact.count - 1);
+  assert.equal(contact.frames, CHAIR_SIT_FRAMES);
+  const soles = Object.values(sock.geometry.userData.soleContacts);
+  const point = new THREE.Vector3();
+  try {
+    for (const weight of [0, .25, .5, .75, 1]) {
+      for (let frame = 0; frame < 60; frame++) {
+        rig.applyPose(frame / 60, weight);
+        rig.mesh.updateMatrixWorld(true);
+        const heights = soles.map(indices => Math.min(...indices.map(index =>
+          sock.localToWorld(sock.getVertexPosition(index, point)).y)));
+        assert.ok(heights.every(y => y > -.0015), '袜底穿地 ' + JSON.stringify({ frame, weight, heights }));
+        if (weight === 0) assert.ok(heights.every(y => y < .003));
+        if (weight === 1) assert.ok(Math.min(...heights) < .004, '支撑脚悬空 ' + JSON.stringify({ frame, heights }));
+      }
+    }
+  } finally { rig.dispose(); }
+});

@@ -290,9 +290,38 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
   asset.scale.setScalar(RESIDENT_SCALE);
   mesh.add(asset);
 
+  const socks = skinned.find(surface => surface.geometry.userData.soleContacts);
+  const contactLegs = socks ? (['Left', 'Right'] as const).map(side => ({
+    vertices: socks.geometry.userData.soleContacts[side] as number[],
+    joints: ['UpLeg', 'Leg', 'Foot'].map(name => bone(side + name)),
+  })) : [];
+  const samplePoint = new THREE.Vector3(), ankle = new THREE.Vector3(), footRotation = new THREE.Quaternion();
+
+  // Local joint interpolation on walk start/stop can lower the toes between two grounded poses.
+  // Lift only a penetrating foot, using the fitted sock's support vertices and the existing leg IK.
+  function correctBlendedContact() {
+    if (!socks) return;
+    mesh.updateWorldMatrix(true, true);
+    const floor = mesh.getWorldPosition(samplePoint).y;
+    for (const { vertices, joints } of contactLegs) {
+      let lowest = floor;
+      for (const vertex of vertices) {
+        socks.getVertexPosition(vertex, samplePoint).applyMatrix4(socks.matrixWorld);
+        lowest = Math.min(lowest, samplePoint.y);
+      }
+      if (lowest >= floor) continue;
+      const foot = joints[2];
+      foot.getWorldPosition(ankle).y += floor - lowest + .0002;
+      plantResidentLeg(joints, ankle, foot.getWorldQuaternion(footRotation));
+    }
+  }
+
   function applyPose(phase: number, walkWeight: number) {
     if (walkWeight === 1) sample(phase);
-    else applyBlendedPose(phase, walkWeight);
+    else {
+      applyBlendedPose(phase, walkWeight);
+      if (walkWeight > 0) correctBlendedContact();
+    }
   }
 
   function applyBlendedPose(phase: number, walkWeight: number) {

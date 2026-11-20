@@ -1,4 +1,4 @@
-import { previewOutfit } from './wardrobe/outfit';
+import { previewOutfit, readOutfit } from './wardrobe/outfit';
 import { BED_POSITION, CLOCK_POSITION, LAMP_POSITION } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
@@ -408,7 +408,7 @@ function WorldContent(props: OrbitalSceneProps) {
           <Suspense fallback={null}><HabitatFurniture {...world} sofaTime={sofaTime} /><MediaObjects {...world} /></Suspense>
           <FeatureSurfaces {...world} />
           {id === props.sceneId && <>
-            <OrbitalResidents {...world} outfit={props.sceneObjects.habitat.wardrobe?.active ? 'snowflower' : 'everyday'} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} drawerInteraction={drawerInteraction} interaction={interaction}
+            <OrbitalResidents {...world} outfit={readOutfit(props.sceneObjects.habitat.wardrobe?.itemId)} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} drawerInteraction={drawerInteraction} interaction={interaction}
               drawerEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} onDrawerAction={props.onAction} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={inCabin && (!props.focusedObject || props.focusedObject === 'bed') && (!props.library || props.library.view.phase === 'idle') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
           </>}
         </group>

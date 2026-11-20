@@ -297,7 +297,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       { id: 'chair', kind: 'sit', hint: '坐下', point: [pose.x, pose.z], reach: CHAIR_REACH },
     ];
     if (p.sceneId === 'habitat') {
-      targets.push({ id: 'wardrobe', kind: 'toggle', hint: outfitHint(!!p.objects.wardrobe?.active), point: WARDROBE_STAND, reach: .75 });
+      targets.push({ id: 'wardrobe', kind: 'toggle', hint: outfitHint(p.outfit), point: WARDROBE_STAND, reach: .75 });
       targets.push({ id: 'sofa', kind: 'sit', hint: '坐进懒人沙发', point: SOFA_ENTRY, reach: .85 });
       // Select the bed along its open side, then board at the authored animation anchor.
       const bedsideZ = clamp(root.position.z, BED_ENTRY[1], BED_POSITION[2] + 1.1);
