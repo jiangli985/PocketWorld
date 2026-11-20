@@ -8,11 +8,14 @@ export function CatInteraction({ onChoose }: { onChoose: (choice?: 'pet' | 'home
     if (element && !element.open) element.showModal();
   }, []);
 
-  return <dialog ref={dialog} className="cat-interaction" aria-labelledby="cat-interaction-title" onClose={event => {
-    const choice = event.currentTarget.returnValue;
-    onChoose(choice === 'pet' || choice === 'home' ? choice : undefined);
-  }}>
-    <form method="dialog">
+  return <dialog ref={dialog} className="cat-interaction" aria-labelledby="cat-interaction-title"
+    onClose={() => onChoose()}>
+    <form method="dialog" onSubmit={event => {
+      event.preventDefault();
+      const button = (event.nativeEvent as SubmitEvent).submitter;
+      const choice = button instanceof HTMLButtonElement ? button.value : undefined;
+      onChoose(choice === 'pet' || choice === 'home' ? choice : undefined);
+    }}>
       <h2 id="cat-interaction-title">团子</h2>
       <div className="cat-interaction-actions">
         <button value="pet" autoFocus>摸摸团子</button>

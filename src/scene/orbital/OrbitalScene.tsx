@@ -37,6 +37,7 @@ import { BOOK_POSITION } from './schedule/SchedulePaper';
 import { SCHEDULE_BOOK_POSITION } from './schedule/bookLayout';
 import { OrbitalResidents } from './OrbitalResidents';
 import { CatInteraction } from './cat/CatInteraction';
+import catMeowUrl from '../../../assets/audio/cat/tuanzi-meow.mp3';
 import type { DrawerInteraction } from './drawerInteraction';
 import { shelfPoint, shelfVector } from './library/catalog';
 import { sideLibraryCamera } from './library/sideCamera';
@@ -414,6 +415,9 @@ function WorldContent(props: OrbitalSceneProps & { catMenuOpen: boolean }) {
 export function OrbitalScene(props: OrbitalSceneProps) {
   const container = useRef<HTMLDivElement>(null);
   const [catMenu, setCatMenu] = useState<WorldAction | null>(null);
+  useEffect(() => {
+    if (props.viewMode === 'cabin') return () => roomAudio.stopCatMeow();
+  }, [props.viewMode]);
   const current = useRef(props);
   current.current = props;
   useEffect(() => {
@@ -467,7 +471,10 @@ export function OrbitalScene(props: OrbitalSceneProps) {
     </Canvas>
     {catMenu && <CatInteraction onChoose={choice => {
       setCatMenu(null);
-      if (choice) props.onAction({ ...catMenu, payload: { itemId: choice } });
+      if (choice) {
+        roomAudio.playCatMeow(catMeowUrl);
+        props.onAction({ ...catMenu, payload: { itemId: choice } });
+      }
     }} />}
     <AlarmClockSurface
       focused={props.viewMode === 'cabin' && props.sceneId === 'habitat' && props.focusedObject === 'clock' && ['active', 'error'].includes(props.transition.phase)}

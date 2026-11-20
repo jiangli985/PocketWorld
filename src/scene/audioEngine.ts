@@ -85,6 +85,7 @@ class RoomAudioEngine {
   private noiseBuffer: AudioBuffer | null = null;
   private noiseBufferCtx: AudioContext | null = null;
   private htmlAudio: HTMLAudioElement | null = null;
+  private catAudio: HTMLAudioElement | null = null;
   private preparedMusic: { disc: MusicDisc; audio: HTMLAudioElement } | null = null;
   private requestId = 0;
   private musicGain: GainNode | null = null;
@@ -170,6 +171,7 @@ class RoomAudioEngine {
 
   public setMuted(muted: boolean) {
     this.isMuted = muted;
+    if (muted) this.stopCatMeow();
     if (this.htmlAudio) {
       this.htmlAudio.muted = muted;
     }
@@ -177,8 +179,27 @@ class RoomAudioEngine {
     this.publish(this.snapshot.status, this.snapshot.error);
   }
 
+  public stopCatMeow() {
+    if (!this.catAudio) return;
+    this.catAudio.pause();
+    this.catAudio.currentTime = 0;
+  }
+
+  public playCatMeow(url: string) {
+    if (this.isMuted) return;
+    try {
+      const audio = this.catAudio ??= new Audio(url);
+      if (!audio.paused) return;
+      audio.volume = .42;
+      audio.currentTime = 0;
+      void audio.play().catch(() => {
+        if (this.catAudio === audio && audio.paused) this.catAudio = null;
+      });
+    } catch { /* An unavailable effect does not interrupt cat interaction. */ }
+  }
+
   public playSfx(
-    type: 'switch' | 'cat' | 'water' | 'paper' | 'soft' | 'disc' | 'footstep'
+    type: 'switch' | 'water' | 'paper' | 'soft' | 'disc' | 'footstep'
   ) {
     if (type === 'footstep') {
       this.playFootstep();
@@ -204,15 +225,6 @@ class RoomAudioEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
       osc.start(now);
       osc.stop(now + 0.06);
-    } else if (type === 'cat') {
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(340, now);
-      osc.frequency.exponentialRampToValueAtTime(580, now + 0.14);
-      osc.frequency.exponentialRampToValueAtTime(460, now + 0.28);
-      gain.gain.setValueAtTime(0.09, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-      osc.start(now);
-      osc.stop(now + 0.32);
     } else if (type === 'water') {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(420, now);
