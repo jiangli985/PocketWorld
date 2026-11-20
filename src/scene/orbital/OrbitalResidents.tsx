@@ -19,7 +19,6 @@ import { HIP_HEIGHT as HIP, ResidentModel, type ResidentLeg, type ResidentRig } 
 import { WALK_SPEED } from './residentRig';
 import { createIdlePlayer, createIdleState, loadYawn, loadLookingAround, stepIdle, STANDING_IDLE } from './standingIdle';
 import { CHAIR_SIT_SECONDS, createChairMotion, stepChairMotion } from './chairMotion';
-import { canReachDrawer, drawerObstacle, DRAWER_CLEAR_Z, DRAWER_TRAVEL, type DrawerInteraction } from './drawerInteraction';
 import { SlipperPair } from './Slippers';
 import { PlushDolls } from './PlushDolls';
 import { createPlushBodies, isValidPlushBody, plushObstacleBoxes, resolveMoverAgainstPlush, stepPlushDolls, type PlushBody } from './plushMotion';
@@ -32,10 +31,8 @@ type ResidentsProps = WorldModelProps & {
   walkTarget: [number, number, number] | null;
   onArrive: () => void;
   enabled: boolean;
-  drawerEnabled: boolean;
+  approachEnabled: boolean;
   sofaTime: React.MutableRefObject<number | null>;
-  drawerInteraction: React.MutableRefObject<DrawerInteraction | null>;
-  onDrawerAction: (action: WorldAction) => void;
   interaction: React.MutableRefObject<NonNullable<WorldModelProps['onApproach']> | null>;
 };
 type Approach = { point: Point; action: WorldAction; perform: () => void; elapsed: number };
@@ -72,7 +69,6 @@ function layout(observatory: boolean) {
   ];
   const grow = (by: number) => furniture.map(([a, b, c, d]) => [a - by, b + by, c - by, d + by] as Box);
   const chairRadius = observatory ? 0.55 : 0.5;
-  const boxes = grow(RADIUS), chairBoxes = grow(chairRadius);
   // Keep kicked plush dolls out of static furniture, the fixed desk chair, and Tuanzi's cat mat.
   const chair = CHAIR_POSES.habitat;
   const plushBoxes: Box[] = observatory ? furniture : [
@@ -80,12 +76,7 @@ function layout(observatory: boolean) {
     [chair.x - 0.38, chair.x + 0.38, chair.z - 0.38, chair.z + 0.38],
     [2.58, 3.46, 1.98, 2.78],
   ];
-  return { seat: observatory ? 0.755 : 0.72, chairRadius,
-    boxes, baseBoxes: boxes,
-    openBoxes: [...boxes, drawerObstacle(DRAWER_TRAVEL, RADIUS + 0.08)],
-    openChairBoxes: [...chairBoxes, drawerObstacle(DRAWER_TRAVEL, chairRadius)],
-    plushBoxes,
-    openPlushBoxes: [...plushBoxes, drawerObstacle(DRAWER_TRAVEL, 0)] };
+  return { seat: observatory ? 0.755 : 0.72, chairRadius, boxes: grow(RADIUS), plushBoxes };
 }
 type Room = ReturnType<typeof layout>;
 function obstacles(room: Room, pose: ChairPose): Box[] {
@@ -210,8 +201,6 @@ export function OrbitalResidents(props: ResidentsProps) {
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const keys = useRef(new Set<string>());
-  const drawerTask = useRef<{ action: WorldAction; target: Point; elapsed: number } | null>(null);
-  const drawerExtension = useRef(0);
   const approach = useRef<Approach | null>(null);
   const walkWeight = useRef(0);
   const libraryNav = useRef('');
@@ -257,14 +246,12 @@ export function OrbitalResidents(props: ResidentsProps) {
       p.interaction.current?.([x, 0, z], action, () => current.current.onAction(action));
     } else p.onAction(action);
   };
-  const canInteract = () => current.current.enabled && !drawerTask.current;
   const nearbyActions = (): NearbyAction[] => {
     const p = current.current, root = resident.current, s = state.current;
-    if (!root || !canInteract() || s.exiting || p.focusedObject) return [];
+    if (!root || !p.enabled || s.exiting || p.focusedObject) return [];
     const pose = CHAIR_POSES[p.sceneId];
     const [cabinetX, , cabinetZ] = shelfPoint(p.sceneId, .55, 0, .65);
     const [bookX, , bookZ] = readingStand(p.sceneId);
-    const drawerOpen = !!p.objects['desk-drawer']?.open;
     const targets: NearbyAction[] = [
       // The desk chair occupies the nearest ring, so reach the free floor beside it.
       { id: 'computer', kind: 'inspect', hint: '使用电脑', point: COMPUTER_STAND, reach: 0.88 },
@@ -282,10 +269,6 @@ export function OrbitalResidents(props: ResidentsProps) {
       targets.push({ id: 'sofa', kind: 'sit', hint: '坐进懒人沙发', point: SOFA_ENTRY, reach: .85 });
       targets.push({ id: 'clock', kind: 'inspect', hint: '设置闹钟', point: [NIGHTSTAND_X + .22, NIGHTSTAND_Z + .64], reach: 0.46 });
     }
-    if (p.drawerEnabled && canReachDrawer(root.position, drawerOpen)) targets.push({
-      id: 'desk-drawer', kind: drawerOpen ? 'close' : 'open', hint: drawerOpen ? '推回抽屉' : '后退拉开抽屉',
-      point: [0.35, drawerOpen ? -0.78 : -1.34], reach: 0.55,
-    });
     const found = targets
       .map(target => ({ target, distance: Math.hypot(root.position.x - target.point[0], root.position.z - target.point[1]) }))
       .filter(({ target, distance }) => distance < target.reach)
@@ -339,8 +322,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       p.onHover('chair', '前方空间不足，请先移开挡路的物品');
       return;
     }
-    const fixed = task.action.objectId === 'sofa' ? SOFA_ENTRY
-      : task.action.objectId === 'desk-drawer' ? [0.35, p.objects['desk-drawer']?.open ? -0.5 : -1.2] as Point : undefined;
+    const fixed = task.action.objectId === 'sofa' ? SOFA_ENTRY : undefined;
     const path = approachRoute(start, task.point, obstacles(room, pose), fixed);
     if (path) state.current.path = path;
     else { cancelApproach(); p.onHover(task.action.objectId, '前方空间不足，请先移开挡路的物品'); }
@@ -348,7 +330,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   useEffect(() => {
     const request: NonNullable<WorldModelProps['onApproach']> = (point, action, perform) => {
       const root = resident.current, p = current.current, s = state.current;
-      if (!root || drawerTask.current || action.sceneId !== p.sceneId) return false;
+      if (!root || action.sceneId !== p.sceneId) return false;
       if (action.kind === 'stand') { cancelApproach(); perform(); return true; }
       const pose = CHAIR_POSES[p.sceneId];
       const target: Point = action.objectId === 'chair' ? [pose.x, pose.z] : action.objectId === 'pet' ? CAT : [point[0], point[2]];
@@ -357,7 +339,7 @@ export function OrbitalResidents(props: ResidentsProps) {
         && Math.hypot(root.position.x - target[0], root.position.z - target[1]) <= 1.15) {
         cancelApproach(); perform(); return true;
       }
-      if (!p.drawerEnabled) { p.onHover(action.objectId, '先返回房间，再走近这个物品'); return false; }
+      if (!p.approachEnabled) { p.onHover(action.objectId, '先返回房间，再走近这个物品'); return false; }
       cancelApproach();
       stand();
       keys.current.clear();
@@ -369,31 +351,6 @@ export function OrbitalResidents(props: ResidentsProps) {
     };
     props.interaction.current = request;
     return () => { approach.current = null; if (props.interaction.current === request) props.interaction.current = null; };
-  }, []);
-
-  useEffect(() => {
-    const handle: DrawerInteraction = { busy: false, request: action => {
-      const p = current.current, root = resident.current, s = state.current;
-      if (handle.busy || action.sceneId !== p.sceneId) return;
-      if (!p.drawerEnabled || !root || s.posture !== 'standing' || s.exiting
-        || !canReachDrawer(root.position, !!p.objects['desk-drawer']?.open)) {
-        p.onHover('desk-drawer', '走到抽屉正面，站稳后再操作');
-        return;
-      }
-      if (p.objects['desk-drawer']?.open) { p.onDrawerAction({ ...action, kind: 'close' }); return; }
-      const pose = CHAIR_POSES[p.sceneId];
-      if (!free([pose.x, pose.z], room.openChairBoxes)) {
-        p.onHover('desk-drawer', '抽屉的滑动路径被椅子挡住了');
-        return;
-      }
-      handle.busy = true;
-      keys.current.clear(); s.path = [];
-      if (s.external) { s.external = false; p.onArrive(); }
-      drawerTask.current = { action: { ...action, kind: 'open' }, target: [root.position.x, Math.max(DRAWER_CLEAR_Z, root.position.z + 0.12)], elapsed: 0 };
-      p.onHover('desk-drawer', '后退让开抽屉…');
-    } };
-    props.drawerInteraction.current = handle;
-    return () => { drawerTask.current = null; if (props.drawerInteraction.current === handle) props.drawerInteraction.current = null; };
   }, []);
 
   useEffect(() => {
@@ -413,7 +370,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       event.preventDefault();
       event.stopPropagation();
       void roomAudio.unlock();
-      if (event.repeat || drawerTask.current) return;
+      if (event.repeat) return;
       if (approach.current) cancelApproach();
       const interactIndex = INTERACT_KEYS.indexOf(event.code);
       if (interactIndex >= 0) {
@@ -459,7 +416,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     if (!props.enabled) keys.current.clear();
   }, [props.enabled]);
   useEffect(() => {
-    if (!props.walkTarget || !props.enabled || drawerTask.current) return;
+    if (!props.walkTarget || !props.enabled) return;
     idleInput.current = true;
     approach.current = null;
     stand();
@@ -478,14 +435,6 @@ export function OrbitalResidents(props: ResidentsProps) {
     const dt = Math.min(Math.max(rawDelta, 0), 0.04);
     const p = current.current;
     const s = state.current;
-    const drawerOpen = !!p.objects['desk-drawer']?.open;
-    drawerExtension.current = p.reducedMotion ? (drawerOpen ? DRAWER_TRAVEL : 0) : THREE.MathUtils.damp(drawerExtension.current, drawerOpen ? DRAWER_TRAVEL : 0, 8, dt);
-    const blocking = drawerOpen || drawerExtension.current > 0.001;
-    room.boxes = blocking ? room.openBoxes : room.baseBoxes;
-    if (drawerTask.current && !p.drawerEnabled) {
-      drawerTask.current = null;
-      if (p.drawerInteraction.current) p.drawerInteraction.current.busy = false;
-    }
     const library = p.library, flow = library?.flow.current;
     const readerYaw = Math.PI + shelfYaw(p.sceneId);
     const libraryActive = !!flow && flow.phase !== 'idle';
@@ -610,19 +559,8 @@ export function OrbitalResidents(props: ResidentsProps) {
       root.position.y = t * (room.seat + 0.095 - HIP);
       s.sit = t;
     } else {
-      const task = drawerTask.current;
-      let [dx, dz] = p.enabled && !task ? steer() : [0, 0];
-      let speed = WALK_SPEED;
-      if (task) {
-        task.elapsed += dt;
-        root.rotation.y = angle(root.rotation.y, Math.PI, 1 - Math.exp(-dt * 14));
-        if (Math.abs(Math.atan2(Math.sin(root.rotation.y - Math.PI), Math.cos(root.rotation.y - Math.PI))) < 0.08) {
-          const distance = Math.hypot(task.target[0] - root.position.x, task.target[1] - root.position.z);
-          speed = dt > 0 ? Math.min(WALK_SPEED, distance / dt) : 0;
-          if (distance > 0.001) { dx = (task.target[0] - root.position.x) / distance; dz = (task.target[1] - root.position.z) / distance; }
-        }
-      }
-      if (!task && !dx && !dz && (p.enabled || wanted !== 'standing' || libraryWalking) && s.path.length) {
+      let [dx, dz] = p.enabled ? steer() : [0, 0];
+      if (!dx && !dz && (p.enabled || wanted !== 'standing' || libraryWalking) && s.path.length) {
         const waypoint = s.path[0];
         const distance = Math.hypot(waypoint[0] - root.position.x, waypoint[1] - root.position.z);
         if (distance <= WALK_SPEED * dt) {
@@ -633,7 +571,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       }
       if (dx || dz) {
         const beforeX = root.position.x, beforeZ = root.position.z;
-        const x = root.position.x + dx * dt * speed, z = root.position.z + dz * dt * speed;
+        const x = root.position.x + dx * dt * WALK_SPEED, z = root.position.z + dz * dt * WALK_SPEED;
         if (s.path.length) {
           const usesChairCircle = approach.current?.action.objectId === 'chair' || (s.external && !approach.current);
           const clear = usesChairCircle
@@ -647,14 +585,7 @@ export function OrbitalResidents(props: ResidentsProps) {
           if (clearSegment([root.position.x, beforeZ], [root.position.x, z], room.boxes, circle)) root.position.z = z;
         }
         walking = Math.hypot(root.position.x - beforeX, root.position.z - beforeZ) > 0.001;
-        if (!task) root.rotation.y = angle(root.rotation.y, Math.atan2(dx, dz), 1 - Math.exp(-dt * 14));
-      }
-      if (task && (Math.hypot(task.target[0] - root.position.x, task.target[1] - root.position.z) < 0.005 || task.elapsed > 2.5)) {
-        drawerTask.current = null;
-        if (p.drawerInteraction.current) p.drawerInteraction.current.busy = false;
-        if (!free([pose.x, pose.z], room.openChairBoxes)) p.onHover('desk-drawer', '抽屉的滑动路径被椅子挡住了');
-        else if (Math.hypot(task.target[0] - root.position.x, task.target[1] - root.position.z) < 0.005 && root.position.z >= DRAWER_CLEAR_Z - 0.005) p.onDrawerAction(task.action);
-        else p.onHover('desk-drawer', '身后空间不足，换个位置再拉开抽屉');
+        root.rotation.y = angle(root.rotation.y, Math.atan2(dx, dz), 1 - Math.exp(-dt * 14));
       }
       if (!s.path.length && s.external && p.enabled && !s.exiting) {
         const request = approach.current;
@@ -713,7 +644,7 @@ export function OrbitalResidents(props: ResidentsProps) {
         plushBodies.current,
         dt,
         [{ x: root.position.x, z: root.position.z, vx: lunaVx, vz: lunaVz, radius: RADIUS, active: s.posture === 'standing' || s.exiting }],
-        blocking ? room.openPlushBoxes : room.plushBoxes,
+        room.plushBoxes,
         PLUSH_FLOOR_BOUNDS,
         p.reducedMotion,
       );
@@ -768,7 +699,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       && !document.hidden && s.posture === 'standing' && wanted === 'standing' && !s.exiting
       && !walking && distance < .00001 && walkWeight.current === 0
       && !keys.current.size && !idleInput.current && !s.path.length && !s.external
-      && !approach.current && !drawerTask.current && !libraryActive;
+      && !approach.current && !libraryActive;
     stepIdle(idle.current, rawDelta, idleEligible, idleMotion.current.clip?.duration ?? 0, Math.random, idleMotion.current.lookClip?.duration ?? 0);
     idleInput.current = false;
     const im = idleMotion.current;
@@ -813,10 +744,10 @@ export function OrbitalResidents(props: ResidentsProps) {
     root.userData.plushBodies = plushBodies.current;
     const nearbyList = nearbyActions();
     const nearby = nearbyList[0] ?? null;
-    const hint = canInteract() && (s.posture !== 'standing' || wanted !== 'standing')
+    const hint = p.enabled && (s.posture !== 'standing' || wanted !== 'standing')
       ? 'E · 起身'
       : nearbyList.map((target, index) => `${INTERACT_LABELS[index]} · ${target.hint}`).join('　');
-    if (!drawerTask.current && (nearby?.id !== s.nearby?.id || hint !== s.nearbyHint)) {
+    if (nearby?.id !== s.nearby?.id || hint !== s.nearbyHint) {
       s.nearby = nearby;
       s.nearbyHint = hint;
       p.onHover(nearby?.id ?? (hint ? s.posture : null), hint || undefined);

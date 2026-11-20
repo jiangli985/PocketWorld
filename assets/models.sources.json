@@ -180,9 +180,9 @@
       "file": "replaced/desk.parts.glb",
       "source": "Repository-supplied replaced/desk.parts.glb at b2df620.",
       "used": true,
-      "bytes": 2365068,
-      "sha256": "ed597438eb73a30cbe93cec97b97558c6d064a796dc9cef25314e8b14fb5f5a9",
-      "processing": "Recolored embedded albedo and extended the tabletop to the left while retaining the drawer."
+      "bytes": 2221232,
+      "sha256": "db71b09deececd80d732e2c40e73ed3916f02d0a0e873962fb77a9b557c66ef9",
+      "processing": "Recolored embedded albedo and extended the tabletop to the left. Removed the drawer mesh while preserving the desk body and shared textures."
     },
     {
       "file": "replaced/cabinet.parts.glb",

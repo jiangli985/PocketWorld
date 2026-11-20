@@ -83,7 +83,6 @@ function mount(kind, overrides = {}, idleLibrary) {
     './schedule/bookLayout': load('./orbital/schedule/bookLayout.ts', {}),
     './chairPose': load('./orbital/chairPose.ts', {}),
     './chairMotion': load('./orbital/chairMotion.ts', {}),
-    './drawerInteraction': load('./orbital/drawerInteraction.ts', {}),
     './scene/audioEngine': { roomAudio: audio, PRESET_MUSIC_DISCS: [] },
     './scene/orbital/OrbitalScene': { OrbitalScene: 'OrbitalScene' },
     './scene/orbital/library/useLibrary': { useLibrary: options => ({ dispatch: options.onAction, back: options.onReturn, data: { books: [] }, flow: { current: { phase: 'idle' } }, view: { phase: 'idle' }, motion: { current: null } }) },
@@ -106,7 +105,7 @@ function mount(kind, overrides = {}, idleLibrary) {
   const names = { orbital: 'OrbitalResidents', app: 'App' };
   const props = {
     sceneId: 'habitat', objects: {}, enabled: true, reducedMotion: false, walkTarget: null,
-    sofaTime: { current: null }, interaction: { current: null }, drawerEnabled: true, drawerInteraction: { current: null }, onDrawerAction() {},
+    sofaTime: { current: null }, interaction: { current: null }, approachEnabled: true,
     onGesture() {}, onHover() {}, onArrive() {}, onAction() {},
     ...overrides,
   };
@@ -446,76 +445,6 @@ test('chair pushes survive nearby walking sounds while duplicate contacts stay t
 
 
 for (const fps of [30, 60, 144]) {
-  test(`drawer: retreat finishes before opening and ignores movement at ${fps} FPS`, () => {
-    const opened = [];
-    const view = mount('orbital', { onDrawerAction: action => opened.push({ kind: action.kind, z: view.root.position.z }) });
-    try {
-      view.root.position.set(0.35, 0, -1.32);
-      view.props.drawerInteraction.current.request({ sceneId: 'habitat', objectId: 'desk-drawer', kind: 'open' });
-      view.key('KeyW');
-      view.props.drawerInteraction.current.request({ sceneId: 'habitat', objectId: 'desk-drawer', kind: 'open' });
-      for (let i = 0; i < fps * 2; i++) {
-        view.frame(1 / fps);
-        assert.equal(view.root.position.y, 0);
-        if (view.root.position.z < -0.56) assert.equal(opened.length, 0);
-      }
-      assert.equal(opened.length, 1);
-      assert.equal(opened[0].kind, 'open');
-      assert.ok(opened[0].z >= -0.56);
-      assert.equal(view.props.drawerInteraction.current.busy, false);
-      assert.ok(view.sounds.some(sound => !sound.variant));
-    } finally { view.dispose(); }
-  });
-}
-
-test('drawer: distance, front side and grounded posture are required', () => {
-  const opened = [];
-  const view = mount('orbital', { onDrawerAction: action => opened.push(action) });
-  try {
-    const action = { sceneId: 'habitat', objectId: 'desk-drawer', kind: 'open' };
-    for (const point of [[0.35, 0, 1], [1.6, 0, -1.32], [0.35, 0, -2], [0.35, 0.2, -1.32]]) {
-      view.root.position.set(...point);
-      view.props.drawerInteraction.current.request(action);
-      assert.equal(view.props.drawerInteraction.current.busy, false);
-    }
-    assert.equal(opened.length, 0);
-  } finally { view.dispose(); }
-});
-
-test('drawer: walking is blocked while open and resumes after it retracts', () => {
-  const view = mount('orbital', { objects: { 'desk-drawer': { open: true } } });
-  try {
-    view.root.position.set(0.35, 0, -0.555);
-    view.key('KeyW');
-    for (let i = 0; i < 90; i++) view.frame(1 / 60);
-    assert.ok(view.root.position.z >= -0.625);
-    view.props.objects['desk-drawer'].open = false;
-    for (let i = 0; i < 120; i++) view.frame(1 / 60);
-    assert.ok(view.root.position.z < -1.3);
-  } finally { view.dispose(); }
-});
-
-test('drawer: a fixed chair in its path blocks opening and the production placement clears it', () => {
-  const opened = [];
-  const hints = [];
-  const view = mount('orbital', { onDrawerAction: action => opened.push(action), onHover: (_, hint) => hints.push(hint) });
-  try {
-    const placement = { ...view.chair };
-    Object.assign(view.chair, { x: 0.8, z: -1.16 });
-    view.root.position.set(-0.35, 0, -1.32);
-    const action = { sceneId: 'habitat', objectId: 'desk-drawer', kind: 'open' };
-    view.props.drawerInteraction.current.request(action);
-    assert.equal(view.props.drawerInteraction.current.busy, false);
-    assert.equal(opened.length, 0);
-    assert.ok(hints.some(hint => hint?.includes('被椅子挡住')));
-    Object.assign(view.chair, placement);
-    view.props.drawerInteraction.current.request(action);
-    for (let i = 0; i < 180; i++) view.frame(1 / 60);
-    assert.equal(opened.length, 1);
-  } finally { view.dispose(); }
-});
-
-for (const fps of [30, 60, 144]) {
   test(`deferred interaction waits for the resident to walk close at ${fps} FPS`, () => {
     const view = mount('orbital');
     let performed = 0;
@@ -648,17 +577,14 @@ test('desk interaction range keeps the next prop reachable without cross-room se
   } finally { view.dispose(); }
 });
 
-test('a remote drawer approach survives Space, then retreats and opens', () => {
+test('Space leaves a pending walk-to-object interaction in place', () => {
+  const view = mount('orbital');
   let performed = 0;
-  const view = mount('orbital', { onDrawerAction: () => performed++ });
   try {
-    const action = { sceneId: 'habitat', objectId: 'desk-drawer', kind: 'open' };
-    view.props.interaction.current([0.35, 1, -1.65], action, () => view.props.drawerInteraction.current.request(action));
-    view.key('Space');
-    assert.equal(view.props.drawerInteraction.current.busy, false);
+    view.props.interaction.current([-3.3, 1, -1.8], { sceneId: 'habitat', objectId: 'book-01', kind: 'read' }, () => performed++);
+    assert.equal(view.key('Space').defaultPrevented, false);
     for (let i = 0; i < 900 && !performed; i++) view.frame(1 / 60);
     assert.equal(performed, 1);
-    assert.ok(view.root.position.z >= -0.56);
   } finally { view.dispose(); }
 });
 
@@ -764,15 +690,27 @@ for (let side = 0; side < 8; side++) {
   });
 }
 
-test('E at the drawer handle still selects the drawer beside the chair', () => {
-  const performed = [];
-  const view = mount('orbital', { onAction: action => performed.push(action) });
+test('the desk front is walkable up to the tabletop and has no drawer interaction', () => {
+  const performed = [], hints = [];
+  const view = mount('orbital', {
+    onAction: action => performed.push(action),
+    onHover: (_, hint) => hints.push(hint),
+  });
   try {
+    view.root.position.set(0.35, 0, -0.555);
+    view.key('KeyW');
+    for (let i = 0; i < 120; i++) view.frame(1 / 60);
+    view.key('KeyW', 'keyup');
+    assert.ok(view.root.position.z < -1.3, 'Luna can cross the former drawer clearance');
+    assert.ok(view.root.position.z >= -1.675 + cabinLayout.RESIDENT_RADIUS, 'the tabletop still blocks walking');
+
     view.root.position.set(0.35, 0, -1.32);
     view.frame(1 / 60);
-    view.key('KeyE');
-    assert.equal(performed.length, 1);
-    assert.equal(performed[0].objectId, 'desk-drawer');
+    for (const key of ['KeyE', 'KeyQ', 'KeyR']) view.key(key);
+    for (let i = 0; i < 60; i++) view.frame(1 / 60);
+    assert.deepEqual(performed, []);
+    assert.ok(!hints.some(hint => hint?.includes('抽屉')));
+    assert.equal(view.root.position.z, -1.32);
   } finally { view.dispose(); }
 });
 

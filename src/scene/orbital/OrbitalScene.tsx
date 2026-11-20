@@ -36,7 +36,6 @@ import { ScheduleSurfaces } from './schedule/ScheduleSurfaces';
 import { BOOK_POSITION } from './schedule/SchedulePaper';
 import { SCHEDULE_BOOK_POSITION } from './schedule/bookLayout';
 import { OrbitalResidents } from './OrbitalResidents';
-import type { DrawerInteraction } from './drawerInteraction';
 import { shelfPoint, shelfVector } from './library/catalog';
 import { sideLibraryCamera } from './library/sideCamera';
 import { JOURNAL_PAGE_POSITION } from './journalLayout';
@@ -350,7 +349,6 @@ function WorldContent(props: OrbitalSceneProps) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
   const [hullReady, setHullReady] = useState(false);
   const sofaTime = useRef<number | null>(null);
-  const drawerInteraction = useRef<DrawerInteraction | null>(null);
   const interaction = useRef<NonNullable<WorldSceneProps['onApproach']> | null>(null);
   const sun = useMemo(createSunState, []);
   const flight = useMemo(() => createFlightState(props.viewMode), []);
@@ -379,13 +377,12 @@ function WorldContent(props: OrbitalSceneProps) {
           if (inCabin && focusedObject) props.onHover(objectId, hint);
         },
         onAction: (action: Parameters<typeof props.onAction>[0]) => {
-          if (!inCabin || id !== props.sceneId || drawerInteraction.current?.busy) return;
-          if (action.objectId === 'desk-drawer') drawerInteraction.current?.request(action);
-          else props.onAction(action);
+          if (!inCabin || id !== props.sceneId) return;
+          props.onAction(action);
         },
         // A panorama click is a request to walk over; once focused, the props are already in reach.
         onApproach: (point: [number, number, number], action: WorldAction, perform: () => void) => {
-          if (!inCabin || id !== props.sceneId || drawerInteraction.current?.busy) return false;
+          if (!inCabin || id !== props.sceneId) return false;
           if (focusedObject) { perform(); return true; }
           return interaction.current?.(point, action, perform) ?? false;
         },
@@ -394,14 +391,14 @@ function WorldContent(props: OrbitalSceneProps) {
         {id === props.sceneId && <OrbitalLighting objects={world.objects} sun={sun} />}
         {id === 'habitat' && <SpacecraftHull flight={flight} sun={sun} reducedMotion={props.reducedMotion} onEnterCabin={props.onEnterCabin} onReady={() => setHullReady(true)} />}
         <group visible={showInterior}>
-          <HabitatShell variant={id} onFloorClick={point => { if (inCabin && !props.focusedObject && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy && (!props.library || props.library.flow.current.phase === 'idle')) { void roomAudio.unlock(); setWalkTarget(point); } }} />
+          <HabitatShell variant={id} onFloorClick={point => { if (inCabin && !props.focusedObject && props.sceneId === id && !props.gestureActive && (!props.library || props.library.flow.current.phase === 'idle')) { void roomAudio.unlock(); setWalkTarget(point); } }} />
           {id === 'habitat' && <ScheduleSurfaces {...world} visible={inCabin && props.sceneId === 'habitat'} />}
           {id === 'habitat' && <AlarmClock3D {...world} />}
           <Suspense fallback={null}><HabitatFurniture {...world} sofaTime={sofaTime} /><MediaObjects {...world} /></Suspense>
           <FeatureSurfaces {...world} />
           {id === props.sceneId && <>
-            <OrbitalResidents {...world} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} drawerInteraction={drawerInteraction} interaction={interaction}
-              drawerEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} onDrawerAction={props.onAction} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={inCabin && !props.focusedObject && (!props.library || props.library.view.phase === 'idle') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
+            <OrbitalResidents {...world} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} interaction={interaction}
+              approachEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={inCabin && !props.focusedObject && (!props.library || props.library.view.phase === 'idle') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
           </>}
         </group>
       </group>;
