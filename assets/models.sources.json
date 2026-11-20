@@ -7,9 +7,63 @@
       "file": "furniture/floor-sofa.glb",
       "source": "Original PocketWorld model and woven textures, authored in Blender from the user's visual reference.",
       "used": true,
-      "bytes": 1213184,
-      "sha256": "d9fab81b3ab17ff26018d2b8dad3b627acca024e86a87f2535165a071cf4f1fc",
-      "processing": "Editable source assets/models/furniture/floor-sofa.blend with packed linen and twill maps. scripts/export-floor-sofa.py converts the piping, topstitching and fringe to mesh and reduces the runtime geometry."
+      "bytes": 1633536,
+      "sha256": "b2cd89965fc90005d68b479e4f6b61fde198954f77dc47da25d5d53fbd91eb4e",
+      "processing": "Editable source assets/models/furniture/floor-sofa.blend with packed linen and twill maps. scripts/export-floor-sofa.py converts the piping, topstitching and fringe to mesh and reduces the runtime geometry. The Seated morph compresses the cushion, piping and throw together under Luna."
+    },
+    {
+      "file": "resident/luna-sofa-low-sit.glb",
+      "source": "CMU Graphics Lab Motion Capture Database, subject 75, trial 20 (low sit), recorded at 60 Hz.",
+      "sourcePage": "https://mocap.cs.cmu.edu/search.php?subjectnumber=75",
+      "license": "Free for use, modification and inclusion in commercial products. Direct resale of the motion data, including converted data, is prohibited.",
+      "licensePage": "https://mocap.cs.cmu.edu/",
+      "acknowledgment": "The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217.",
+      "used": true,
+      "originals": [
+        {
+          "url": "https://mocap.cs.cmu.edu/subjects/75/75.asf",
+          "sha256": "25961b3566d225039f87d5180c7a4da523382b252552a6478707dd5e2c1dd1e2"
+        },
+        {
+          "url": "https://mocap.cs.cmu.edu/subjects/75/75_20.amc",
+          "sha256": "e5bc4e480f762211f17f27649c78a1ba95357f84933f062d7c66fe232c70e12f"
+        }
+      ],
+      "processing": "scripts/bake-luna-sofa.py retargets the captured descent and seated recoil to the room skeleton in Blender, with foot IK and fitted skirt bones. Bone animation only, sampled at 30 Hz.",
+      "bytes": 101984,
+      "sha256": "6de95fb63aec6482bb84d627f69535a4207935923daa40dda178b2d060742718"
+    },
+    {
+      "file": "furniture/trash-can.glb",
+      "source": "PocketWorld original procedural Blender pedal wastebin, scripts/build-trash-can.py -> assets/models/furniture/trash-can.blend.",
+      "used": true,
+      "bytes": 738652,
+      "sha256": "96431941cca68297d3b32df1ad154c6fe263a4aabf38657118641d744632fcef",
+      "processing": "Procedural Blender 5.2.3 LTS warm porcelain, honey-oak, apricot-band, and brushed-brass pedal wastebin with packed 256px/128px PBR textures (25 watertight meshes, 17,604 triangles). Rebuild/export with scripts/build-trash-can.py."
+    },
+    {
+      "file": "furniture/plush-bunny.glb",
+      "source": "PocketWorld original procedural Blender sitting floppy-ear bunny plush doll, scripts/build-plush-dolls.py -> assets/models/furniture/plush-bunny.blend.",
+      "used": true,
+      "bytes": 918272,
+      "sha256": "525231c7d8a021dc8853175999aeb071608e189dd191cce6acb49fbd35607c0e",
+      "processing": "Procedural Blender 5.2.3 LTS ivory-cream short-pile plush floppy-ear bunny with dusty-rose inner ears/paw pads, sage ribbed knit scarf, and packed 192px/128px PBR textures (42 watertight meshes, 21,684 triangles). Rebuild/export with scripts/build-plush-dolls.py."
+    },
+    {
+      "file": "furniture/plush-bear.glb",
+      "source": "PocketWorld original procedural Blender sitting teddy bear plush doll, scripts/build-plush-dolls.py -> assets/models/furniture/plush-bear.blend.",
+      "used": true,
+      "bytes": 934140,
+      "sha256": "89fbb20fba70e581f43c6741509f619653dab48da1c31f987d6bef2f70f814c1",
+      "processing": "Procedural Blender 5.2.3 LTS honey-caramel short-pile plush teddy bear with oatmeal snout/stitched belly patch/paws, dusty-rose folded neck bow, and packed 192px/128px PBR textures (57 watertight meshes, 25,404 triangles). Rebuild/export with scripts/build-plush-dolls.py."
+    },
+    {
+      "file": "furniture/plush-penguin.glb",
+      "source": "PocketWorld original procedural Blender sitting penguin plush doll, scripts/build-plush-dolls.py -> assets/models/furniture/plush-penguin.blend.",
+      "used": true,
+      "bytes": 757100,
+      "sha256": "b1d367da7fec88c84800ff5aa02f891bf54fd54f59b15c3f04694ea54d251a2f",
+      "processing": "Procedural Blender 5.2.3 LTS dusty sky-blue short-pile plush penguin with snow-cream heart apron, butter-apricot beak/feet, striped knit pom-pom beanie, and packed 192px/128px PBR textures (21 watertight meshes, 15,712 triangles). Rebuild/export with scripts/build-plush-dolls.py."
     },
     {
       "file": "furniture/throw_pillows_01.glb",

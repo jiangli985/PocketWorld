@@ -38,6 +38,18 @@ blender --background assets/models/cabin/open-cabin.blend --python scripts/expor
 blender --background assets/models/furniture/floor-sofa.blend --python scripts/export-floor-sofa.py
 ```
 
+右墙书柜旁的[脚踏垃圾桶制作源](../../assets/models/furniture/trash-can.blend)由 `scripts/build-trash-can.py` 程序化生成并打包贴图，在仓库根目录运行以下命令可重建 `.blend` 并导出[运行时模型](../../assets/public/models/furniture/trash-can.glb)。
+
+```sh
+blender --background --factory-startup --python scripts/build-trash-can.py
+```
+
+舱内三只坐姿毛绒娃娃的制作源（[奶油垂耳兔](../../assets/models/furniture/plush-bunny.blend)、[焦糖泰迪熊](../../assets/models/furniture/plush-bear.blend)、[雾蓝胖企鹅](../../assets/models/furniture/plush-penguin.blend)）由 `scripts/build-plush-dolls.py` 程序化生成并打包贴图，在仓库根目录运行以下命令可一次重建全部 `.blend` 并导出对应的 `assets/public/models/furniture/plush-*.glb` 运行时模型（也支持 `-- --only bunny|bear|penguin` 单独生成）。
+
+```sh
+blender --background --factory-startup --python scripts/build-plush-dolls.py
+```
+
 书桌旁的[固定椅制作源](../../assets/models/furniture/fixed-desk-chair.blend)以米为单位，座面朝 Blender 的 −Y 方向。四条木腿、木框架、扶手和软包可分别编辑。用以下命令重建制作源和[运行时模型](../../assets/public/models/furniture/fixed-desk-chair.glb)。场景直接使用导出的尺寸与原点，以匹配 Luna 的坐姿接触点。
 
 ```sh

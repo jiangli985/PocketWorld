@@ -73,9 +73,12 @@ function mount(kind, overrides = {}, idleLibrary) {
     './ObjectHandle': { ObjectHandle: 'ObjectHandle' },
     './Cat': { Cat: 'Cat' },
     './Slippers': { SlipperPair: 'SlipperPair' },
+    './PlushDolls': { PlushDolls: 'PlushDolls' },
+    './plushMotion': load('./orbital/plushMotion.ts', {}),
     './ResidentModel': { HIP_HEIGHT: 0.69, ResidentModel: 'ResidentModel' },
     './residentRig': residentRig,
     './cabinLayout': cabinLayout,
+    './sofaMotion': load('./orbital/sofaMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './bedMotion': load('./orbital/bedMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './journalLayout': load('./orbital/journalLayout.ts', {}),
     './schedule/bookLayout': load('./orbital/schedule/bookLayout.ts', {}),
@@ -104,7 +107,7 @@ function mount(kind, overrides = {}, idleLibrary) {
   const names = { orbital: 'OrbitalResidents', app: 'App' };
   const props = {
     sceneId: 'habitat', objects: {}, enabled: true, reducedMotion: false, walkTarget: null,
-    interaction: { current: null }, drawerEnabled: true, drawerInteraction: { current: null }, onDrawerAction() {},
+    sofaTime: { current: null }, interaction: { current: null }, drawerEnabled: true, drawerInteraction: { current: null }, onDrawerAction() {},
     onGesture() {}, onHover() {}, onArrive() {}, onAction() {},
     ...overrides,
   };
@@ -244,6 +247,172 @@ test('the floor sofa blocks walking from the rug only inside the habitat', () =>
         assert.ok(end > z);
       }
     } finally { view.dispose(); }
+  }
+});
+
+test('the pedal trash can blocks walking only inside the habitat', () => {
+  const [x, , z] = cabinLayout.TRASH_CAN.position;
+  const foot = cabinLayout.TRASH_CAN.footprint;
+  for (const sceneId of ['habitat', 'observatory']) {
+    // 1. Resident walking straight east (+X) into the front pedal side of the trash can.
+    const viewX = mount('orbital', { sceneId });
+    try {
+      viewX.root.position.set(x - 1.1, 0, z);
+      viewX.key('KeyD');
+      for (let i = 0; i < 150; i++) viewX.frame(1 / 60);
+      const endX = viewX.root.position.x;
+      if (sceneId === 'habitat') {
+        assert.ok(endX > x - 1.1 && endX <= x + foot.left - 0.23 + 1e-4, `habitat +X walk stopped at ${endX}`);
+      } else {
+        assert.ok(endX > x + foot.left, `observatory should not collide with habitat trash can (${endX})`);
+      }
+    } finally { viewX.dispose(); }
+
+    // 2. Resident walking straight south (+Z) into the north side of the trash can.
+    const viewZ = mount('orbital', { sceneId });
+    try {
+      viewZ.root.position.set(x - 0.1, 0, z - 1.1);
+      viewZ.key('KeyS');
+      for (let i = 0; i < 150; i++) viewZ.frame(1 / 60);
+      const endZ = viewZ.root.position.z;
+      if (sceneId === 'habitat') {
+        assert.ok(endZ > z - 1.1 && endZ <= z + foot.back - 0.23 + 1e-4, `habitat +Z walk stopped at ${endZ}`);
+      } else {
+        assert.ok(endZ > z + foot.back, `observatory should not collide with habitat trash can (${endZ})`);
+      }
+    } finally { viewZ.dispose(); }
+  }
+});
+
+test('trash-can.glb bounds fit cleanly inside TRASH_CAN.footprint after scaling and rotation', async () => {
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const raw = fs.readFileSync(new URL('../../assets/public/models/furniture/trash-can.glb', import.meta.url));
+  const jsonLen = raw.readUInt32LE(12);
+  const doc = JSON.parse(raw.subarray(20, 20 + jsonLen).toString('utf8'));
+  doc.materials = doc.materials.map(m => ({ name: m.name, pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1] } }));
+  doc.images = [];
+  doc.textures = [];
+  const json = Buffer.from(JSON.stringify(doc));
+  const padded = Buffer.alloc(Math.ceil(json.length / 4) * 4, 32);
+  json.copy(padded);
+  const binary = raw.subarray(20 + jsonLen);
+  const buffer = Buffer.alloc(20 + padded.length + binary.length);
+  buffer.writeUInt32LE(0x46546c67, 0);
+  buffer.writeUInt32LE(2, 4);
+  buffer.writeUInt32LE(buffer.length, 8);
+  buffer.writeUInt32LE(padded.length, 12);
+  buffer.writeUInt32LE(0x4e4f534a, 16);
+  padded.copy(buffer, 20);
+  binary.copy(buffer, 20 + padded.length);
+
+  const gltf = await new GLTFLoader().parseAsync(buffer.buffer, '');
+  const model = gltf.scene.clone(true);
+  model.updateMatrixWorld(true);
+  const rawBox = new THREE.Box3().setFromObject(model);
+  const rawSize = rawBox.getSize(new THREE.Vector3());
+  const scale = cabinLayout.TRASH_CAN.height / rawSize.y;
+  model.scale.setScalar(scale);
+  model.position.set(-(rawBox.min.x + rawSize.x / 2) * scale, -rawBox.min.y * scale, -(rawBox.min.z + rawSize.z / 2) * scale);
+  const placed = new THREE.Group();
+  placed.rotation.set(0, cabinLayout.TRASH_CAN.yaw, 0);
+  placed.add(model);
+  placed.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(placed);
+  const foot = cabinLayout.TRASH_CAN.footprint;
+  assert.ok(box.min.x >= foot.left && box.max.x <= foot.right, `X bounds [${box.min.x}, ${box.max.x}] must fit inside [${foot.left}, ${foot.right}]`);
+  assert.ok(box.min.z >= foot.back && box.max.z <= foot.front, `Z bounds [${box.min.z}, ${box.max.z}] must fit inside [${foot.back}, ${foot.front}]`);
+  assert.ok(Math.abs(box.min.y) < 1e-4 && Math.abs(box.max.y - cabinLayout.TRASH_CAN.height) < 1e-4);
+});
+
+test('the three sitting plush dolls can be kicked around and block solidly when pinned only inside the habitat', () => {
+  const kickChecks = [
+    // Bunny beside floor sofa: kick south (+Z) into open front floor.
+    { id: 'plush-bunny', startOffset: [0, -0.85], key: 'KeyS', deltaSign: 1, testPinned: true },
+    // Bear in wardrobe nook: kick north (-Z) toward the wardrobe and keep pushing into it once pinned!
+    { id: 'plush-bear', startOffset: [0, 0.85], key: 'KeyW', deltaSign: -1, testPinned: true },
+    // Penguin near cat corner: kick south (+Z) into the front wall and keep pushing once pinned!
+    { id: 'plush-penguin', startOffset: [0, -0.85], key: 'KeyS', deltaSign: 1, testPinned: true },
+  ];
+  for (const check of kickChecks) {
+    const dollSpec = cabinLayout.PLUSH_DOLLS.find(item => item.id === check.id);
+    assert.ok(dollSpec, `Missing plush doll spec: ${check.id}`);
+    const [x, , z] = dollSpec.position;
+
+    // 1. Habitat: walking into the plush doll kicks it away and keeps solid non-clipping separation even when pinned.
+    const view = mount('orbital', { sceneId: 'habitat' });
+    try {
+      view.root.position.set(x + check.startOffset[0], 0, z + check.startOffset[1]);
+      view.key(check.key);
+      for (let i = 0; i < 150; i++) {
+        view.frame(1 / 60);
+        const live = view.root.userData.plushBodies.find(b => b.id === check.id);
+        const gap = Math.hypot(live.x - view.root.position.x, live.z - view.root.position.z);
+        assert.ok(gap >= cabinLayout.RESIDENT_RADIUS + live.radius - 0.01, `${check.id} solid separation violated: gap=${gap}`);
+      }
+      const live = view.root.userData.plushBodies.find(b => b.id === check.id);
+      if (check.deltaSign > 0) {
+        assert.ok(live.z > z + 0.15, `${check.id} should be kicked south from ${z}, got ${live.z}`);
+      } else {
+        assert.ok(live.z < z - 0.15, `${check.id} should be kicked north from ${z}, got ${live.z}`);
+      }
+      if (check.testPinned) {
+        // Keep walking until pinned against wall/wardrobe; Luna must stay cleanly outside the doll's solid volume.
+        for (let i = 0; i < 180; i++) {
+          view.frame(1 / 60);
+          const gap = Math.hypot(live.x - view.root.position.x, live.z - view.root.position.z);
+          assert.ok(gap >= cabinLayout.RESIDENT_RADIUS + live.radius - 0.01, `${check.id} pinned solid check failed: gap=${gap}`);
+        }
+      }
+    } finally { view.dispose(); }
+
+    // 2. Observatory: no habitat plush dolls exist or interfere.
+    const obsView = mount('orbital', { sceneId: 'observatory' });
+    try {
+      obsView.frame(1 / 60);
+      assert.equal(obsView.root.userData.plushBodies.length, 0);
+    } finally { obsView.dispose(); }
+  }
+});
+
+test('all three plush doll GLBs fit cleanly inside their PLUSH_DOLLS footprints after scaling and rotation', async () => {
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  for (const doll of cabinLayout.PLUSH_DOLLS) {
+    const raw = fs.readFileSync(new URL(`../../assets/public/models/${doll.path}`, import.meta.url));
+    const jsonLen = raw.readUInt32LE(12);
+    const doc = JSON.parse(raw.subarray(20, 20 + jsonLen).toString('utf8'));
+    doc.materials = doc.materials.map(m => ({ name: m.name, pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1] } }));
+    doc.images = [];
+    doc.textures = [];
+    const json = Buffer.from(JSON.stringify(doc));
+    const padded = Buffer.alloc(Math.ceil(json.length / 4) * 4, 32);
+    json.copy(padded);
+    const binary = raw.subarray(20 + jsonLen);
+    const buffer = Buffer.alloc(20 + padded.length + binary.length);
+    buffer.writeUInt32LE(0x46546c67, 0);
+    buffer.writeUInt32LE(2, 4);
+    buffer.writeUInt32LE(buffer.length, 8);
+    buffer.writeUInt32LE(padded.length, 12);
+    buffer.writeUInt32LE(0x4e4f534a, 16);
+    padded.copy(buffer, 20);
+    binary.copy(buffer, 20 + padded.length);
+
+    const gltf = await new GLTFLoader().parseAsync(buffer.buffer, '');
+    const model = gltf.scene.clone(true);
+    model.updateMatrixWorld(true);
+    const rawBox = new THREE.Box3().setFromObject(model);
+    const rawSize = rawBox.getSize(new THREE.Vector3());
+    const scale = doll.height / rawSize.y;
+    model.scale.setScalar(scale);
+    model.position.set(-(rawBox.min.x + rawSize.x / 2) * scale, -rawBox.min.y * scale, -(rawBox.min.z + rawSize.z / 2) * scale);
+    const placed = new THREE.Group();
+    placed.rotation.set(0, doll.yaw, 0);
+    placed.add(model);
+    placed.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(placed);
+    const foot = doll.footprint;
+    assert.ok(box.min.x >= foot.left && box.max.x <= foot.right, `${doll.id} X bounds [${box.min.x}, ${box.max.x}] must fit inside [${foot.left}, ${foot.right}]`);
+    assert.ok(box.min.z >= foot.back && box.max.z <= foot.front, `${doll.id} Z bounds [${box.min.z}, ${box.max.z}] must fit inside [${foot.back}, ${foot.front}]`);
+    assert.ok(Math.abs(box.min.y) < 1e-4 && Math.abs(box.max.y - doll.height) < 1e-4, `${doll.id} height bounds [${box.min.y}, ${box.max.y}] must match [0, ${doll.height}]`);
   }
 });
 
