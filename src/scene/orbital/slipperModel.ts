@@ -134,7 +134,11 @@ function build(scene: THREE.Object3D): SlipperModel | null {
     const size = bounds.getSize(new THREE.Vector3());
     const center = bounds.getCenter(new THREE.Vector3());
     // Center all three axes so roll/pitch tumbling rotates cleanly around the slipper's volume center.
-    for (const part of meshes) part.geometry.translate(-center.x, -center.y, -center.z);
+    for (const part of meshes) {
+      part.geometry.translate(-center.x, -center.y, -center.z);
+      part.geometry.computeBoundingBox();
+      part.geometry.computeBoundingSphere();
+    }
     return {
       parts: meshes,
       center: [center.x, center.z] as [number, number],
