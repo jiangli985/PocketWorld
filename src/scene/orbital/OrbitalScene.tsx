@@ -1,4 +1,4 @@
-import { BED_POSITION, CLOCK_POSITION, LAMP_POSITION } from './cabinLayout';
+import { CLOCK_POSITION, LAMP_POSITION } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer, OrbitControls, PerspectiveCamera } from '@react-three/drei';
@@ -36,7 +36,6 @@ import { ScheduleSurfaces } from './schedule/ScheduleSurfaces';
 import { BOOK_POSITION } from './schedule/SchedulePaper';
 import { SCHEDULE_BOOK_POSITION } from './schedule/bookLayout';
 import { OrbitalResidents } from './OrbitalResidents';
-import type { DrawerInteraction } from './drawerInteraction';
 import { shelfPoint, shelfVector } from './library/catalog';
 import { sideLibraryCamera } from './library/sideCamera';
 import { JOURNAL_PAGE_POSITION } from './journalLayout';
@@ -49,7 +48,6 @@ const FOCUS: Record<string, { target: [number, number, number]; offset: [number,
   'schedule-glass': { target: [0.69, 2.53, -3.13], offset: [0, 0.02, 1.75] },
   'book-01': { target: [-.07, 1.03, .9], offset: [1.35, 1.12, 2.5] },
   cabinet: { target: [0, 0.48, .32], offset: [0.9, 0.71, 2.35] },
-  bed: { target: [BED_POSITION[0] + .1, .7, BED_POSITION[2]], offset: [3.2, 3.2, 4.0] },
   clock: { target: [-2.06, 1.01, -2.615], offset: [0.10, 0.24, 1.15] },
 };
 interface OrbitalSceneProps extends WorldSceneProps {
@@ -316,13 +314,12 @@ function OrbitalLighting({ objects, sun }: Pick<WorldSceneProps, 'objects'> & { 
   const sunTarget = useMemo(() => new THREE.Object3D(), []);
   useEffect(() => () => { scene.environmentIntensity = 1; }, [scene]);
   useFrame((_, delta) => {
-    const sleeping = objects.bed?.active;
     const daylight = sun.daylight.value;
     const warmth = sun.warmth;
-    if (lamp.current) lamp.current.intensity = THREE.MathUtils.damp(lamp.current.intensity, objects.lamp?.active === false ? 0 : sleeping ? 1.4 : 5.2, 5, delta);
-    if (roomWarm.current) roomWarm.current.intensity = THREE.MathUtils.damp(roomWarm.current.intensity, sleeping ? 1.1 : 2.8 + 0.6 * (1 - daylight), 3, delta);
+    if (lamp.current) lamp.current.intensity = THREE.MathUtils.damp(lamp.current.intensity, objects.lamp?.active === false ? 0 : 5.2, 5, delta);
+    if (roomWarm.current) roomWarm.current.intensity = THREE.MathUtils.damp(roomWarm.current.intensity, 2.8 + 0.6 * (1 - daylight), 3, delta);
     if (ambient.current) {
-      ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, sleeping ? 0.24 : 0.36 + 0.40 * daylight + 0.06 * warmth, 3, delta);
+      ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, 0.36 + 0.40 * daylight + 0.06 * warmth, 3, delta);
       ambient.current.color.lerpColors(SKY_SHADOW_COLOR, SKY_DAY_COLOR, daylight).lerp(SKY_DUSK_COLOR, warmth * 0.42);
       ambient.current.groundColor.lerpColors(GROUND_SHADOW_COLOR, GROUND_DAY_COLOR, daylight).lerp(GROUND_DUSK_COLOR, warmth * 0.35);
     }
@@ -332,7 +329,7 @@ function OrbitalLighting({ objects, sun }: Pick<WorldSceneProps, 'objects'> & { 
       key.current.color.lerpColors(SUN_DAY_COLOR, SUN_LIMB_COLOR, warmth * 0.88);
     }
     if (earthshine.current) {
-      earthshine.current.intensity = sleeping ? 0.14 : 0.20 + 0.20 * (1 - daylight) + 0.14 * warmth;
+      earthshine.current.intensity = 0.20 + 0.20 * (1 - daylight) + 0.14 * warmth;
       earthshine.current.color.lerpColors(EARTHSHINE_NIGHT_COLOR, EARTHSHINE_DAY_COLOR, daylight).lerp(EARTHSHINE_DUSK_COLOR, warmth * 0.55);
     }
     scene.environmentIntensity = 0.36 + 0.44 * daylight;
@@ -352,7 +349,6 @@ function WorldContent(props: OrbitalSceneProps) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
   const [hullReady, setHullReady] = useState(false);
   const sofaTime = useRef<number | null>(null);
-  const drawerInteraction = useRef<DrawerInteraction | null>(null);
   const interaction = useRef<NonNullable<WorldSceneProps['onApproach']> | null>(null);
   const sun = useMemo(createSunState, []);
   const flight = useMemo(() => createFlightState(props.viewMode), []);
@@ -381,13 +377,12 @@ function WorldContent(props: OrbitalSceneProps) {
           if (inCabin && focusedObject) props.onHover(objectId, hint);
         },
         onAction: (action: Parameters<typeof props.onAction>[0]) => {
-          if (!inCabin || id !== props.sceneId || drawerInteraction.current?.busy) return;
-          if (action.objectId === 'desk-drawer') drawerInteraction.current?.request(action);
-          else props.onAction(action);
+          if (!inCabin || id !== props.sceneId) return;
+          props.onAction(action);
         },
         // A panorama click is a request to walk over; once focused, the props are already in reach.
         onApproach: (point: [number, number, number], action: WorldAction, perform: () => void) => {
-          if (!inCabin || id !== props.sceneId || drawerInteraction.current?.busy) return false;
+          if (!inCabin || id !== props.sceneId) return false;
           if (focusedObject) { perform(); return true; }
           return interaction.current?.(point, action, perform) ?? false;
         },
@@ -396,14 +391,14 @@ function WorldContent(props: OrbitalSceneProps) {
         {id === props.sceneId && <OrbitalLighting objects={world.objects} sun={sun} />}
         {id === 'habitat' && <SpacecraftHull flight={flight} sun={sun} reducedMotion={props.reducedMotion} onEnterCabin={props.onEnterCabin} onReady={() => setHullReady(true)} />}
         <group visible={showInterior}>
-          <HabitatShell variant={id} onFloorClick={point => { if (inCabin && (!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy && (!props.library || props.library.flow.current.phase === 'idle')) { void roomAudio.unlock(); setWalkTarget(point); } }} />
+          <HabitatShell variant={id} onFloorClick={point => { if (inCabin && !props.focusedObject && props.sceneId === id && !props.gestureActive && (!props.library || props.library.flow.current.phase === 'idle')) { void roomAudio.unlock(); setWalkTarget(point); } }} />
           {id === 'habitat' && <ScheduleSurfaces {...world} visible={inCabin && props.sceneId === 'habitat'} />}
           {id === 'habitat' && <AlarmClock3D {...world} />}
           <Suspense fallback={null}><HabitatFurniture {...world} sofaTime={sofaTime} /><MediaObjects {...world} /></Suspense>
           <FeatureSurfaces {...world} />
           {id === props.sceneId && <>
-            <OrbitalResidents {...world} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} drawerInteraction={drawerInteraction} interaction={interaction}
-              drawerEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} onDrawerAction={props.onAction} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={inCabin && (!props.focusedObject || props.focusedObject === 'bed') && (!props.library || props.library.view.phase === 'idle') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
+            <OrbitalResidents {...world} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} interaction={interaction}
+              approachEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={inCabin && !props.focusedObject && (!props.library || props.library.view.phase === 'idle') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
           </>}
         </group>
       </group>;

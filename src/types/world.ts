@@ -3,7 +3,7 @@ import type { MutableRefObject } from 'react';
 import type { MusicDisc } from './interactable';
 
 export type WorldSceneId = 'habitat' | 'observatory';
-export type WorldActionKind = 'inspect' | 'open' | 'close' | 'read' | 'write' | 'plan' | 'sleep' | 'wake' | 'toggle' | 'select' | 'insert' | 'eject' | 'water' | 'pet' | 'travel' | 'turn-page' | 'sit' | 'stand';
+export type WorldActionKind = 'inspect' | 'open' | 'close' | 'read' | 'write' | 'plan' | 'toggle' | 'select' | 'insert' | 'eject' | 'water' | 'pet' | 'travel' | 'turn-page' | 'sit' | 'stand';
 export type WorldPhase = 'idle' | 'preparing' | 'leaving' | 'entering' | 'active' | 'returning' | 'error';
 export interface WorldAction {
   sceneId: WorldSceneId;
@@ -72,13 +72,11 @@ export interface JournalPage { text: string; date?: string; weather?: JournalWea
 export interface JournalEntry { id: string; date: string; text: string; updatedAt: string; pages?: JournalPage[] }
 export interface ScheduleEntry { id: string; time: string; title: string; completed: boolean; content?: string }
 export interface BookContent { id: string; title: string; author?: string; pages: string[] }
-export interface SleepSession { startedAt: string; endedAt?: string; sceneId: WorldSceneId }
 /** Optional content providers. Geometry and gesture code never depend on a backend. */
 export interface WorldFeatureAdapters {
   actions?: Partial<Record<WorldActionKind, WorldActionAdapter>>;
   journal?: { load: (signal: AbortSignal) => Promise<JournalEntry>; save: (entry: JournalEntry, signal: AbortSignal) => Promise<void> };
   schedule?: { load: (signal: AbortSignal) => Promise<ScheduleEntry[]>; save: (entries: ScheduleEntry[], signal: AbortSignal) => Promise<void> };
   library?: { loadBook: (id: string, signal: AbortSignal) => Promise<BookContent>; saveBookmark?: (id: string, page: number, signal: AbortSignal) => Promise<void> };
-  sleep?: { onFallAsleep?: (session: SleepSession, signal: AbortSignal) => void | Promise<void>; onWake?: (session: SleepSession, signal: AbortSignal) => void | Promise<void> };
 }
 export const SCENE_ORIGINS: Record<WorldSceneId, [number, number, number]> = { habitat: [0, 0, 0], observatory: [14, 0, 0] };

@@ -16,7 +16,7 @@ function restore(bone: THREE.Bone, pose: BonePose) {
 }
 const tilt = (from: THREE.Vector3, to: THREE.Vector3) => Math.atan2(to.z - from.z, from.y - to.y);
 
-export function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE.Vector3, sole: THREE.Quaternion) {
+function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE.Vector3, sole: THREE.Quaternion) {
   const worldPosition = (joint: THREE.Bone) => joint.getWorldPosition(new THREE.Vector3());
   const worldRotation = (joint: THREE.Object3D) => joint.getWorldQuaternion(new THREE.Quaternion());
   const hip = worldPosition(thigh), knee = worldPosition(shin), ankle = worldPosition(foot);
@@ -353,5 +353,5 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
   }
 
   return { mesh, legs, arms, torso, neck, head, skirtFront, skirtBack, applyPose, followMotion, applyArmCorrectives,
-    neutralPose: neutral, dispose: () => { for (const object of skinned) object.skeleton.dispose(); } };
+    dispose: () => { for (const object of skinned) object.skeleton.dispose(); } };
 }

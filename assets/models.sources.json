@@ -164,16 +164,6 @@
       "processing": "Adapted from David-Alfter's Animal Animator 0.1.0 presets. Retargeted paw contact and belly-rest breathing for Tuanzi. Editable animation source and license: assets/models/cat/motion/."
     },
     {
-      "file": "resident/luna-bed-v3.glb",
-      "sourcePage": "https://www.mixamo.com/",
-      "license": null,
-      "licensePage": null,
-      "used": true,
-      "bytes": 799688,
-      "sha256": "b0c94ebcf1b1ae56e9d9f4df558549070b79be6d33dca76df0569cf5d7a84ed6",
-      "processing": "Luna V3 bed motion, authored from user-supplied V2 Blender study (Plask-derived late motion and Mixamo Laying Sleeping upper-body finish). Direct supported seat and right shin/ankle/toe repair, fixed V2 heel contacts. Animation-only GLB, 115 nodes and 230 tracks, no meshes or textures. Editable source assets/models/resident/luna-bed-v3.blend; rebuild scripts/export-luna-bed.py. Original Luna and bed reused unchanged; upstream licenses are not reassigned."
-    },
-    {
       "file": "resident/luna-looking-around.glb",
       "source": "Adobe Mixamo — Looking Around (description: Idle Stand Looking Around)",
       "sourceUrl": "https://www.mixamo.com/#/?page=1&query=Idle+Stand+Looking+Around",
@@ -230,9 +220,9 @@
       "file": "replaced/desk.parts.glb",
       "source": "Repository-supplied replaced/desk.parts.glb at b2df620.",
       "used": true,
-      "bytes": 2365068,
-      "sha256": "ed597438eb73a30cbe93cec97b97558c6d064a796dc9cef25314e8b14fb5f5a9",
-      "processing": "Recolored embedded albedo and extended the tabletop to the left while retaining the drawer."
+      "bytes": 2221232,
+      "sha256": "db71b09deececd80d732e2c40e73ed3916f02d0a0e873962fb77a9b557c66ef9",
+      "processing": "Recolored embedded albedo and extended the tabletop to the left. Removed the drawer mesh while preserving the desk body and shared textures."
     },
     {
       "file": "replaced/cabinet.parts.glb",

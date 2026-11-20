@@ -117,13 +117,13 @@ test('抵达书柜即开始取指定书，归还后可退出并继续待处理�
   c.arrived();
   advance();
   assert.equal(c.flow.current.phase, 'reading');
-  const sleep = { sceneId: 'habitat', objectId: 'bed', kind: 'sleep' };
-  c.dispatch(sleep);
+  const nextAction = { sceneId: 'habitat', objectId: 'lamp', kind: 'toggle' };
+  c.dispatch(nextAction);
   advance();
   assert.equal(c.flow.current.phase, 'recenter');
   c.arrived();
   assert.equal(c.flow.current.phase, 'idle');
-  assert.deepEqual(actions.slice(-2), ['return', sleep]);
+  assert.deepEqual(actions.slice(-2), ['return', nextAction]);
   enter();
   assert.equal(c.flow.current.phase, 'catalog');
   c.back();
