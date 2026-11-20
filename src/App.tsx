@@ -143,7 +143,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
   }, []);
   const onToggleMute = useCallback(() => { roomAudio.setMuted(!roomAudio.getSnapshot().isMuted); }, []);
   const focusGuide = world.focusedObject === 'journal' ? '点击书页书写 · ← / → 翻页 · 自动保存 · Esc 返回'
-    : world.focusedObject === 'schedule' ? '← / → 翻页 · 上拖纸页贴出 · V 切换视角 · Esc 返回'
+    : world.focusedObject === 'schedule' ? '← / → 翻页 · X 撕下这页 · V 切换视角 · Esc 返回'
     : world.focusedObject === 'schedule-glass' ? '左右键浏览 · V 切换视角 · Esc 返回'
     : world.focusedObject === 'clock' ? '设定闹钟或倒计时 · 可试听经典版与特供版铃声 · Esc 返回' : '';
   const orbitGuide = viewMode === 'approach' ? '宇宙很大。这里，刚刚好。'
@@ -188,6 +188,6 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     {audio.isPlaying && <aside className="orbital-now-playing"><span className="orbital-record-dot" /><div><small>NOW PLAYING</small><p>{audio.disc.title}</p></div></aside>}
     {draggingFile && <div className="orbital-drop-message"><span className="orbital-drop-disc" /><p>让这段音乐，留在这里。</p><small>松手制作一张自己的唱片</small></div>}
     <input ref={fileInput} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac" hidden onChange={event => importFiles(event.target.files)} />
-    <span className="sr-only">键盘：舱外视角长按空格或 Shift 加速绕地飞行与时间流逝，E 或回车进入舱室；舱内 F 返回舱外视角，WASD 行走，E 与最近物品互动，M 静音，Esc 返回。</span>
+    <span className="sr-only">键盘：舱外视角长按空格或 Shift 加速绕地飞行与时间流逝，E 或回车进入舱室；舱内 F 返回舱外视角，WASD 行走，E、Q、R 依次与身边最近的物品互动，M 静音，Esc 返回。</span>
   </main>;
 };

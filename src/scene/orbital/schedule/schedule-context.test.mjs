@@ -88,7 +88,7 @@ function mount(storage, remote) {
   };
 }
 
-test('failed draft writes retain input, block posting and can retry without another edit', async () => {
+test('failed draft writes retain input, block tearing and can retry without another edit', async () => {
   const storage = storageFor(schedule.migrateSchedule([entry('local')]));
   const view = mount(storage);
   try {
@@ -100,9 +100,9 @@ test('failed draft writes retain input, block posting and can retry without anot
     await view.flush();
     assert.equal(view.value.state.current.entries[0].title, '刚输入的内容');
     assert.equal(storage.read().current.entries[0].title, '任务 local');
-    assert.equal(view.value.commit(schedule.postSchedulePage(view.value.state)), false);
+    assert.equal(view.value.commit(schedule.tearSchedulePage(view.value.state)), false);
     await view.flush();
-    assert.equal(view.value.state.posted.length, 0);
+    assert.equal(view.value.state.discarded.length, 0);
     storage.fail = false;
     view.value.retry();
     await view.flush();
@@ -159,7 +159,8 @@ test('retry after a read failure with no local edits only reads and merges remot
 });
 
 test('offline page removals survive refresh and are not recovered as remote additions', async () => {
-  const local = schedule.postSchedulePage(schedule.migrateSchedule([entry('removed')]));
+  const base = schedule.migrateSchedule([entry('removed')]);
+  const local = { ...base, posted: [base.current], current: schedule.createSchedulePage(2) };
   const storage = storageFor(local);
   let server = schedule.flattenSchedule(local);
   const offlineView = mount(storage, { load: async () => { throw new Error('offline'); }, save: async () => assert.fail('must read before saving') });

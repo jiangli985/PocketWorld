@@ -4,6 +4,7 @@ import { useGLTF } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { AssetBoundary } from './ReusableAsset';
+import { extractSlipperModel, isSlipperMaterial } from './slipperModel';
 
 interface HabitatShellProps {
   variant: 'habitat' | 'observatory';
@@ -19,6 +20,11 @@ function CabinModel({ variant }: Pick<HabitatShellProps, 'variant'>) {
     });
     if (variant === 'observatory') {
       for (const part of ['Wardrobe_Nightstand', 'Stationery', 'Shelf_Gallery', 'Rugs']) copy.getObjectByName(part)?.removeFromParent();
+    } else if (extractSlipperModel(scene)) {
+      // The pair is re-mounted as separate props so Luna can kick them around.
+      const slippers: THREE.Object3D[] = [];
+      copy.traverse(node => { if (node instanceof THREE.Mesh && isSlipperMaterial(node.material)) slippers.push(node); });
+      slippers.forEach(node => node.removeFromParent());
     }
     return copy;
   }, [scene, variant]);

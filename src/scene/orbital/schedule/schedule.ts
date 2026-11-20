@@ -4,8 +4,6 @@ export const SCHEDULE_KEY = 'pocketworld:schedule:notebook:v3';
 export const SCHEDULE_ROWS = 8;
 export const TODO_ROWS = 3;
 export const TOMORROW_ROWS = 2;
-export const MAX_POSTED_SCHEDULES = 5;
-export const SCHEDULE_FULL_MESSAGE = '主角：“玻璃已经贴满 5 张啦，先拿掉一张，再贴新的吧。”';
 export interface SchedulePage {
   id: string;
   number: number;
@@ -93,23 +91,12 @@ export function readScheduleNotebook(storage: Pick<Storage, 'getItem'>): Schedul
   const upgraded = { ...saved, version: 3 as const, current: upgrade(saved.current), posted: saved.posted.map(upgrade), queued: saved.queued.map(upgrade) };
   return { ...upgraded, queued: [...upgraded.queued, ...overflow] };
 }
-export function hasScheduleContent(page: SchedulePage) {
-  return page.entries.some(entry => entry.title.trim() || entry.content?.trim())
-    || page.todos.some(item => item.text.trim()) || page.tomorrow.some(text => text.trim()) || !!page.notes.trim();
-}
-export function schedulePageError(page: SchedulePage): string | null {
-  if (!hasScheduleContent(page)) return '先写下一件想做的事，再贴到玻璃上。';
-  for (const entry of page.entries) {
-    if (!(entry.title.trim() || entry.content?.trim())) continue;
-    if (!entry.title.trim()) return '请为写好的任务补上标题。';
-    if (!/^([01]?\d|2[0-3])[:：][0-5]\d$/.test(entry.time.trim())) return '请输入有效时间，例如 09:00。';
-  }
-  return null;
-}
-export function postSchedulePage(state: ScheduleNotebook): ScheduleNotebook {
-  if (state.posted.length >= MAX_POSTED_SCHEDULES || schedulePageError(state.current)) return state;
-  const nextNumber = Math.max(state.current.number, ...state.posted.map(p => p.number), ...state.queued.map(p => p.number)) + 1;
-  return { ...state, current: state.queued[0] ?? createSchedulePage(nextNumber), posted: [...state.posted, state.current], queued: state.queued.slice(1) };
+export function tearSchedulePage(state: ScheduleNotebook): ScheduleNotebook {
+  const nextNumber = Math.max(state.current.number, ...state.posted.map(page => page.number), ...state.queued.map(page => page.number)) + 1;
+  return { ...state,
+    current: state.queued[0] ?? createSchedulePage(nextNumber),
+    queued: state.queued.slice(1),
+    discarded: [...state.discarded, { id: state.current.id, seed: state.current.number }].slice(-24) };
 }
 export function openSchedulePage(state: ScheduleNotebook): ScheduleNotebook {
   const pages = [state.current, ...state.queued].sort((a, b) => a.number - b.number);
