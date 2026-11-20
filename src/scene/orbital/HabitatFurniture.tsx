@@ -1,4 +1,4 @@
-import { BED_POSITION, FLOOR_SOFA, LAMP_POSITION, PLANT_POSITION, TRASH_CAN } from './cabinLayout';
+import { BED_POSITION, LAMP_POSITION, PLANT_POSITION, TRASH_CAN } from './cabinLayout';
 import React, { Suspense, useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { CLOSED_OBJECT, type WorldModelProps } from '../../types/world';
@@ -9,6 +9,7 @@ import { FurnitureDesk } from './FurnitureDesk';
 import { FurnitureBookcase } from './FurnitureBooks';
 import { SuppliedAsset } from './SuppliedAsset';
 import { Bedding } from './Bedding';
+import { FloorSofa } from './FloorSofa';
 import { AssetBoundary, ReusableAsset } from './ReusableAsset';
 import { cloneSuppliedModel } from './supplied-model';
 import { CHAIR_POSES } from './chairPose';
@@ -111,7 +112,7 @@ function FurnitureHatch() {
   </group>;
 }
 
-export const HabitatFurniture: React.FC<WorldModelProps> = world => {
+export const HabitatFurniture: React.FC<WorldModelProps & { sofaTime: React.RefObject<number | null> }> = world => {
   const observatory = world.sceneId === 'observatory';
   return <group name={`Furniture_${world.sceneId}`}>
     <FurnitureDesk world={world} />
@@ -128,8 +129,10 @@ export const HabitatFurniture: React.FC<WorldModelProps> = world => {
     </> : <>
       <FurnitureBed world={world} />
       <FurnitureChair world={world} />
-      <ReusableAsset name="Furniture_FloorSofa" path="furniture/floor-sofa.glb"
-        width={FLOOR_SOFA.width} position={FLOOR_SOFA.position} rotation={[0, FLOOR_SOFA.yaw, 0]} />
+      <ObjectHandle id="sofa" panorama onClick={event => event.stopPropagation()} action={world.objects.sofa?.active ? 'stand' : 'sit'}
+        hint={world.objects.sofa?.active ? '起身' : '坐进懒人沙发'} world={world}>
+        <AssetBoundary><Suspense fallback={null}><FloorSofa sample={world.sofaTime} /></Suspense></AssetBoundary>
+      </ObjectHandle>
       <ReusableAsset name="Furniture_TrashCan" path="furniture/trash-can.glb"
         height={TRASH_CAN.height} position={TRASH_CAN.position} rotation={[0, TRASH_CAN.yaw, 0]} />
     </>}

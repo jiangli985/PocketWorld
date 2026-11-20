@@ -78,6 +78,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './ResidentModel': { HIP_HEIGHT: 0.69, ResidentModel: 'ResidentModel' },
     './residentRig': residentRig,
     './cabinLayout': cabinLayout,
+    './sofaMotion': load('./orbital/sofaMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './bedMotion': load('./orbital/bedMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './journalLayout': load('./orbital/journalLayout.ts', {}),
     './schedule/bookLayout': load('./orbital/schedule/bookLayout.ts', {}),
@@ -106,7 +107,7 @@ function mount(kind, overrides = {}, idleLibrary) {
   const names = { orbital: 'OrbitalResidents', app: 'App' };
   const props = {
     sceneId: 'habitat', objects: {}, enabled: true, reducedMotion: false, walkTarget: null,
-    interaction: { current: null }, drawerEnabled: true, drawerInteraction: { current: null }, onDrawerAction() {},
+    sofaTime: { current: null }, interaction: { current: null }, drawerEnabled: true, drawerInteraction: { current: null }, onDrawerAction() {},
     onGesture() {}, onHover() {}, onArrive() {}, onAction() {},
     ...overrides,
   };

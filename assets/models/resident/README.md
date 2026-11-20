@@ -1,5 +1,16 @@
 # Luna 动画制作源
 
+## 地毯旁的懒人沙发
+
+落座主段取自 CMU Graphics Lab 的 75_20「low sit」。源动作为 60 Hz，烘焙使用第 95–261 帧（从 1 计数），保留下降和落座后的回稳段，以 30 Hz 导出。骨盆位移按 Luna 身形和座面校准，双腿 IK 固定原站姿脚掌，前裙三段裙骨沿腿面逐段弯折，两侧朝膝盖收拢，后摆越过软垫前缘后下垂，起身从当前样本逆放。坐垫的承重形变由同一播放时间驱动。[官方动作目录](https://mocap.cs.cmu.edu/search.php?subjectnumber=75) · [免费使用条件](https://mocap.cs.cmu.edu/)
+
+将[主体骨架](https://mocap.cs.cmu.edu/subjects/75/75.asf)和[原始角度数据](https://mocap.cs.cmu.edu/subjects/75/75_20.amc)放入同一个仓库外目录。将环境变量 `CMU_SUBJECT_75` 设为该目录，再从仓库根目录运行下列命令，以实际运行站姿为基准复建动作。文件校验值与致谢见[素材登记](../../models.sources.json)。
+
+```sh
+node scripts/luna-library-neutral.mjs > /tmp/luna-neutral.json
+blender --background --python scripts/bake-luna-sofa.py -- "$CMU_SUBJECT_75" /tmp/luna-neutral.json
+```
+
 ## 转椅坐姿
 
 `Luna-Sit-ContactFixed.blend` 基于用户提供的接触修正版，加入撑扶手、后挪和收手的关键帧，保留 115 骨骼、真实转椅和接触修形修改器。第 53 帧是脚掌着地的前缘坐姿；第 65–85 帧支撑、抬髋后挪并落稳；第 98 帧双手已回到膝上。在 `ChairSit_ScootBack` 第 49–97 帧调整双侧上臂、前臂与手腕旋转。伸手时双肘向后让开，两掌略向外、掌心朝下压住扶手后再收手。离座逆放同一组关键帧。前裙随大腿抬起，后裙收进坐垫与靠背之间。源文件 SHA-256 为 `2e776a69b87a1c6bb69d5ee4518aadd68aa6a17da7583cb39d25c9383dc14221`。角色与 Mixamo 行走素材沿用既有项目输入，未收到独立许可声明；不将其标记为 CC0。

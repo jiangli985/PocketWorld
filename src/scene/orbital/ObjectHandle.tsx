@@ -8,6 +8,7 @@ interface ObjectHandleProps extends Omit<ThreeElements['group'], 'id' | 'onPoint
   action: WorldActionKind;
   hint: string;
   world: WorldModelProps;
+  panorama?: boolean;
   drag?: 'x' | 'y' | 'z';
   payload?: WorldAction['payload'];
 }
@@ -22,7 +23,7 @@ function belongsToFocus(id: string, focused: string | null) {
 }
 
 /** A real object's input ownership, not an invisible menu hotspot. */
-export function ObjectHandle({ id, action, hint, world, drag, payload, children, onClick, ...props }: ObjectHandleProps) {
+export function ObjectHandle({ id, action, hint, world, panorama = false, drag, payload, children, onClick, ...props }: ObjectHandleProps) {
   const held = useRef<{ x: number; y: number; pointerId: number; target: EventTarget | null; point: [number, number, number] } | null>(null);
   const movable = useRef<THREE.Group>(null);
   const callbacks = useRef(world);
@@ -41,7 +42,7 @@ export function ObjectHandle({ id, action, hint, world, drag, payload, children,
     window.addEventListener('pointercancel', cancel);
     return () => { cancel(); window.removeEventListener('blur', cancel); window.removeEventListener('pointercancel', cancel); };
   }, []);
-  const enabled = belongsToFocus(id, world.focusedObject);
+  const enabled = (!world.focusedObject && panorama) || belongsToFocus(id, world.focusedObject);
   useEffect(() => { if (!enabled) release(); }, [enabled]);
   const down = (event: ThreeEvent<PointerEvent>) => {
     if (!enabled || event.button !== 0 || held.current) return;

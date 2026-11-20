@@ -351,6 +351,7 @@ function OrbitalLighting({ objects, sun }: Pick<WorldSceneProps, 'objects'> & { 
 function WorldContent(props: OrbitalSceneProps) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
   const [hullReady, setHullReady] = useState(false);
+  const sofaTime = useRef<number | null>(null);
   const drawerInteraction = useRef<DrawerInteraction | null>(null);
   const interaction = useRef<NonNullable<WorldSceneProps['onApproach']> | null>(null);
   const sun = useMemo(createSunState, []);
@@ -398,10 +399,10 @@ function WorldContent(props: OrbitalSceneProps) {
           <HabitatShell variant={id} onFloorClick={point => { if (inCabin && (!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy && (!props.library || props.library.flow.current.phase === 'idle')) { void roomAudio.unlock(); setWalkTarget(point); } }} />
           {id === 'habitat' && <ScheduleSurfaces {...world} visible={inCabin && props.sceneId === 'habitat'} />}
           {id === 'habitat' && <AlarmClock3D {...world} />}
-          <Suspense fallback={null}><HabitatFurniture {...world} /><MediaObjects {...world} /></Suspense>
+          <Suspense fallback={null}><HabitatFurniture {...world} sofaTime={sofaTime} /><MediaObjects {...world} /></Suspense>
           <FeatureSurfaces {...world} />
           {id === props.sceneId && <>
-            <OrbitalResidents {...world} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} drawerInteraction={drawerInteraction} interaction={interaction}
+            <OrbitalResidents {...world} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} drawerInteraction={drawerInteraction} interaction={interaction}
               drawerEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} onDrawerAction={props.onAction} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={inCabin && (!props.focusedObject || props.focusedObject === 'bed') && (!props.library || props.library.view.phase === 'idle') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
           </>}
         </group>
