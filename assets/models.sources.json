@@ -12,6 +12,38 @@
       "processing": "Editable source assets/models/furniture/floor-sofa.blend with packed linen and twill maps. scripts/export-floor-sofa.py converts the piping, topstitching and fringe to mesh and reduces the runtime geometry."
     },
     {
+      "file": "furniture/trash-can.glb",
+      "source": "PocketWorld original procedural Blender pedal wastebin, scripts/build-trash-can.py -> assets/models/furniture/trash-can.blend.",
+      "used": true,
+      "bytes": 738652,
+      "sha256": "96431941cca68297d3b32df1ad154c6fe263a4aabf38657118641d744632fcef",
+      "processing": "Procedural Blender 5.2.3 LTS warm porcelain, honey-oak, apricot-band, and brushed-brass pedal wastebin with packed 256px/128px PBR textures (25 watertight meshes, 17,604 triangles). Rebuild/export with scripts/build-trash-can.py."
+    },
+    {
+      "file": "furniture/plush-bunny.glb",
+      "source": "PocketWorld original procedural Blender sitting floppy-ear bunny plush doll, scripts/build-plush-dolls.py -> assets/models/furniture/plush-bunny.blend.",
+      "used": true,
+      "bytes": 918272,
+      "sha256": "525231c7d8a021dc8853175999aeb071608e189dd191cce6acb49fbd35607c0e",
+      "processing": "Procedural Blender 5.2.3 LTS ivory-cream short-pile plush floppy-ear bunny with dusty-rose inner ears/paw pads, sage ribbed knit scarf, and packed 192px/128px PBR textures (42 watertight meshes, 21,684 triangles). Rebuild/export with scripts/build-plush-dolls.py."
+    },
+    {
+      "file": "furniture/plush-bear.glb",
+      "source": "PocketWorld original procedural Blender sitting teddy bear plush doll, scripts/build-plush-dolls.py -> assets/models/furniture/plush-bear.blend.",
+      "used": true,
+      "bytes": 934140,
+      "sha256": "89fbb20fba70e581f43c6741509f619653dab48da1c31f987d6bef2f70f814c1",
+      "processing": "Procedural Blender 5.2.3 LTS honey-caramel short-pile plush teddy bear with oatmeal snout/stitched belly patch/paws, dusty-rose folded neck bow, and packed 192px/128px PBR textures (57 watertight meshes, 25,404 triangles). Rebuild/export with scripts/build-plush-dolls.py."
+    },
+    {
+      "file": "furniture/plush-penguin.glb",
+      "source": "PocketWorld original procedural Blender sitting penguin plush doll, scripts/build-plush-dolls.py -> assets/models/furniture/plush-penguin.blend.",
+      "used": true,
+      "bytes": 757100,
+      "sha256": "b1d367da7fec88c84800ff5aa02f891bf54fd54f59b15c3f04694ea54d251a2f",
+      "processing": "Procedural Blender 5.2.3 LTS dusty sky-blue short-pile plush penguin with snow-cream heart apron, butter-apricot beak/feet, striped knit pom-pom beanie, and packed 192px/128px PBR textures (21 watertight meshes, 15,712 triangles). Rebuild/export with scripts/build-plush-dolls.py."
+    },
+    {
       "file": "furniture/throw_pillows_01.glb",
       "sourcePage": "https://polyhaven.com/a/throw_pillows_01",
       "license": "CC0-1.0",
