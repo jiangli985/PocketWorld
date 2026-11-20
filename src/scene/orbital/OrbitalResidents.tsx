@@ -874,6 +874,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   const canCatWalk = (x: number, z: number) => {
     const luna = resident.current?.position;
     return approach.current?.action.objectId !== 'pet'
+      && free([x, z], room.boxes)
       && (!luna || Math.hypot(x - luna.x, z - luna.z) > RADIUS + .28)
       && plushBodies.current.every(plush => Math.hypot(x - plush.x, z - plush.z) > plush.radius + .28);
   };
