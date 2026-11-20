@@ -296,3 +296,56 @@ test('云朵装贴臂时两只袖筒在肘部上下都保有宽度和厚度', as
     }
   } finally { rig.dispose(); }
 });
+
+test('云朵装站定和呼吸时双臂垂在身侧，腰与两袖的正面轮廓连续', async () => {
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-cloudhoodie.glb', import.meta.url));
+  const rig = createResidentRig(gltf.scene, gltf.animations.find(a => a.name === 'Walk_Grounded_Loop'), true);
+  try {
+    rig.mesh.userData.outfit = 'cloudhoodie';
+    const idle = createIdlePlayer(rig.mesh);
+    const updateCloth = compile('./wardrobe/sleeveContact.ts').createSleeveContact(gltf.scene);
+    const mesh = gltf.scene.getObjectByProperty('isSkinnedMesh', true);
+    const { geometry, skeleton } = mesh;
+    const indices = geometry.index.array;
+    const points = Array.from({ length: geometry.attributes.position.count }, () => new THREE.Vector3());
+    const state = createIdleState(random);
+    for (const phase of [0, 2.25, 4.5, 6.75]) {
+      rig.applyPose(0, 0);
+      state.weight = phase === 0 ? 0 : 1;
+      state.phase = phase;
+      idle(state);
+      updateCloth();
+      rig.mesh.updateMatrixWorld(true);
+      const joint = name => mesh.worldToLocal(skeleton.getBoneByName('mixamorig' + name).getWorldPosition(new THREE.Vector3()));
+      for (const side of ['Left', 'Right']) {
+        const shoulder = joint(side + 'Arm'), elbow = joint(side + 'ForeArm'), wrist = joint(side + 'Hand');
+        for (const end of [elbow, wrist]) {
+          const slope = Math.abs(end.x - shoulder.x) / (shoulder.y - end.y);
+          assert.ok(slope < Math.tan(6 * Math.PI / 180), side + ' arm flares outward');
+        }
+      }
+      points.forEach((v, i) => mesh.getVertexPosition(i, v));
+      const elbow = joint('LeftForeArm'), wrist = joint('LeftHand');
+      for (const fraction of [.24, .4, .55, .7, .85, 1]) {
+        const y = THREE.MathUtils.lerp(wrist.y, elbow.y, fraction);
+        const intervals = [];
+        for (let i = 0; i < indices.length; i += 3) {
+          const a = points[indices[i]], b = points[indices[i + 1]], c = points[indices[i + 2]];
+          if (y < Math.min(a.y, b.y, c.y) || y >= Math.max(a.y, b.y, c.y)) continue;
+          const xs = [];
+          for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+            if ((p.y > y) !== (q.y > y)) xs.push(THREE.MathUtils.lerp(p.x, q.x, (y - p.y) / (q.y - p.y)));
+          }
+          if (xs.length === 2) intervals.push([Math.min(...xs), Math.max(...xs)]);
+        }
+        intervals.sort((a, b) => a[0] - b[0]);
+        assert.ok(intervals.length > 0);
+        let edge = intervals[0][1];
+        for (const [start, end] of intervals) {
+          assert.ok(start - edge < .002, '腰侧透光 ' + JSON.stringify({ phase, fraction, gap: start - edge }));
+          edge = Math.max(edge, end);
+        }
+      }
+    }
+  } finally { rig.dispose(); }
+});

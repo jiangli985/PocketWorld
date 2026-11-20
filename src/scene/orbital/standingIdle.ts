@@ -104,6 +104,8 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
     return { joint, curve: track.createInterpolant() };
   }) ?? [];
   const channels = bind(clip), lookChannels = bind(lookClip);
+  // The padded sleeves rest against the waist. Keep the breathing offsets within that contact.
+  const armAmplitude = root.userData.outfit === 'cloudhoodie' ? .18 : 1;
   const spine = root.getObjectByName('mixamorigSpine2')!;
   const neck = root.getObjectByName('mixamorigNeck')!;
   const arms = ['Right', 'Left'].map(side => ({
@@ -122,11 +124,12 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
     const weight = smooth(state.weight);
     offset(spine, breath * STANDING_IDLE.breathPitch, 0, sway * STANDING_IDLE.swayRoll, weight);
     offset(neck, -breath * .012, sway * STANDING_IDLE.headTurn, -sway * .015, weight);
+    const armWeight = weight * armAmplitude;
     arms.forEach((arm, side) => {
       const direction = side ? 1 : -1;
-      offset(arm.shoulder, 0, 0, direction * breath * STANDING_IDLE.shoulderRoll, weight);
-      offset(arm.upper, sway * STANDING_IDLE.armSwing, 0, direction * .025, weight);
-      offset(arm.forearm, STANDING_IDLE.elbowRelax * (.65 + .35 * breath), 0, 0, weight);
+      offset(arm.shoulder, 0, 0, direction * breath * STANDING_IDLE.shoulderRoll, armWeight);
+      offset(arm.upper, sway * STANDING_IDLE.armSwing, 0, direction * .025, armWeight);
+      offset(arm.forearm, STANDING_IDLE.elbowRelax * (.65 + .35 * breath), 0, 0, armWeight);
     });
     const time = state.lookTime >= 0 ? state.lookTime : state.yawnTime;
     const gestureWeight = state.lookTime >= 0 ? state.lookWeight : state.yawnWeight;
