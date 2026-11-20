@@ -42,6 +42,46 @@
       "processing": "Procedural Blender 5.2.3 LTS warm porcelain, honey-oak, apricot-band, and brushed-brass pedal wastebin with packed 256px/128px PBR textures (25 watertight meshes, 17,604 triangles). Rebuild/export with scripts/build-trash-can.py."
     },
     {
+      "file": "furniture/vinyl-rack.glb",
+      "source": "PocketWorld original procedural Blender mid-century tabletop vinyl record rack, scripts/build-vinyl-rack.py -> assets/models/furniture/vinyl-rack.blend.",
+      "used": true,
+      "bytes": 852496,
+      "sha256": "e5b262a0db974011b9c371f4d6a25560ca417aca2cce3de50d7532aab7e98b7d",
+      "processing": "Procedural Blender 5.2.3 LTS American walnut, satin brushed-brass, and charcoal wool-felt 6-slot tabletop vinyl record rack (30-degree angled milled grooves, 7 swept brass wire dividers, twin rear stabilizer rails, sculpted cheek panels with brass-lined handle cutouts, 4 tapered walnut/brass feet, packed 256px/128px PBR textures; 93 watertight meshes, 22,096 triangles). Rebuild/export with scripts/build-vinyl-rack.py."
+    },
+    {
+      "file": "furniture/cartridge-mario.glb",
+      "source": "PocketWorld original procedural Blender retro game cartridge (Ski Adventure / No.01), scripts/build-game-cartridges.py -> assets/models/furniture/cartridge-mario.blend.",
+      "used": true,
+      "bytes": 232540,
+      "sha256": "966118f7295b57845afe050332d4c73900251d3a8e0e08b0cc1fdd090190da40",
+      "processing": "Procedural Blender 5.2.3 LTS FC/GB-inspired glacier-blue and tangerine retro cartridge with packed 512x432 16-bit pixel-art cover label, top spine sticker, rear spec plate, security screws, and recessed PCB with 14 gold edge-connector pins (50 watertight meshes, 3,752 triangles). Rebuild/export with scripts/build-game-cartridges.py."
+    },
+    {
+      "file": "furniture/cartridge-shooter.glb",
+      "source": "PocketWorld original procedural Blender retro game cartridge (Magic Grimoire / No.02), scripts/build-game-cartridges.py -> assets/models/furniture/cartridge-shooter.blend.",
+      "used": true,
+      "bytes": 232084,
+      "sha256": "1fcc408bec4916c04da318c9073eb6e8be19f6f1a4a8fe54959422def2a3a062",
+      "processing": "Procedural Blender 5.2.3 LTS FC/GB-inspired twilight-violet and starlight-gold retro cartridge with packed 512x432 16-bit pixel-art cover label, top spine sticker, rear spec plate, security screws, and recessed PCB with 14 gold edge-connector pins (50 watertight meshes, 3,752 triangles). Rebuild/export with scripts/build-game-cartridges.py."
+    },
+    {
+      "file": "furniture/cartridge-stand.glb",
+      "source": "PocketWorld original procedural Blender 2-slot angled walnut & brass cartridge display stand, scripts/build-game-cartridges.py -> assets/models/furniture/cartridge-stand.blend.",
+      "used": true,
+      "bytes": 212036,
+      "sha256": "07fb7189ea9f48c9a8bd3bfa416094cd2a70dc2d09a963f6fcc9bb9548076d38",
+      "processing": "Procedural Blender 5.2.3 LTS 2-slot walnut, charcoal-felt and brushed-brass tabletop cartridge display stand cradling both cartridges side-by-side at -14 deg lean (22 watertight meshes, 2,524 triangles). Rebuild/export with scripts/build-game-cartridges.py."
+    },
+    {
+      "file": "furniture/cartridge-dock.glb",
+      "source": "PocketWorld original procedural Blender retro cream & walnut console cartridge expansion dock, scripts/build-game-cartridges.py -> assets/models/furniture/cartridge-dock.blend.",
+      "used": true,
+      "bytes": 302380,
+      "sha256": "0b04571339d9a48b0c513f740ea5ec019b546c32e176d3bdb15c1cda1ddfd2aa",
+      "processing": "Procedural Blender 5.2.3 LTS retro cream-ivory and walnut console cartridge reader dock with dark-lined top-loading slot throat, 14 brass socket pins, front LED bezel, rear cooling vents, and integrated pause toggle switch bay (48 watertight meshes, 3,872 triangles). Rebuild/export with scripts/build-game-cartridges.py."
+    },
+    {
       "file": "furniture/plush-bunny.glb",
       "source": "PocketWorld original procedural Blender sitting floppy-ear bunny plush doll, scripts/build-plush-dolls.py -> assets/models/furniture/plush-bunny.blend.",
       "used": true,
@@ -90,9 +130,9 @@
       "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the arm-supported scoot from the cushion edge to the resting pose; Walk and 2K data maps from repository commit 6f6df88; original 4K base color from the user-supplied Tripo GLB, also preserved in commit 2e1ff72.",
       "license": "User-supplied; no separate license declaration supplied.",
       "used": true,
-      "bytes": 10406152,
-      "sha256": "c0f0e434f5af09d87880e016489c611aab0b79a154f02e9dde9c657254319a03",
-      "processing": "The seated clip and detailed contact mesh are baked from Blender. The walk channels and existing compressed textures are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. See assets/models/resident/README.md."
+      "bytes": 10506732,
+      "sha256": "46a09d5ea671caee8ebb25d1597af6430874247cff0d787ea58a7470d38e2dcd",
+      "processing": "The seated clip and detailed contact mesh are baked from Blender. Luna-ArmContact.blend adds independent sparse skirt and underarm morph targets driven by arm pose. The original vertex mapping, walk channels and existing compressed textures are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. See assets/models/resident/README.md."
     },
     {
       "file": "resident/luna-seat-contact.bin",

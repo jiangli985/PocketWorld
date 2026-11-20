@@ -695,12 +695,13 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (librarySample && librarySample.coverProgress === undefined) resetArms(rig.current, 1);
       else applyLibraryPose(rig.current, root, p.sceneId, libraryCoverFlow(flow, librarySample), dt, authored);
     }
-    const idleEligible = !!rig.current && p.enabled && !p.focusedObject && !p.reducedMotion
+    const standingAtRest = !!rig.current && p.enabled && !p.focusedObject
       && !document.hidden && s.posture === 'standing' && wanted === 'standing' && !s.exiting
       && !walking && distance < .00001 && walkWeight.current === 0
       && !keys.current.size && !idleInput.current && !s.path.length && !s.external
       && !approach.current && !libraryActive;
-    stepIdle(idle.current, rawDelta, idleEligible, idleMotion.current.clip?.duration ?? 0, Math.random, idleMotion.current.lookClip?.duration ?? 0);
+    stepIdle(idle.current, rawDelta, standingAtRest && !p.reducedMotion, idleMotion.current.clip?.duration ?? 0,
+      Math.random, idleMotion.current.lookClip?.duration ?? 0, standingAtRest);
     idleInput.current = false;
     const im = idleMotion.current;
     if (idle.current.elapsed >= STANDING_IDLE.delay && !im.lookClip && !im.lookLoading && idle.current.elapsed >= im.lookRetryAt) {
@@ -723,7 +724,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       const playingChair = p.sceneId === 'habitat' && s.posture === 'chair';
       rig.current.applyPose(s.walkTime, ease(walkWeight.current));
       if (!playingChair && flow?.book && librarySample) libraryPlayer.current!.apply(flow.book, librarySample);
-      if (!playingChair && !libraryActive && !p.reducedMotion) im.player?.(idle.current);
+      if (!interactionPose && !libraryActive) im.player?.(idle.current, !p.reducedMotion);
       rig.current.applyChairPose?.(
         playingChair ? chairMotion.current.time : 0,
         playingChair ? ease(chairMotion.current.align) : 0,
@@ -733,11 +734,13 @@ export function OrbitalResidents(props: ResidentsProps) {
       rig.current.followMotion(rawDelta,
         !interactionPose && !libraryActive && !p.focusedObject && !p.reducedMotion && !document.hidden,
         root.rotation.y, root.position.x - frameX, root.position.z - frameZ, s.walkTime);
+      rig.current.applyArmCorrectives(!interactionPose && !libraryActive);
     }
     if (library && rig.current) library.tick(dt);
     root.userData.posture = s.exiting ? 'standing-up' : s.posture;
     root.userData.standingIdle = { elapsed: idle.current.elapsed, weight: idle.current.weight, yawnTime: idle.current.yawnTime,
-      nextYawn: idle.current.nextYawn, lookTime: idle.current.lookTime, nextLook: idle.current.nextLook };
+      nextYawn: idle.current.nextYawn, lookTime: idle.current.lookTime, nextLook: idle.current.nextLook,
+      shortTime: idle.current.shortTime, shortKind: idle.current.shortKind };
     root.userData.chairPhase = s.posture === 'chair' ? chairMotion.current.phase : 'idle';
     p.sofaTime.current = s.posture === 'sofa' ? sofa.time - SOFA_STEPS : null;
     root.userData.sofaTime = p.sofaTime.current;
