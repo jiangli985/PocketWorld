@@ -196,3 +196,32 @@ test('ordinary idle visibly moves head and hands while preserving planted feet',
     console.log('ordinary idle movement in metres', Object.fromEntries(names.map((name, i) => [name, travel[i]])));
   } finally { rig.dispose(); }
 });
+
+test('云朵连帽衫的两个待机动作均可绑定，并驱动两侧手腕', async () => {
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-cloudhoodie.glb', import.meta.url));
+  const fitted = [clip, lookClip].map(original => {
+    const motion = gltf.animations.find(animation => animation.name === original.name);
+    assert.ok(motion, original.name);
+    assert.ok(Math.abs(motion.duration - original.duration) < 1e-5);
+    for (const side of ['Left', 'Right']) {
+      assert.ok(motion.tracks.some(track => track.name === 'mixamorig' + side + 'Hand.quaternion'));
+    }
+    return motion;
+  });
+  const player = createIdlePlayer(gltf.scene, ...fitted);
+  const state = createIdleState(random);
+  for (const [index, gesture] of ['yawn', 'look'].entries()) {
+    state[gesture + 'Time'] = fitted[index].duration / 2;
+    state[gesture + 'Weight'] = 1;
+    player(state);
+    for (const side of ['Left', 'Right']) {
+      const name = 'mixamorig' + side + 'Hand';
+      const sample = fitted[index].tracks.find(track => track.name === name + '.quaternion')
+        .createInterpolant().evaluate(state[gesture + 'Time']);
+      const expected = new THREE.Quaternion().fromArray(sample).normalize();
+      assert.ok(gltf.scene.getObjectByName(name).quaternion.angleTo(expected) < .001);
+    }
+    state[gesture + 'Time'] = -1;
+    state[gesture + 'Weight'] = 0;
+  }
+});

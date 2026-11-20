@@ -823,16 +823,19 @@ export function OrbitalResidents(props: ResidentsProps) {
       && !walking && distance < .00001 && walkWeight.current === 0
       && !keys.current.size && !idleInput.current && !s.path.length && !s.external
       && !approach.current && !drawerTask.current && !libraryActive;
-    stepIdle(idle.current, rawDelta, idleEligible, idleMotion.current.clip?.duration ?? 0, Math.random, idleMotion.current.lookClip?.duration ?? 0);
-    idleInput.current = false;
     const im = idleMotion.current;
-    if (idle.current.elapsed >= STANDING_IDLE.delay && !im.lookClip && !im.lookLoading && idle.current.elapsed >= im.lookRetryAt) {
+    const fittedIdle = rig.current?.fitted?.idle;
+    const yawnClip = fittedIdle?.yawn ?? im.clip;
+    const lookClip = fittedIdle?.look ?? im.lookClip;
+    stepIdle(idle.current, rawDelta, idleEligible, yawnClip?.duration ?? 0, Math.random, lookClip?.duration ?? 0);
+    idleInput.current = false;
+    if (idle.current.elapsed >= STANDING_IDLE.delay && !lookClip && !im.lookLoading && idle.current.elapsed >= im.lookRetryAt) {
       im.lookLoading = true;
       void loadLookingAround().then(clip => { if (mounted.current) { im.lookClip = clip; im.rig = null; } })
         .catch(() => { im.lookRetryAt = idle.current.elapsed + 30; })
         .finally(() => { im.lookLoading = false; });
     }
-    if (idle.current.elapsed >= STANDING_IDLE.delay && !im.clip && !im.loading && idle.current.elapsed >= im.retryAt) {
+    if (idle.current.elapsed >= STANDING_IDLE.delay && !yawnClip && !im.loading && idle.current.elapsed >= im.retryAt) {
       im.loading = true;
       void loadYawn().then(clip => { if (mounted.current) { im.clip = clip; im.rig = null; } })
         .catch(() => { im.retryAt = idle.current.elapsed + 30; })
@@ -840,7 +843,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
     if (rig.current && im.rig !== rig.current) {
       im.rig = rig.current;
-      im.player = createIdlePlayer(rig.current.mesh, im.clip ?? undefined, im.lookClip ?? undefined);
+      im.player = createIdlePlayer(rig.current.mesh, yawnClip ?? undefined, lookClip ?? undefined);
     }
     if (rig.current) {
       const playingBed = s.posture === 'bed' && bed.player;

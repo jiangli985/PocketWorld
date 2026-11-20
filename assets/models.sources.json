@@ -90,18 +90,18 @@
       "source": "User-supplied Tripo model 1115d436-5d3e-444c-be63-a6141e1f346c.glb. Motion sources are shared with the existing Luna walk, chair, low-sofa, bed and library assets.",
       "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
       "used": true,
-      "bytes": 8949416,
-      "sha256": "e97016e467db28dbb440b523ce37924e6716575c8b777581dbc310516aff5cde",
-      "processing": "Fitted Luna skeleton, lined sleeve openings, reworked flat sock feet, retouched facial albedo and rebaked grounded walk. Includes outfit-specific chair IDs, support vertices and book marker tracks."
+      "bytes": 9320268,
+      "sha256": "1c9659460ff058b93f07efd13a5f77f02984e0665513f3f64ee19bc8827e9ede",
+      "processing": "Fitted Luna skeleton, rounded jaw with head-led skinning, tailored sleeves, wrist weights and fitted arm motion including idle gestures. Reworked flat sock feet, retouched facial albedo and grounded walk. Includes chair contact IDs, support vertices and book markers."
     },
     {
       "file": "resident/luna-cloudhoodie-seat.bin",
       "source": "Cloud hoodie mesh, its fitted Luna chair action, and the PocketWorld fixed desk chair.",
       "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
       "used": true,
-      "bytes": 542156,
-      "sha256": "1314ded22883575b36585839c9c611c54d1a1886661348ad854ff60daec6d38f",
-      "processing": "98 frames of pre-skin corrections to the seat cushion and armrest tops. 922 contact IDs on the hoodie mesh."
+      "bytes": 437492,
+      "sha256": "b69110852a09e6555e44d4616e380a0c9eb9de0173363c8a4026dae2c92b8578",
+      "processing": "98 frames of pre-skin corrections to the seat cushion and armrest tops. 744 contact IDs on the hoodie mesh."
     },
     {
       "file": "resident/luna-snowflower.glb",
