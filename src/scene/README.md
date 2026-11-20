@@ -44,6 +44,12 @@ blender --background assets/models/furniture/floor-sofa.blend --python scripts/e
 blender --background --factory-startup --python scripts/build-trash-can.py
 ```
 
+舱内三只坐姿毛绒娃娃的制作源（[奶油垂耳兔](../../assets/models/furniture/plush-bunny.blend)、[焦糖泰迪熊](../../assets/models/furniture/plush-bear.blend)、[雾蓝胖企鹅](../../assets/models/furniture/plush-penguin.blend)）由 `scripts/build-plush-dolls.py` 程序化生成并打包贴图，在仓库根目录运行以下命令可一次重建全部 `.blend` 并导出对应的 `assets/public/models/furniture/plush-*.glb` 运行时模型（也支持 `-- --only bunny|bear|penguin` 单独生成）。
+
+```sh
+blender --background --factory-startup --python scripts/build-plush-dolls.py
+```
+
 包裹生活舱的[轨道飞船外壳制作源](../../assets/models/cabin/spacecraft-hull.blend)由 `scripts/build-spacecraft-hull.py` 程序化生成并打包贴图，在仓库根目录运行以下命令可重建 `.blend` 并导出[运行时模型](../../assets/public/models/cabin/spacecraft-hull.glb)。
 
 ```sh

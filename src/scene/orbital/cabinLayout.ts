@@ -29,6 +29,56 @@ export const TRASH_CAN = {
   footprint: { left: -0.24, right: 0.24, back: -0.22, front: 0.22 },
 };
 
+export interface PlushDollPlacement {
+  id: 'plush-bunny' | 'plush-bear' | 'plush-penguin';
+  name: string;
+  path: string;
+  position: [number, number, number];
+  yaw: number;
+  height: number;
+  // Circular solid collision radius on the floor plane (m), matching the plushie's seated girth.
+  radius: number;
+  // X/Z offsets measured from each GLB after ReusableAsset centering, scaling and yaw rotation.
+  footprint: { left: number; right: number; back: number; front: number };
+}
+
+// Floor perimeter available to loose dynamic plush dolls (inset from aft/starboard walls and open edges).
+export const PLUSH_FLOOR_BOUNDS = { left: -6.42, right: 4.02, back: -3.18, front: 3.02 };
+
+// Three sitting short-pile plush dolls placed around the habitat with solid, kickable floor physics.
+export const PLUSH_DOLLS: readonly PlushDollPlacement[] = [
+  {
+    id: 'plush-bunny',
+    name: 'Furniture_PlushBunny',
+    path: 'furniture/plush-bunny.glb',
+    position: [-4.02, 0, 2.28],
+    yaw: 0.26,
+    height: 0.58,
+    radius: 0.20,
+    footprint: { left: -0.21, right: 0.23, back: -0.19, front: 0.22 },
+  },
+  {
+    id: 'plush-bear',
+    name: 'Furniture_PlushBear',
+    path: 'furniture/plush-bear.glb',
+    position: [-5.58, 0, -1.48],
+    yaw: 0.40,
+    height: 0.55,
+    radius: 0.23,
+    footprint: { left: -0.25, right: 0.29, back: -0.21, front: 0.26 },
+  },
+  {
+    id: 'plush-penguin',
+    name: 'Furniture_PlushPenguin',
+    path: 'furniture/plush-penguin.glb',
+    position: [1.76, 0, 2.36],
+    yaw: -0.52,
+    height: 0.47,
+    radius: 0.22,
+    footprint: { left: -0.27, right: 0.25, back: -0.24, front: 0.26 },
+  },
+];
+
 // The table top is a fixed part of the authored cabin mesh.
 export const NIGHTSTAND_X = -2.52;
 export const NIGHTSTAND_Z = -2.825;

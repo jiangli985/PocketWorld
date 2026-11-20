@@ -1,4 +1,4 @@
-import { BED_ENTRY, BED_POSITION, COMPUTER_STAND, FLOOR_SOFA, TRASH_CAN, CABIN_LEFT, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
+import { BED_ENTRY, BED_POSITION, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, PLUSH_FLOOR_BOUNDS, TRASH_CAN, CABIN_LEFT, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -21,6 +21,8 @@ import { CHAIR_SIT_SECONDS, createChairMotion, stepChairMotion } from './chairMo
 import { BED_YAW, BED_DURATION, advanceBedTime, createBedPlayer, loadBedClip } from './bedMotion';
 import { canReachDrawer, drawerObstacle, DRAWER_CLEAR_Z, DRAWER_TRAVEL, type DrawerInteraction } from './drawerInteraction';
 import { SlipperPair } from './Slippers';
+import { PlushDolls } from './PlushDolls';
+import { createPlushBodies, isValidPlushBody, plushObstacleBoxes, resolveMoverAgainstPlush, stepPlushDolls, type PlushBody } from './plushMotion';
 
 type Point = [number, number];
 type Box = [number, number, number, number];
@@ -77,10 +79,14 @@ function layout(observatory: boolean) {
   const grow = (by: number) => furniture.map(([a, b, c, d]) => [a - by, b + by, c - by, d + by] as Box);
   const chairRadius = observatory ? 0.55 : 0.5;
   const boxes = grow(RADIUS), chairBoxes = grow(chairRadius);
+  // Keep kicked plush dolls out of static furniture and Tuanzi's cat mat too.
+  const plushBoxes: Box[] = observatory ? furniture : [...furniture, [2.58, 3.46, 1.98, 2.78]];
   return { seat: observatory ? 0.755 : 0.72, chairRadius,
     boxes, chairBoxes, baseBoxes: boxes, baseChairBoxes: chairBoxes,
     openBoxes: [...boxes, drawerObstacle(DRAWER_TRAVEL, RADIUS + 0.08)],
-    openChairBoxes: [...chairBoxes, drawerObstacle(DRAWER_TRAVEL, chairRadius)] };
+    openChairBoxes: [...chairBoxes, drawerObstacle(DRAWER_TRAVEL, chairRadius)],
+    plushBoxes,
+    openPlushBoxes: [...plushBoxes, drawerObstacle(DRAWER_TRAVEL, 0)] };
 }
 type Room = ReturnType<typeof layout>;
 const seatYaw = chairFacing;
@@ -239,6 +245,12 @@ export function OrbitalResidents(props: ResidentsProps) {
   const resident = useRef<THREE.Group>(null);
   const hips = useRef<THREE.Group>(null);
   const rig = useRef<ResidentRig | null>(null);
+  const plushBodies = useRef<PlushBody[]>(props.sceneId === 'habitat' ? createPlushBodies(PLUSH_DOLLS) : []);
+  const slipperRoom = useRef<{ boxes: Box[] }>({ boxes: room.boxes });
+  useEffect(() => {
+    plushBodies.current = props.sceneId === 'habitat' ? createPlushBodies(PLUSH_DOLLS) : [];
+    slipperRoom.current.boxes = room.boxes;
+  }, [props.sceneId, room]);
   const idle = useRef(createIdleState());
   const idleMotion = useRef({ rig: null as ResidentRig | null, player: null as ReturnType<typeof createIdlePlayer> | null,
     clip: null as THREE.AnimationClip | null, loading: false, retryAt: 0,
@@ -589,6 +601,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (s.posture !== 'standing') beginExit();
       else if (wanted !== 'standing') s.path = route([root.position.x, root.position.z], entry, obstacles(room, pose));
     }
+    const chairFrameX = pose.x, chairFrameZ = pose.z;
     const scooting = p.sceneId === 'habitat' && s.posture === 'chair' && !s.exiting && chairMotion.current.hasSeated;
     if (!scooting) {
       s.kick = 0; s.planted = false; s.idle = Infinity;
@@ -841,6 +854,35 @@ export function OrbitalResidents(props: ResidentsProps) {
         }
       }
     }
+    if (p.sceneId === 'habitat') {
+      if (plushBodies.current.length !== PLUSH_DOLLS.length || !plushBodies.current.every(isValidPlushBody)) {
+        plushBodies.current = createPlushBodies(PLUSH_DOLLS);
+      }
+      const lunaVx = dt > 0 ? (root.position.x - frameX) / dt : 0;
+      const lunaVz = dt > 0 ? (root.position.z - frameZ) / dt : 0;
+      const chairVx = dt > 0 ? (pose.x - chairFrameX) / dt : pose.vx;
+      const chairVz = dt > 0 ? (pose.z - chairFrameZ) / dt : pose.vz;
+      stepPlushDolls(
+        plushBodies.current,
+        dt,
+        [
+          { x: root.position.x, z: root.position.z, vx: lunaVx, vz: lunaVz, radius: RADIUS, active: s.posture === 'standing' || s.exiting },
+          { x: pose.x, z: pose.z, vx: chairVx, vz: chairVz, radius: room.chairRadius, active: true, strength: 0.9 },
+        ],
+        blocking ? room.openPlushBoxes : room.plushBoxes,
+        PLUSH_FLOOR_BOUNDS,
+        p.reducedMotion,
+      );
+      if (s.posture === 'standing' && !s.exiting && !libraryActive) {
+        resolveMoverAgainstPlush(root.position, RADIUS, plushBodies.current, (x, z) => free([x, z], room.boxes));
+      }
+      if (resolveMoverAgainstPlush(pose, room.chairRadius, plushBodies.current, (x, z) => chairOpen(room, x, z, null))) {
+        pose.vx = 0; pose.vz = 0;
+      }
+      slipperRoom.current.boxes = [...room.boxes, ...plushObstacleBoxes(plushBodies.current)];
+    } else {
+      slipperRoom.current.boxes = room.boxes;
+    }
     if (p.sceneId !== 'habitat') pose.drop = s.perch;
     else if (s.posture !== 'chair') pose.drop = 1;
     const distance = Math.hypot(root.position.x - frameX, root.position.z - frameZ);
@@ -938,6 +980,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     root.userData.chairPhase = s.posture === 'chair' ? chairMotion.current.phase : 'idle';
     root.userData.chairHeight = chairMotion.current.height;
     root.userData.bedTime = s.posture === 'bed' ? bed.time : null;
+    root.userData.plushBodies = plushBodies.current;
     const nearbyList = nearbyActions();
     const nearby = nearbyList[0] ?? null;
     const hint = canInteract() && (s.posture !== 'standing' || wanted !== 'standing')
@@ -956,7 +999,8 @@ export function OrbitalResidents(props: ResidentsProps) {
         <ResidentModel rig={rig} onFailure={props.library?.fail} position={[0, -HIP, 0]} />
       </group>
     </group>
-    {props.sceneId === 'habitat' && <Suspense fallback={null}><SlipperPair resident={resident} room={room} reducedMotion={props.reducedMotion} /></Suspense>}
+    {props.sceneId === 'habitat' && <Suspense fallback={null}><SlipperPair resident={resident} room={slipperRoom.current} reducedMotion={props.reducedMotion} /></Suspense>}
+    {props.sceneId === 'habitat' && <PlushDolls bodies={plushBodies} />}
     <ObjectHandle id="pet" action="pet" hint="摸摸团子" world={props} position={[CAT[0], .015, CAT[1]]} rotation={[0, -.75, 0]}
       onClick={event => event.stopPropagation()}>
       <Cat resident={resident} value={props.objects.pet?.value ?? 0} reducedMotion={props.reducedMotion} />
