@@ -41,7 +41,6 @@ export function createChairAnimation(asset: THREE.Object3D, clip: THREE.Animatio
   });
   const vector = new THREE.Vector3(), rotation = new THREE.Quaternion();
   const hips = bones.get('mixamorigHips')!;
-  const legChains = ['Right', 'Left'].map(side => ['UpLeg', 'Leg', 'Foot'].map(s => bones.get('mixamorig' + side + s)!));
   let lastTime = -1, lastWeight = -1;
   function deform(time: number, weight: number) {
     if (time === lastTime && weight === lastWeight) return;
@@ -59,7 +58,7 @@ export function createChairAnimation(asset: THREE.Object3D, clip: THREE.Animatio
     }
   }
   /** Call after the normal pose. The chair owns every deform bone while its weight is one. */
-  function apply(time: number, weight: number, soleAhead = 0, soleLift = 0) {
+  function apply(time: number, weight: number) {
     time = THREE.MathUtils.clamp(time, 0, CHAIR_SIT_SECONDS);
     deform(time, weight);
     if (weight <= 0) return;
@@ -70,32 +69,6 @@ export function createChairAnimation(asset: THREE.Object3D, clip: THREE.Animatio
     }
     // Root travel is already in the clip. Rebase once so the controller can align the entry stance.
     hips.position.z -= CHAIR_CLIP_ORIGIN / RESIDENT_SCALE * weight;
-    if (soleAhead || soleLift) {
-      asset.updateWorldMatrix(true, true);
-      for (const chain of legChains) offsetFoot(chain, soleAhead, soleLift, asset);
-    }
   }
   return { apply, dispose: () => surfaces.forEach(s => s.geometry.dispose()) };
-}
-
-/** Shortest-arc corrections preserve the accepted knee roll and measured segment lengths. */
-function offsetFoot([thigh, shin, foot]: THREE.Bone[], ahead: number, lift: number, asset: THREE.Object3D) {
-  const position = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3());
-  const orientation = (o: THREE.Object3D) => o.getWorldQuaternion(new THREE.Quaternion());
-  const h = position(thigh), k = position(shin), a = position(foot), sole = orientation(foot);
-  const direction = new THREE.Vector3(0, 0, 1).transformDirection(asset.matrixWorld);
-  const target = a.clone().addScaledVector(direction, ahead); target.y += lift;
-  const l1 = h.distanceTo(k), l2 = k.distanceTo(a), axis = target.clone().sub(h);
-  const distance = THREE.MathUtils.clamp(axis.length(), Math.abs(l1 - l2) + 1e-5, l1 + l2 - 1e-5); axis.normalize();
-  const bend = k.clone().sub(h); bend.addScaledVector(axis, -bend.dot(axis));
-  if (bend.lengthSq() < 1e-10) bend.copy(direction).addScaledVector(axis, -direction.dot(axis));
-  bend.normalize();
-  const along = (l1*l1 - l2*l2 + distance*distance) / (2*distance);
-  const knee = h.clone().addScaledVector(axis, along).addScaledVector(bend, Math.sqrt(Math.max(0, l1*l1-along*along)));
-  const set = (joint: THREE.Bone, q: THREE.Quaternion) => { joint.quaternion.copy(orientation(joint.parent!).invert()).multiply(q); joint.updateWorldMatrix(false, true); };
-  const aim = (joint: THREE.Bone, before: THREE.Vector3, after: THREE.Vector3) => set(joint, new THREE.Quaternion().setFromUnitVectors(before.normalize(), after.normalize()).multiply(orientation(joint)));
-  aim(thigh, k.clone().sub(h), knee.clone().sub(h));
-  const newKnee = position(shin);
-  aim(shin, position(foot).sub(newKnee), h.addScaledVector(axis, distance).sub(newKnee));
-  set(foot, sole);
 }
