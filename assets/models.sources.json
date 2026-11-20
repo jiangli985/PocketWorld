@@ -119,9 +119,9 @@
       "license": "GPL-3.0-or-later",
       "licensePage": "https://www.gnu.org/licenses/gpl-3.0.html",
       "used": true,
-      "bytes": 195512,
-      "sha256": "152003193c826c855a828e8b609873213ee712bb3ac7ab8fd57c28ed275b22bf",
-      "processing": "Adapted from David-Alfter's Animal Animator 0.1.0 presets. Retargeted paw contact and belly-rest breathing for Tuanzi. Editable animation source and license: assets/models/cat/motion/."
+      "bytes": 230336,
+      "sha256": "52d2c349b6c43933003db97145b4b6954595be9036ee17a7a010f5355490d24e",
+      "processing": "Adapted from David-Alfter's Animal Animator 0.1.0 presets. Retargeted four-beat walk, paw contact and belly-rest breathing for Tuanzi. Editable animation source and license: assets/models/cat/motion/."
     },
     {
       "file": "resident/luna-bed-v3.glb",

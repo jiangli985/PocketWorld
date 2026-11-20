@@ -1,5 +1,5 @@
 import { SOFA_ENTRY, SOFA_STEPS, loadSofaClip, sofaPlayer } from './sofaMotion';
-import { BED_ENTRY, BED_POSITION, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, PLUSH_FLOOR_BOUNDS, TRASH_CAN, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
+import { BED_ENTRY, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, PLUSH_FLOOR_BOUNDS, TRASH_CAN, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -44,11 +44,11 @@ const RADIUS = RESIDENT_RADIUS;
 const WALK_LEFT = WALK_BOUNDS.left;
 const CHAIR_CONTACT = 0.52;
 const CHAIR_REACH = 0.95;
+const PET_REACH = 0.70;
 type NearbyAction = { id: string; kind: WorldActionKind; hint: string; point: Point; reach: number };
 // E is the nearest prop; Q/R reach the next-closest ones when furniture crowds the same spot.
 const INTERACT_KEYS = ['KeyE', 'KeyQ', 'KeyR'];
 const INTERACT_LABELS = ['E', 'Q', 'R'];
-const CAT: Point = [3.02, 2.38];
 const clamp = THREE.MathUtils.clamp;
 const ease = (t: number) => t * t * (3 - 2 * t);
 const angle = (from: number, to: number, t: number) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * t;
@@ -165,10 +165,10 @@ function route(start: Point, end: Point, boxes: Box[], circle?: Circle): Point[]
   }
   return [];
 }
-function approachRoute(start: Point, point: Point, boxes: Box[], fixed?: Point): Point[] | null {
-  if (!fixed && Math.hypot(start[0] - point[0], start[1] - point[1]) <= 1.15) return [];
+function approachRoute(start: Point, point: Point, boxes: Box[], fixed?: Point, reach = 1.15): Point[] | null {
+  if (!fixed && Math.hypot(start[0] - point[0], start[1] - point[1]) <= reach) return [];
   const targets: Point[] = fixed ? [fixed] : [];
-  if (!fixed) for (const radius of [0.36, 0.58, 0.85]) for (let i = 0; i < 24; i++) {
+  if (!fixed) for (const radius of [0.36, 0.58, 0.85].filter(radius => radius < reach)) for (let i = 0; i < 24; i++) {
     const yaw = i * Math.PI / 12;
     targets.push([point[0] + Math.sin(yaw) * radius, point[1] + Math.cos(yaw) * radius]);
   }
@@ -215,6 +215,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   const drawerTask = useRef<{ action: WorldAction; target: Point; elapsed: number } | null>(null);
   const drawerExtension = useRef(0);
   const approach = useRef<Approach | null>(null);
+  const catLocation = useRef<Point>([...CAT_HOME]);
   const walkWeight = useRef(0);
   const libraryNav = useRef('');
   const libraryAsset = props.library?.motion;
@@ -287,7 +288,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       { id: 'cabinet', kind: 'open', hint: '打开柜门', point: [cabinetX, cabinetZ], reach: 0.55 },
       { id: 'lamp', kind: 'toggle', hint: '开关灯', point: p.sceneId === 'habitat' ? [NIGHTSTAND_X - .11, NIGHTSTAND_Z + .77] : [-1.42, -2.55], reach: 0.46 },
       { id: 'plant', kind: 'water', hint: '给盆栽浇水', point: p.sceneId === 'habitat' ? [NIGHTSTAND_X + .32, NIGHTSTAND_Z + .78] : [2.75, 1.85], reach: 0.55 },
-      { id: 'pet', kind: 'pet', hint: '摸摸团子', point: CAT, reach: 0.70 },
+      { id: 'pet', kind: 'pet', hint: '摸摸团子', point: catLocation.current, reach: PET_REACH },
       { id: 'chair', kind: 'sit', hint: '坐下', point: [pose.x, pose.z], reach: CHAIR_REACH },
     ];
     if (p.sceneId === 'habitat') {
@@ -357,7 +358,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
     const fixed = task.action.objectId === 'sofa' ? SOFA_ENTRY : task.action.objectId === 'bed' ? BED_ENTRY as Point
       : task.action.objectId === 'desk-drawer' ? [0.35, p.objects['desk-drawer']?.open ? -0.5 : -1.2] as Point : undefined;
-    const path = approachRoute(start, task.point, obstacles(room, pose), fixed);
+    const path = approachRoute(start, task.point, obstacles(room, pose), fixed, task.action.objectId === 'pet' ? PET_REACH : undefined);
     if (path) state.current.path = path;
     else { cancelApproach(); p.onHover(task.action.objectId, '前方空间不足，请先移开挡路的物品'); }
   };
@@ -367,10 +368,10 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (!root || drawerTask.current || action.sceneId !== p.sceneId) return false;
       if (action.kind === 'stand' || action.kind === 'wake') { cancelApproach(); perform(); return true; }
       const pose = CHAIR_POSES[p.sceneId];
-      const target: Point = action.objectId === 'chair' ? [pose.x, pose.z] : action.objectId === 'pet' ? CAT : [point[0], point[2]];
+      const target: Point = action.objectId === 'chair' ? [pose.x, pose.z] : action.objectId === 'pet' ? [...catLocation.current] : [point[0], point[2]];
       if (s.posture === 'standing' && !s.exiting
         && action.objectId !== 'chair' && action.objectId !== 'bed' && action.objectId !== 'sofa'
-        && Math.hypot(root.position.x - target[0], root.position.z - target[1]) <= 1.15) {
+        && Math.hypot(root.position.x - target[0], root.position.z - target[1]) <= (action.objectId === 'pet' ? PET_REACH : 1.15)) {
         cancelApproach(); perform(); return true;
       }
       if (!p.drawerEnabled && p.focusedObject !== 'bed') { p.onHover(action.objectId, '先返回房间，再走近这个物品'); return false; }
@@ -701,7 +702,7 @@ export function OrbitalResidents(props: ResidentsProps) {
         const fixed = request?.action.objectId === 'chair' || request?.action.objectId === 'bed' || request?.action.objectId === 'sofa';
         const target = request?.action.objectId === 'sofa' ? SOFA_ENTRY : request?.action.objectId === 'chair' ? seatEntry : request?.action.objectId === 'bed' ? BED_ENTRY : request?.point;
         const distance = target ? Math.hypot(root.position.x - target[0], root.position.z - target[1]) : 0;
-        const radius = fixed ? 0.06 : 1.15;
+        const radius = fixed ? 0.06 : request?.action.objectId === 'pet' ? PET_REACH : 1.15;
         cancelApproach();
         if (request && distance <= radius) request.perform();
       }
@@ -870,6 +871,12 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
   }, -1);
 
+  const canCatWalk = (x: number, z: number) => {
+    const luna = resident.current?.position;
+    return approach.current?.action.objectId !== 'pet'
+      && (!luna || Math.hypot(x - luna.x, z - luna.z) > RADIUS + .28)
+      && plushBodies.current.every(plush => Math.hypot(x - plush.x, z - plush.z) > plush.radius + .28);
+  };
   return <group name={`OrbitalResidents_${props.sceneId}`}>
     <group ref={resident} name="OrbitalResident" position={spawn} rotation-y={-.78}>
       <group ref={hips} position={[0, HIP, 0]}>
@@ -878,9 +885,10 @@ export function OrbitalResidents(props: ResidentsProps) {
     </group>
     {props.sceneId === 'habitat' && <Suspense fallback={null}><SlipperPair resident={resident} room={slipperRoom.current} reducedMotion={props.reducedMotion} /></Suspense>}
     {props.sceneId === 'habitat' && <PlushDolls bodies={plushBodies} />}
-    <ObjectHandle id="pet" action="pet" hint="摸摸团子" world={props} position={[CAT[0], .015, CAT[1]]} rotation={[0, -.75, 0]}
+    <ObjectHandle id="pet" action="pet" hint="摸摸团子" world={props} position={[CAT_HOME[0], CAT_MAT_Y, CAT_HOME[1]]}
       onClick={event => event.stopPropagation()}>
-      <Cat resident={resident} value={props.objects.pet?.value ?? 0} reducedMotion={props.reducedMotion} />
+      <Cat resident={resident} value={props.objects.pet?.value ?? 0} reducedMotion={props.reducedMotion}
+        location={catLocation} canWalk={props.sceneId === 'habitat' ? canCatWalk : undefined} />
     </ObjectHandle>
   </group>;
 }

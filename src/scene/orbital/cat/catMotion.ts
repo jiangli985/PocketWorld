@@ -36,10 +36,13 @@ export function createCatMotion(root: Object3D, clips: AnimationClip[]) {
   const stretch = find('stretch'), lieDown = find('lieDown'), sleep = find('sleep'), getUp = find('getUp');
   if (!stretch || !lieDown || !sleep || !getUp) return null;
   const actions = { stretch, lieDown, sleep, getUp };
+  const walkClip = clips.find(clip => clip.name === 'Tuanzi_Walk');
+  const walk = walkClip ? mixer.clipAction(walkClip) : null;
   const duration = (name: ActionName) => actions[name].getClip().duration;
   let phase: Phase = 'standing';
   let time = 0;
   let sleepAtWake = 0;
+  let naturalWake = false;
   let next: 'stretch' | 'lieDown' = 'stretch';
   let standingFor = BEFORE_STRETCH;
   let blendIn = false;
@@ -61,6 +64,16 @@ export function createCatMotion(root: Object3D, clips: AnimationClip[]) {
   }
 
   return {
+    walk: walk ? {
+      sample(cycles: number, weight: number) {
+        walk.play();
+        walk.paused = true;
+        walk.time = (cycles % 1) * walk.getClip().duration;
+        walk.setEffectiveWeight(weight);
+        mixer.update(0);
+      },
+      stop() { walk.stop(); },
+    } : null,
     update(dt: number, pet: boolean, petActive: boolean, reducedMotion: boolean, onStart: () => void) {
       if (reducedMotion) {
         if (phase !== 'standing') stand(false);
@@ -85,6 +98,7 @@ export function createCatMotion(root: Object3D, clips: AnimationClip[]) {
       } else if (phase === 'lieDown' && pet) {
         phase = 'riseEarly';
       } else if (phase === 'sleep' && (pet || time >= SLEEP_TIME)) {
+        naturalWake = !pet;
         sleepAtWake = time % duration('sleep');
         phase = 'getUp';
         time = 0;
@@ -120,8 +134,9 @@ export function createCatMotion(root: Object3D, clips: AnimationClip[]) {
               sample('sleep', 0);
             } else {
               next = phase === 'stretch' ? 'lieDown' : 'stretch';
+              const walkReady = phase === 'getUp' && naturalWake && !petActive;
               stand(true);
-              return { idle: 0, standing: true };
+              return { idle: 0, standing: true, walkReady };
             }
           }
         }
