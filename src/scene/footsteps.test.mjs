@@ -79,7 +79,6 @@ function mount(kind, overrides = {}, idleLibrary) {
     './residentRig': residentRig,
     './cabinLayout': cabinLayout,
     './sofaMotion': load('./orbital/sofaMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
-    './bedMotion': load('./orbital/bedMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './journalLayout': load('./orbital/journalLayout.ts', {}),
     './schedule/bookLayout': load('./orbital/schedule/bookLayout.ts', {}),
     './chairPose': load('./orbital/chairPose.ts', {}),
@@ -590,24 +589,24 @@ test('the fixed desk chair has room to board from the front', () => {
   } finally { view.dispose(); }
 });
 
-test('clicking the far corner of the bed still uses its safe entry', () => {
-  const view = mount('orbital');
-  let performed = 0;
-  try {
-    view.props.interaction.current([cabinLayout.BED_POSITION[0] - .8, .8, cabinLayout.BED_POSITION[2] - 1.25], { sceneId: 'habitat', objectId: 'bed', kind: 'sleep' }, () => performed++);
-    for (let i = 0; i < 900 && !performed; i++) view.frame(1 / 60);
-    assert.equal(performed, 1);
-    assert.ok(Math.hypot(view.root.position.x - cabinLayout.BED_ENTRY[0], view.root.position.z - cabinLayout.BED_ENTRY[1]) < 0.06);
-  } finally { view.dispose(); }
-});
-
-test('E selects the bed along its open side and distinguishes the lamp and plant at the table', () => {
+test('the static bed blocks walking without offering keyboard interaction, and nightstand controls are reachable', () => {
   const actions = [];
   const view = mount('orbital', { onAction: action => actions.push(action.objectId) });
   try {
     const [x, , z] = cabinLayout.BED_POSITION;
+    view.root.position.set(x + 1.12, 0, z + .90);
+    for (const key of ['KeyE', 'KeyQ', 'KeyR']) view.key(key);
+    for (let i = 0; i < 240; i++) view.frame(1 / 60);
+    assert.deepEqual(actions, []);
+    assert.equal(view.root.userData.posture, 'standing');
+    assert.equal(view.root.position.x, x + 1.12);
+    assert.equal(view.root.position.z, z + .90);
+    view.key('KeyA');
+    for (let i = 0; i < 60; i++) view.frame(1 / 60);
+    view.key('KeyA', 'keyup');
+    assert.ok(view.root.position.x >= x + .86 + cabinLayout.RESIDENT_RADIUS, 'the bed remains a solid obstacle');
+
     for (const [px, pz, id] of [
-      [x + 1.12, z + .90, 'bed'],
       [cabinLayout.NIGHTSTAND_X - .11, cabinLayout.NIGHTSTAND_Z + .77, 'lamp'],
       [cabinLayout.NIGHTSTAND_X + .32, cabinLayout.NIGHTSTAND_Z + .78, 'plant'],
       [cabinLayout.NIGHTSTAND_X + .22, cabinLayout.NIGHTSTAND_Z + .64, 'clock'],
