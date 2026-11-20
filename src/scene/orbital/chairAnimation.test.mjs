@@ -15,7 +15,7 @@ function local(name){
 }
 const {createResidentRig}=local('./residentRig');
 const {createChairAnimation,readSeatContactCache}=local('./chairAnimation');
-const {CHAIR_FPS,CHAIR_PERCH_SECONDS,CHAIR_SIT_FRAMES,CHAIR_SIT_SECONDS}=local('./chairMotion');
+const {CHAIR_FPS,CHAIR_SIT_FRAMES,CHAIR_SIT_SECONDS}=local('./chairMotion');
 const data=readFileSync(new URL('../../../assets/public/models/resident/luna-seat-contact.bin',import.meta.url));
 const buffer=data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength),cache=readSeatContactCache(buffer);
 const {gltf}=await load(new URL('../../../assets/public/models/resident/luna-walk-room.glb',import.meta.url));
@@ -23,7 +23,7 @@ function instance(){
  const asset=clone(gltf.scene),rig=createResidentRig(asset,gltf.animations.find(c=>c.name==='Walk_Grounded_Loop'));
  const chair=createChairAnimation(asset,gltf.animations.find(c=>c.name==='ChairSit_Contact'),cache);
  const root=new THREE.Group();root.add(rig.mesh);root.position.z=.54;
- const sample=(t,w=1,ahead=0,lift=0)=>{rig.applyPose(0,0);chair.apply(t,w,ahead,lift);root.updateMatrixWorld(true);asset.traverse(o=>{if(o.isSkinnedMesh)o.skeleton.update();});};
+ const sample=(t,w=1)=>{rig.applyPose(0,0);chair.apply(t,w);root.updateMatrixWorld(true);asset.traverse(o=>{if(o.isSkinnedMesh)o.skeleton.update();});};
  return {asset,rig,chair,root,sample,dispose:()=>{chair.dispose();rig.dispose();}};
 }
 test('the shipped contact cache validates its header, dimensions and vertex mapping',()=>{
@@ -48,12 +48,11 @@ test('seat deformation is instance-local and releases the original geometry and 
  assert(a.asset.getObjectByName('mixamorigHips').position.length()<1);
  a.dispose();b.dispose();
 });
-test('authored sitting and grounded scoot corrections preserve limb lengths and finite skinning',()=>{
+test('authored sitting preserves limb lengths and finite skinning',()=>{
  const a=instance(),position=o=>o.getWorldPosition(new THREE.Vector3());
  const lengths=[];
- for(const time of [0,.5,1,1.5,CHAIR_PERCH_SECONDS,2.45,CHAIR_SIT_SECONDS])for(const ahead of [0,.015,.035]) {
-  const grounded=time===CHAIR_PERCH_SECONDS;
-  a.sample(time,1,grounded?ahead:0,grounded?.023:0);
+ for(const time of [0,.5,1,1.5,(53 - 1) / CHAIR_FPS,2.45,CHAIR_SIT_SECONDS]) {
+  a.sample(time);
   const values=[];
   for(const side of ['Left','Right']) {
    const chain=['UpLeg','Leg','Foot'].map(n=>a.asset.getObjectByName('mixamorig'+side+n));
