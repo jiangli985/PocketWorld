@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { WALK_BOUNDS } from './cabinLayout';
-import { createSlipperPair, stepSlippers, type SlipperRect } from './slipperMotion';
+import { createSlipperPair, slipperFloorY, slipperSupportHeight, stepSlippers, type SlipperRect } from './slipperMotion';
 import { extractSlipperModel, SLIPPER_MODEL_URL } from './slipperModel';
 
 interface SlipperPairProps {
@@ -40,16 +40,22 @@ export function SlipperPair({ resident, room, reducedMotion }: SlipperPairProps)
       vz: previous && dt > 0 ? (root.position.z - previous.z) / dt : 0,
       active: posture === 'standing' || posture === 'standing-up',
     }, room.boxes, WALK_BOUNDS, reducedMotion);
+    const sides = [model.left, model.right];
     bodies.current.forEach((body, index) => {
-      groups[index]!.position.set(body.x, 0, body.z);
-      groups[index]!.rotation.y = body.yaw;
+      const group = groups[index]!;
+      const side = sides[index]!;
+      const floor = slipperFloorY(body.x, body.z, side.baseY);
+      const support = slipperSupportHeight(body.roll, body.pitch, side.halfHeight, side.halfWidth, side.halfLength);
+      group.position.set(body.x, floor + support + body.y, body.z);
+      group.rotation.order = 'YXZ';
+      group.rotation.set(body.pitch, body.yaw, body.roll);
     });
   });
 
   if (!model) return null;
   return <>
     {[model.left, model.right].map((side, index) => <group key={index} ref={index ? right : left}
-      name={index ? 'Slipper_Right' : 'Slipper_Left'} position={[side.center[0], 0, side.center[1]]}>
+      name={index ? 'Slipper_Right' : 'Slipper_Left'} position={[side.center[0], side.baseY + side.halfHeight, side.center[1]]}>
       {side.parts.map((part, partIndex) => <mesh key={partIndex} geometry={part.geometry} material={part.material} castShadow receiveShadow />)}
     </group>)}
   </>;
