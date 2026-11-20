@@ -1,5 +1,5 @@
-import { BED_POSITION, FLOOR_SOFA, LAMP_POSITION, PLANT_POSITION } from './cabinLayout';
-import React, { useRef } from 'react';
+import { BED_POSITION, LAMP_POSITION, PLANT_POSITION } from './cabinLayout';
+import React, { Suspense, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { CLOSED_OBJECT, type WorldModelProps } from '../../types/world';
@@ -10,7 +10,8 @@ import { FurnitureDesk } from './FurnitureDesk';
 import { FurnitureBookcase } from './FurnitureBooks';
 import { SuppliedAsset } from './SuppliedAsset';
 import { Bedding } from './Bedding';
-import { ReusableAsset } from './ReusableAsset';
+import { FloorSofa } from './FloorSofa';
+import { AssetBoundary, ReusableAsset } from './ReusableAsset';
 import { CHAIR_POSES, SEAT_DROP, SEAT_SWIVEL } from './chairPose';
 
 function FurnitureBed({ world }: { world: WorldModelProps }) {
@@ -107,7 +108,7 @@ function FurnitureHatch() {
   </group>;
 }
 
-export const HabitatFurniture: React.FC<WorldModelProps> = world => {
+export const HabitatFurniture: React.FC<WorldModelProps & { sofaTime: React.RefObject<number | null> }> = world => {
   const observatory = world.sceneId === 'observatory';
   return <group name={`Furniture_${world.sceneId}`}>
     <FurnitureDesk world={world} />
@@ -124,8 +125,10 @@ export const HabitatFurniture: React.FC<WorldModelProps> = world => {
     </> : <>
       <FurnitureBed world={world} />
       <FurnitureChair world={world} />
-      <ReusableAsset name="Furniture_FloorSofa" path="furniture/floor-sofa.glb"
-        width={FLOOR_SOFA.width} position={FLOOR_SOFA.position} rotation={[0, FLOOR_SOFA.yaw, 0]} />
+      <ObjectHandle id="sofa" panorama onClick={event => event.stopPropagation()} action={world.objects.sofa?.active ? 'stand' : 'sit'}
+        hint={world.objects.sofa?.active ? '起身' : '坐进懒人沙发'} world={world}>
+        <AssetBoundary><Suspense fallback={null}><FloorSofa sample={world.sofaTime} /></Suspense></AssetBoundary>
+      </ObjectHandle>
     </>}
     <FurnitureLamp world={world} />
     <FurniturePlant world={world} observatory={observatory} />
