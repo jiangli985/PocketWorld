@@ -38,7 +38,7 @@ blender --background assets/models/cabin/open-cabin.blend --python scripts/expor
 blender --background assets/models/furniture/floor-sofa.blend --python scripts/export-floor-sofa.py
 ```
 
-书桌旁的[固定椅制作源](../../assets/models/furniture/fixed-desk-chair.blend)以米为单位，座面朝 Blender 的 −Y 方向。底板、螺栓、支架和软包可分别编辑。用以下命令重建制作源和[运行时模型](../../assets/public/models/furniture/fixed-desk-chair.glb)。场景直接使用导出的尺寸与原点，以匹配 Luna 的坐姿接触点。
+书桌旁的[固定椅制作源](../../assets/models/furniture/fixed-desk-chair.blend)以米为单位，座面朝 Blender 的 −Y 方向。四条木腿、木框架、扶手和软包可分别编辑。用以下命令重建制作源和[运行时模型](../../assets/public/models/furniture/fixed-desk-chair.glb)。场景直接使用导出的尺寸与原点，以匹配 Luna 的坐姿接触点。
 
 ```sh
 blender --background --factory-startup --python scripts/build-fixed-desk-chair.py

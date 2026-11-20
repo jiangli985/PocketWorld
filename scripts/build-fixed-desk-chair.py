@@ -1,4 +1,4 @@
-"""Build the cabin's floor-mounted chair in metre units. The front faces Blender -Y."""
+"""Build the cabin's fixed four-legged chair in metre units. The front faces Blender -Y."""
 from math import cos, copysign, sin, tau
 from pathlib import Path
 
@@ -11,7 +11,7 @@ RUNTIME = ROOT / "assets/public/models/furniture/fixed-desk-chair.glb"
 ARM_TOP = 0.786
 
 
-def material(name, hex_color, roughness, metalness=0):
+def material(name, hex_color, roughness):
     def linear(byte):
         value = int(byte, 16) / 255
         return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
@@ -22,7 +22,6 @@ def material(name, hex_color, roughness, metalness=0):
     shader = mat.node_tree.nodes.get("Principled BSDF")
     shader.inputs["Base Color"].default_value = mat.diffuse_color
     shader.inputs["Roughness"].default_value = roughness
-    shader.inputs["Metallic"].default_value = metalness
     return mat
 
 
@@ -69,18 +68,29 @@ def arm_profile(obj):
         vertex.co.z -= .022 * front ** 1.25
 
 
-def round_part(name, loc, radius, depth, mat, vertices=32):
-    bpy.ops.mesh.primitive_cylinder_add(vertices=vertices, radius=radius, depth=depth, location=loc)
-    obj = finish(bpy.context.object, name, mat)
-    bevel(obj, min(depth * .22, radius * .18))
-    return obj
+def leg(name, foot, joint, mat):
+    # Horizontal cross sections leave the four feet flush with the cabin floor.
+    sections = [(foot[0], foot[1], 0, .052, .058),
+                (joint[0], joint[1], .427, .090, .097)]
+    vertices = [(x + sx * width / 2, y + sy * depth / 2, z)
+                for x, y, z, width, depth in sections
+                for sx, sy in [(-1, -1), (1, -1), (1, 1), (-1, 1)]]
+    faces = [(3, 2, 1, 0), (4, 5, 6, 7)]
+    faces.extend((i, (i + 1) % 4, (i + 1) % 4 + 4, i + 4) for i in range(4))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    finish(obj, name, mat)
+    bevel(obj, .013)
 
 
-def seat_cushion(mat):
+def seat_cushion(mat, welt):
     # Rounded rectangular rings with a shaped crown at the two hip load areas.
     count = 64
     rings = [(.14, .000), (.40, .000), (.69, .001), (.84, .004), (.93, .011),
-             (.98, .024), (1, .042), (1, .058), (.965, .083), (.87, .106), (.55, .110)]
+             (.98, .024), (1, .042), (1, .058), (.965, .083), (.958, .087), (.87, .106), (.55, .110)]
     vertices = [(0, -.061, .530)]
     for index, (scale, drop) in enumerate(rings):
         for i in range(count):
@@ -107,65 +117,62 @@ def seat_cushion(mat):
     obj = bpy.data.objects.new("Seat cushion", mesh)
     bpy.context.collection.objects.link(obj)
     finish(obj, obj.name, mat)
+    obj.data.materials.append(welt)
+    seam = count * 9
+    for polygon in obj.data.polygons[seam:seam + count]:
+        polygon.material_index = 1
 
 
 def build():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    bronze = material("Powder-coated bronze", "514039", .5, .32)
-    brass = material("Satin brass", "B18A58", .31, .65)
-    walnut = material("Warm walnut", "80523C", .38)
-    sage = material("Sage upholstery", "87978A", .84)
-    dark_sage = material("Upholstery welt", "657A6B", .85)
-    inset = material("Bolt socket", "433731", .68)
+    frame = material("Walnut frame", "6C4936", .42)
+    walnut = material("Walnut edge", "80583E", .40)
+    oatmeal = material("Oatmeal upholstery", "CBBBA1", .88)
+    welt = material("Oatmeal welt", "AC9A7F", .86)
 
-    box("Floor gasket", (0, .047, .011), (.606, .539, .022), .010, inset)
-    box("Bolted floor plate", (0, .047, .033), (.596, .529, .034), .016, bronze)
-    for x in (-.228, .228):
-        for y in (-.139, .233):
-            round_part("Flange washer", (x, y, .052), .026, .008, brass)
-            round_part("Anchor bolt", (x, y, .061), .017, .014, brass, 6)
-            round_part("Dark hex socket", (x, y, .068), .007, .0015, inset, 6)
-
-    box("Pedestal lower collar", (0, .09, .059), (.271, .252, .033), .014, bronze)
-    beam("Fixed pedestal", (0, .09, .059), (0, .038, .407), .194, .181, .035, bronze)
-    box("Pedestal saddle", (0, .025, .395), (.394, .365, .079), .027, bronze)
+    box("Front apron", (0, -.247, .389), (.563, .071, .074), .020, frame)
+    box("Rear apron", (0, .167, .389), (.547, .074, .074), .020, frame)
     box("Walnut seat pan", (0, -.062, .423), (.679, .616, .062), .030, walnut)
-    seat_cushion(sage)
+    seat_cushion(oatmeal, welt)
 
     for side, label in ((-1, "Left"), (1, "Right")):
+        leg(f"{label} front leg", (side * .345, -.310), (side * .278, -.241), frame)
+        leg(f"{label} rear leg", (side * .333, .255), (side * .263, .159), frame)
+        box(f"{label} side apron", (side * .281, -.043, .389),
+            (.068, .456, .074), .020, frame)
         beam(f"{label} back upright", (side * .225, .171, .406),
-             (side * .245, .362, .947), .055, .068, .021, bronze)
+             (side * .245, .362, .947), .055, .068, .021, frame)
         beam(f"{label} arm support", (side * .292, .145, .412),
-             (side * .394, .137, .746), .047, .061, .020, bronze)
+             (side * .394, .137, .746), .055, .062, .021, frame)
         rail = box(f"{label} walnut arm rail", (side * .383, -.065, ARM_TOP - .047),
                    (.114, .447, .058), .024, walnut)
         pad = box(f"{label} arm padding", (side * .389, -.057, ARM_TOP - .012),
-                  (.102, .442, .024), .009, dark_sage)
+                  (.102, .442, .024), .009, oatmeal)
         arm_profile(rail)
         arm_profile(pad)
 
     back = box("Walnut back shell", (0, .345, .885), (.656, .092, .507), .045, walnut)
     back.rotation_euler.x = -.292
-    pad = box("Back cushion", (0, .307, .901), (.590, .092, .443), .045, sage)
+    pad = box("Back cushion", (0, .307, .901), (.590, .092, .443), .045, oatmeal)
     pad.rotation_euler.x = back.rotation_euler.x
-    trim = box("Back cushion welt", (0, .321, .900), (.607, .052, .458), .025, dark_sage)
+    trim = box("Back cushion welt", (0, .321, .900), (.607, .052, .458), .025, welt)
     trim.rotation_euler.x = back.rotation_euler.x
-    box("Back shell inlay", (0, .410, .946), (.136, .009, .021), .004, brass).rotation_euler.x = back.rotation_euler.x
 
-    # The source keeps the hardware, pads and supports independently editable.
+    # Keep the legs, joinery and upholstery independently editable in the source.
     bpy.ops.object.select_all(action="DESELECT")
     bpy.context.preferences.filepaths.save_version = 0
     bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE), compress=True)
 
-    # One runtime mesh per material. Authoring modifiers are evaluated during conversion.
-    for mat in (bronze, brass, walnut, sage, dark_sage, inset):
+    # Join parts by primary material while preserving the cushion welt faces.
+    for mat in (frame, walnut, oatmeal, welt):
         bpy.ops.object.select_all(action="DESELECT")
         parts = [obj for obj in bpy.context.scene.objects if obj.active_material == mat]
         for obj in parts:
             obj.select_set(True)
         bpy.context.view_layer.objects.active = parts[0]
         bpy.ops.object.convert(target="MESH")
-        bpy.ops.object.join()
+        if len(parts) > 1:
+            bpy.ops.object.join()
         bpy.context.object.name = mat.name
 
     bpy.ops.export_scene.gltf(filepath=str(RUNTIME), export_format="GLB", export_animations=False)

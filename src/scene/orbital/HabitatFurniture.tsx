@@ -36,13 +36,15 @@ function FurnitureChair({ world }: { world: WorldModelProps }) {
   const state = world.objects.chair ?? CLOSED_OBJECT;
   const { x, z, yaw } = CHAIR_POSES[world.sceneId];
   const fallback = <>
-    <SoftBox dims={[.60, .05, .54]} position={[0, .025, -.047]} color="#514039" />
-    <SoftBox dims={[.19, .40, .18]} position={[0, .23, -.035]} color="#514039" />
-    <FurnitureCushion dims={[.69, .12, .65]} position={[0, .47, .074]} color="#87978a" />
+    {[-1, 1].flatMap(side => [-1, 1].map(end => <SoftBox key={side + '/' + end}
+      dims={[.07, .42, .075]} position={[side * .31, .21, end * .24 + .035]}
+      color="#6c4936" rotation={[end * .15, 0, side * .15]} />))}
+    <SoftBox dims={[.68, .065, .62]} position={[0, .421, .062]} color="#80583e" />
+    <FurnitureCushion dims={[.65, .12, .61]} position={[0, .47, .061]} color="#cbbba1" />
     <SoftBox dims={[.64, .64, .09]} position={[0, .81, -.28]} rotation={[-.29, 0, 0]} color="#80523c" />
     {[-.38, .38].map(side => <group key={side}>
-      <SoftBox dims={[.05, .32, .07]} position={[side, .60, -.13]} color="#514039" />
-      <SoftBox dims={[.11, .04, .44]} position={[side, .766, .065]} color="#657a6b" />
+      <SoftBox dims={[.05, .32, .07]} position={[side, .60, -.13]} color="#6c4936" />
+      <SoftBox dims={[.11, .04, .44]} position={[side, .766, .065]} color="#cbbba1" />
     </group>)}
   </>;
   return <ObjectHandle id="chair" action={state.active ? 'stand' : 'sit'} hint={state.active ? '起身' : '坐下歇一会'}

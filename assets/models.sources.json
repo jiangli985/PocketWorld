@@ -158,11 +158,11 @@
     },
     {
       "file": "furniture/fixed-desk-chair.glb",
-      "source": "Original PocketWorld floor-mounted desk chair authored in Blender.",
+      "source": "Original PocketWorld four-legged walnut chair authored in Blender.",
       "used": true,
-      "bytes": 374564,
-      "sha256": "df7fd11c0aafeeaa0c168e463992944b905eb13752f989a97ad0eac5b7e1ded3",
-      "processing": "Built in metres with a floor origin by scripts/build-fixed-desk-chair.py. Editable source: assets/models/furniture/fixed-desk-chair.blend. The six static meshes share the authored footprint and seat contacts."
+      "bytes": 205204,
+      "sha256": "a0f45e200d665f334afd4b34a95c10e9a4e152a6ce103ad2eb6cd42b2807dc1e",
+      "processing": "Built in metres with four floor-level feet by scripts/build-fixed-desk-chair.py. Editable model: assets/models/furniture/fixed-desk-chair.blend."
     },
     {
       "file": "replaced/computer.fitted.glb",
