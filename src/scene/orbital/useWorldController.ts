@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
+import { initialOutfit, rememberOutfit } from './wardrobe/outfit';
 import { CLOSED_OBJECT, type SleepSession, type WorldAction, type WorldActionContext, type WorldFeatureAdapters, type WorldMotion, type WorldObjectState, type WorldSceneId, type WorldTransition } from '../../types/world';
 
 export function nextObjectState(previous: WorldObjectState, action: WorldAction): WorldObjectState {
@@ -22,7 +23,10 @@ const FOCUS_ACTIONS: Record<string, true | undefined> = { inspect: true, read: t
 const EMPTY_TRANSITION: WorldTransition = { id: 0, phase: 'idle', action: null, fromScene: 'habitat', toScene: 'habitat' };
 export function useWorldController(adapters?: WorldFeatureAdapters) {
   const [sceneId, setSceneId] = useState<WorldSceneId>('habitat');
-  const [sceneObjects, setSceneObjects] = useState<Record<WorldSceneId, Record<string, WorldObjectState>>>({ habitat: { lamp: { ...CLOSED_OBJECT, active: true } }, observatory: { lamp: { ...CLOSED_OBJECT, active: true } } });
+  const [sceneObjects, setSceneObjects] = useState<Record<WorldSceneId, Record<string, WorldObjectState>>>(() => ({
+    habitat: { lamp: { ...CLOSED_OBJECT, active: true }, wardrobe: { ...CLOSED_OBJECT, active: initialOutfit() === 'snowflower' } },
+    observatory: { lamp: { ...CLOSED_OBJECT, active: true } },
+  }));
   const [focusedObject, setFocusedObject] = useState<string | null>(null);
   const [transition, setTransition] = useState<WorldTransition>(EMPTY_TRANSITION);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +85,11 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
     setTransition({ id, phase: 'preparing', action, fromScene: snapshot.sceneId, toScene: destination });
     try {
       await adapterRef.current?.actions?.[action.kind]?.prepare?.(context);
+      if (request.sceneId === 'habitat' && request.objectId === 'wardrobe' && request.kind === 'toggle') {
+        const { loadResidentAssets } = await import('./wardrobe/residentAssets');
+        try { await loadResidentAssets(visiblePrevious.active ? 'everyday' : 'snowflower'); }
+        catch { throw new Error('这套衣服加载失败，请再试一次。'); }
+      }
       if (abort.signal.aborted) return;
       const followsVisibleState = ['toggle', 'open', 'sleep', 'sit', 'turn-page'].includes(action.kind);
       const next = nextObjectState(followsVisibleState ? visiblePrevious : previous, action);
@@ -114,6 +123,8 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
             if (!abort.signal.aborted) sleepSession.current = null;
           }
           if (abort.signal.aborted) return;
+          if (action.sceneId === 'habitat' && action.objectId === 'wardrobe' && action.kind === 'toggle')
+            rememberOutfit(next.active ? 'snowflower' : 'everyday');
           setSceneId(destination);
           setTransition({ id, phase: 'active', action, fromScene: destination, toScene: destination });
           pending.current = null;

@@ -4,11 +4,16 @@ export const CABIN_RIGHT = 4.24;
 export const CABIN_CENTER_X = (CABIN_LEFT + CABIN_RIGHT) / 2;
 
 // Floor area shared by the resident walker and loose props such as the slippers.
+export const HABITAT_SPAWN: [number, number] = [2.52, 1.10];
 export const RESIDENT_RADIUS = 0.23;
 export const WALK_BOUNDS = { left: CABIN_LEFT + .25 + RESIDENT_RADIUS, right: 3.76, back: -2.96, front: 2.96 };
 
 export const BED_POSITION: [number, number, number] = [-4.05, 0, -1.897];
 export const BED_ENTRY: [number, number] = [BED_POSITION[0] + 1.12, BED_POSITION[2] - .27];
+
+// The wardrobe occupies the west half of the combined Wardrobe_Nightstand mesh.
+export const WARDROBE_FOOTPRINT: [number, number, number, number] = [-6.47, -4.97, -3.18, -2.29];
+export const WARDROBE_STAND: [number, number] = [-5.72, -1.90];
 
 // Armless floor sofa at the open corner in front of the bedside rug.
 export const FLOOR_SOFA = {

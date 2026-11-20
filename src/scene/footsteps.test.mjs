@@ -78,6 +78,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './ResidentModel': { HIP_HEIGHT: 0.69, ResidentModel: 'ResidentModel' },
     './residentRig': residentRig,
     './cabinLayout': cabinLayout,
+    './wardrobe/outfit': load('./orbital/wardrobe/outfit.ts', {}),
     './sofaMotion': load('./orbital/sofaMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './bedMotion': load('./orbital/bedMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './journalLayout': load('./orbital/journalLayout.ts', {}),
@@ -587,6 +588,22 @@ test('the fixed desk chair has room to board from the front', () => {
     assert.equal(performed, 1);
     assert.deepEqual({ ...view.chair }, placement);
     assert.ok(view.root.position.z >= -1.445);
+  } finally { view.dispose(); }
+});
+
+test('clicking the wardrobe leads to its doors and E changes the outfit at the same spot', () => {
+  const actions = [];
+  const view = mount('orbital', { onAction: action => actions.push([action.objectId, action.kind]) });
+  try {
+    const [x, z] = cabinLayout.WARDROBE_STAND;
+    const request = { sceneId: 'habitat', objectId: 'wardrobe', kind: 'toggle' };
+    let reached = false;
+    view.props.interaction.current([-6.22, 1.45, -2.3], request, () => { reached = true; });
+    for (let i = 0; i < 900 && !reached; i++) view.frame(1 / 60);
+    assert.ok(reached);
+    assert.ok(Math.hypot(view.root.position.x - x, view.root.position.z - z) < .06);
+    view.key('KeyE');
+    assert.deepEqual(actions, [['wardrobe', 'toggle']]);
   } finally { view.dispose(); }
 });
 

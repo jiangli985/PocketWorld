@@ -121,7 +121,7 @@ function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
   };
 }
 
-export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationClip): ResidentRig {
+export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationClip, authoredStanding = false): ResidentRig {
   const bones = new Map<string, THREE.Bone>();
   const skinned: THREE.SkinnedMesh[] = [];
   asset.traverse(object => {
@@ -150,46 +150,48 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     for (const { value, curve } of channels) value.fromArray(curve.evaluate(t));
   };
 
-  // Build a two-foot neutral pose using the planted phase of each leg, and
-  // average the upper body at the two mid-swing phases for a relaxed stance.
-  const leftLeg = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => bone('Left' + name));
-  const rightLeg = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => bone('Right' + name));
-  const support = (leg: THREE.Bone[]) => ({
-    pose: leg.map(capture),
-    point: leg[2].getWorldPosition(new THREE.Vector3()),
-    toe: leg[3].getWorldPosition(new THREE.Vector3()),
-    sole: leg[2].getWorldQuaternion(new THREE.Quaternion()),
-  });
-  sample(.20);
-  const leftSupport = support(leftLeg);
-  sample(.70);
-  const rightSupport = support(rightLeg);
-  sample(.32);
-  const opposite = Array.from(bones.values(), capture);
-  sample(.82);
-  Array.from(bones.values()).forEach((joint, i) => {
-    joint.position.lerp(opposite[i].position, .5);
-    joint.quaternion.slerp(opposite[i].quaternion, .5);
-    joint.scale.lerp(opposite[i].scale, .5);
-  });
-  leftLeg.forEach((joint, i) => restore(joint, leftSupport.pose[i]));
-  rightLeg.forEach((joint, i) => restore(joint, rightSupport.pose[i]));
-  // Mid-swing averages leave the pelvis behind the planted feet and the trunk
-  // leaning back. Balance the pelvis over the rear/middle of the sole, then
-  // align the neck above it. Replant both legs below, preserving their soles.
-  const hips = bone('Hips');
-  const hipPosition = hips.getWorldPosition(new THREE.Vector3());
-  const neckPosition = bone('Neck').getWorldPosition(new THREE.Vector3());
-  const forward = (leftSupport.point.z + rightSupport.point.z) * .5
-    + ((leftSupport.toe.z - leftSupport.point.z) + (rightSupport.toe.z - rightSupport.point.z)) * .175;
-  const pitch = Math.atan2(hipPosition.z - neckPosition.z, neckPosition.y - hipPosition.y);
-  const balancedRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitch)
-    .multiply(hips.getWorldQuaternion(new THREE.Quaternion()));
-  hips.position.copy(hips.parent!.worldToLocal(hipPosition.clone().setZ(forward)));
-  hips.quaternion.copy(hips.parent!.getWorldQuaternion(new THREE.Quaternion()).invert()).multiply(balancedRotation);
-  hips.updateWorldMatrix(false, true);
-  plantResidentLeg(leftLeg, leftSupport.point, leftSupport.sole);
-  plantResidentLeg(rightLeg, rightSupport.point, rightSupport.sole);
+  if (!authoredStanding) {
+    // Build a two-foot neutral pose using the planted phase of each leg, and
+    // average the upper body at the two mid-swing phases for a relaxed stance.
+    const leftLeg = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => bone('Left' + name));
+    const rightLeg = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => bone('Right' + name));
+    const support = (leg: THREE.Bone[]) => ({
+      pose: leg.map(capture),
+      point: leg[2].getWorldPosition(new THREE.Vector3()),
+      toe: leg[3].getWorldPosition(new THREE.Vector3()),
+      sole: leg[2].getWorldQuaternion(new THREE.Quaternion()),
+    });
+    sample(.20);
+    const leftSupport = support(leftLeg);
+    sample(.70);
+    const rightSupport = support(rightLeg);
+    sample(.32);
+    const opposite = Array.from(bones.values(), capture);
+    sample(.82);
+    Array.from(bones.values()).forEach((joint, i) => {
+      joint.position.lerp(opposite[i].position, .5);
+      joint.quaternion.slerp(opposite[i].quaternion, .5);
+      joint.scale.lerp(opposite[i].scale, .5);
+    });
+    leftLeg.forEach((joint, i) => restore(joint, leftSupport.pose[i]));
+    rightLeg.forEach((joint, i) => restore(joint, rightSupport.pose[i]));
+    // Mid-swing averages leave the pelvis behind the planted feet and the trunk
+    // leaning back. Balance the pelvis over the rear/middle of the sole, then
+    // align the neck above it. Replant both legs below, preserving their soles.
+    const hips = bone('Hips');
+    const hipPosition = hips.getWorldPosition(new THREE.Vector3());
+    const neckPosition = bone('Neck').getWorldPosition(new THREE.Vector3());
+    const forward = (leftSupport.point.z + rightSupport.point.z) * .5
+      + ((leftSupport.toe.z - leftSupport.point.z) + (rightSupport.toe.z - rightSupport.point.z)) * .175;
+    const pitch = Math.atan2(hipPosition.z - neckPosition.z, neckPosition.y - hipPosition.y);
+    const balancedRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitch)
+      .multiply(hips.getWorldQuaternion(new THREE.Quaternion()));
+    hips.position.copy(hips.parent!.worldToLocal(hipPosition.clone().setZ(forward)));
+    hips.quaternion.copy(hips.parent!.getWorldQuaternion(new THREE.Quaternion()).invert()).multiply(balancedRotation);
+    hips.updateWorldMatrix(false, true);
+    plantResidentLeg(leftLeg, leftSupport.point, leftSupport.sole);
+    plantResidentLeg(rightLeg, rightSupport.point, rightSupport.sole);
+  }
   asset.updateMatrixWorld(true);
   const mesh = new THREE.Group();
   mesh.name = 'Resident';

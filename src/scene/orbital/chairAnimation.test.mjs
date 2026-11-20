@@ -161,3 +161,43 @@ test('palms face the armrests with aligned forearms and little axial wrist twist
     actor.dispose();
   }
 });
+
+
+test('雪花裙装使用自己的接触索引，坐起只变形接触网格，站姿两只袜脚着地', async () => {
+  const root = new URL('../../../assets/public/models/resident/', import.meta.url);
+  const { gltf } = await load(new URL('luna-snowflower.glb', root));
+  const data = readFileSync(new URL('luna-snowflower-seat.bin', root));
+  const contact = readSeatContactCache(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+  const asset = clone(gltf.scene);
+  const clip = name => gltf.animations.find(value => value.name === name);
+  const rig = createResidentRig(asset, clip('Walk_Grounded_Loop'), true);
+  const surfaces = [];
+  asset.traverse(node => { if (node.isSkinnedMesh) surfaces.push(node); });
+  const sock = surfaces.find(node => node.material.name === 'Snowflower | socks');
+  const face = surfaces.find(node => node.material.name === 'Luna | Snowflower Face');
+  const faceGeometry = face.geometry;
+  const body = surfaces.find(node => node.geometry.getAttribute('_contact_id').array.some(v => v >= 0));
+  const rest = body.geometry.getAttribute('position').array;
+  const mapped = new Set(body.geometry.getAttribute('_contact_id').array);
+  mapped.delete(-1);
+  assert.equal(mapped.size, contact.count);
+  assert.equal(Math.max(...mapped), contact.count - 1);
+  const seat = createChairAnimation(asset, clip('ChairSit_Contact'), contact);
+  try {
+    rig.applyPose(0, 0);
+    rig.mesh.updateMatrixWorld(true);
+    const sole = [Infinity, Infinity], point = new THREE.Vector3();
+    for (let i = 0; i < sock.geometry.getAttribute('position').count; i++) {
+      sock.localToWorld(sock.getVertexPosition(i, point));
+      const side = point.x < 0 ? 0 : 1;
+      sole[side] = Math.min(sole[side], point.y);
+    }
+    sole.forEach(height => assert.ok(Math.abs(height) < .003, '袜底站姿离地 ' + height));
+    seat.apply(97 / 30, 1);
+    const posed = body.geometry.getAttribute('position').array;
+    assert.ok(posed.some((v, i) => Math.abs(v - rest[i]) > .002));
+    assert.equal(face.geometry, faceGeometry);
+    seat.apply(0, 0);
+    assert.deepEqual(posed, rest);
+  } finally { seat.dispose(); rig.dispose(); }
+});

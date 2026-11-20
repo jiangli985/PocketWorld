@@ -28,15 +28,16 @@ export function createChairAnimation(asset: THREE.Object3D, clip: THREE.Animatio
     if (!(o instanceof THREE.SkinnedMesh)) return;
     const ids = o.geometry.getAttribute('_contact_id');
     if (!ids) throw new Error('Luna seat vertex mapping missing');
-    o.geometry = o.geometry.clone();
-    const position = o.geometry.getAttribute('position') as THREE.BufferAttribute;
-    position.setUsage(THREE.DynamicDrawUsage);
     const mapping: [number, number][] = [];
     for (let i = 0; i < ids.count; i++) if (ids.getX(i) >= 0) {
       const index = Math.round(ids.getX(i));
       if (index >= cache.count) throw new Error('Luna seat vertex mapping out of range');
       mapping.push([i * 3, index * 3]);
     }
+    if (!mapping.length) return;
+    o.geometry = o.geometry.clone();
+    const position = o.geometry.getAttribute('position') as THREE.BufferAttribute;
+    position.setUsage(THREE.DynamicDrawUsage);
     surfaces.push({ geometry: o.geometry, rest: new Float32Array(position.array), position, mapping });
   });
   const vector = new THREE.Vector3(), rotation = new THREE.Quaternion();

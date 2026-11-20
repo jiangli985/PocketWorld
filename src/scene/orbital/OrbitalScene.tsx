@@ -1,3 +1,4 @@
+import { previewOutfit } from './wardrobe/outfit';
 import { BED_POSITION, CLOCK_POSITION, LAMP_POSITION } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
@@ -6,7 +7,7 @@ import type { OrbitControls as Controls } from 'three-stdlib';
 import * as THREE from 'three';
 import { SCENE_ORIGINS, type WorldAction, type WorldObjectState, type WorldSceneId, type WorldSceneProps } from '../../types/world';
 import { roomAudio } from '../audioEngine';
-import { CAMERA_FOV, HOME_DIRECTION, HOME_TARGET, HOME_ZOOM, homeDistanceForAspect } from './cabinView';
+import { CAMERA_FOV, HOME_DIRECTION, HOME_TARGET, HOME_ZOOM, OUTFIT_TARGET, outfitCameraPosition, homeDistanceForAspect } from './cabinView';
 import { Cosmos, createSunState, type SunState } from './Cosmos';
 import { HabitatShell } from './HabitatShell';
 import { SpacecraftHull } from './SpacecraftHull';
@@ -60,7 +61,7 @@ interface OrbitalSceneProps extends WorldSceneProps {
   onViewModeChange: (mode: SpacecraftViewMode) => void;
   onEnterCabin: () => void;
 }
-function CameraRig(props: OrbitalSceneProps & { flight: SpacecraftFlightState }) {
+function CameraRig(props: OrbitalSceneProps & { flight: SpacecraftFlightState; outfitPreview: boolean }) {
   const { camera, size } = useThree();
   const controls = useRef<Controls>(null);
   const fromPosition = useRef(new THREE.Vector3());
@@ -73,8 +74,8 @@ function CameraRig(props: OrbitalSceneProps & { flight: SpacecraftFlightState })
   const viewFlight = useRef<{ active: boolean; elapsed: number; duration: number; mode: 'entering-cabin' | 'leaving-cabin' }>({ active: false, elapsed: 0, duration: ENTER_CABIN_DURATION, mode: 'entering-cabin' });
   const currentView = useRef('habitat/');
   const prevSize = useRef({ width: 0, height: 0 });
-  const initialized = useRef(false);
-  const initialTarget = useMemo(() => (props.viewMode === 'cabin' ? HOME_TARGET.toArray() : SHIP_TARGET.toArray()) as [number, number, number], []);
+  const initializedCamera = useRef<THREE.Camera | null>(null);
+  const initialTarget = useMemo(() => (props.outfitPreview ? OUTFIT_TARGET : props.viewMode === 'cabin' ? HOME_TARGET : SHIP_TARGET).toArray() as [number, number, number], []);
   const narrow = size.width < 720;
   const aspect = size.width / Math.max(1, size.height);
   const homeDistance = useMemo(() => homeDistanceForAspect(aspect), [aspect]);
@@ -93,8 +94,10 @@ function CameraRig(props: OrbitalSceneProps & { flight: SpacecraftFlightState })
     if (!controls.current) return;
     const resized = prevSize.current.width !== size.width || prevSize.current.height !== size.height;
     prevSize.current = { width: size.width, height: size.height };
-    if (initialized.current && !resized) return;
-    initialized.current = true;
+    const firstView = initializedCamera.current !== camera;
+    if (!firstView && !resized) return;
+    const showOutfit = props.outfitPreview && firstView;
+    initializedCamera.current = camera;
     const origin = new THREE.Vector3(...SCENE_ORIGINS[props.sceneId]);
     if (props.viewMode === 'approach') {
       const look = origin.clone().add(SHIP_TARGET);
@@ -109,9 +112,10 @@ function CameraRig(props: OrbitalSceneProps & { flight: SpacecraftFlightState })
       controls.current.target.copy(look);
       controls.current.update();
     } else if (props.viewMode === 'cabin' && !props.focusedObject) {
-      const look = origin.add(HOME_TARGET);
+      const look = origin.add(showOutfit ? OUTFIT_TARGET : HOME_TARGET);
       if (camera instanceof THREE.PerspectiveCamera) { camera.zoom = HOME_ZOOM; camera.fov = CAMERA_FOV; camera.updateProjectionMatrix(); }
-      camera.position.copy(look).addScaledVector(HOME_DIRECTION, homeDistance);
+      if (showOutfit) camera.position.copy(outfitCameraPosition(aspect));
+      else camera.position.copy(look).addScaledVector(HOME_DIRECTION, homeDistance);
       controls.current.target.copy(look);
       controls.current.update();
     }
@@ -356,8 +360,10 @@ function WorldContent(props: OrbitalSceneProps) {
   const interaction = useRef<NonNullable<WorldSceneProps['onApproach']> | null>(null);
   const sun = useMemo(createSunState, []);
   const flight = useMemo(() => createFlightState(props.viewMode), []);
+  const outfitPreview = useMemo(() => props.viewMode === 'cabin' && !!previewOutfit(window.location.search), []);
   const initialCameraPos = useMemo(() => {
     const aspect = typeof window !== 'undefined' && window.innerHeight > 0 ? window.innerWidth / window.innerHeight : 16 / 10;
+    if (outfitPreview) return outfitCameraPosition(aspect).toArray() as [number, number, number];
     if (props.viewMode === 'approach') return approachStartPosition(aspect).toArray() as [number, number, number];
     if (props.viewMode === 'orbit') return orbitHomePosition(aspect).toArray() as [number, number, number];
     return HOME_TARGET.clone().addScaledVector(HOME_DIRECTION, homeDistanceForAspect(aspect)).toArray() as [number, number, number];
@@ -368,7 +374,7 @@ function WorldContent(props: OrbitalSceneProps) {
   return <ScheduleProvider adapters={props.adapters}>
     <color attach="background" args={['#080714']} />
     <PerspectiveCamera makeDefault fov={CAMERA_FOV} position={initialCameraPos} near={0.08} far={2000} />
-    <CameraRig {...props} flight={flight} />
+    <CameraRig {...props} flight={flight} outfitPreview={outfitPreview} />
     <Cosmos reducedMotion={props.reducedMotion} sun={sun} flight={flight} />
     <Environment resolution={128} frames={1}>
       <Lightformer form="rect" intensity={1.55} color="#ffe9cc" position={[0, 5, -2]} rotation={[Math.PI / 2, 0, 0]} scale={[10, 8, 1]} />
@@ -396,13 +402,13 @@ function WorldContent(props: OrbitalSceneProps) {
         {id === props.sceneId && <OrbitalLighting objects={world.objects} sun={sun} />}
         {id === 'habitat' && <SpacecraftHull flight={flight} sun={sun} reducedMotion={props.reducedMotion} onEnterCabin={props.onEnterCabin} onReady={() => setHullReady(true)} />}
         <group visible={showInterior}>
-          <HabitatShell variant={id} onFloorClick={point => { if (inCabin && (!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy && (!props.library || props.library.flow.current.phase === 'idle')) { void roomAudio.unlock(); setWalkTarget(point); } }} />
+          <HabitatShell world={world} onFloorClick={point => { if (inCabin && (!props.focusedObject || props.focusedObject === 'bed') && props.sceneId === id && !props.gestureActive && !drawerInteraction.current?.busy && (!props.library || props.library.flow.current.phase === 'idle')) { void roomAudio.unlock(); setWalkTarget(point); } }} />
           {id === 'habitat' && <ScheduleSurfaces {...world} visible={inCabin && props.sceneId === 'habitat'} />}
           {id === 'habitat' && <AlarmClock3D {...world} />}
           <Suspense fallback={null}><HabitatFurniture {...world} sofaTime={sofaTime} /><MediaObjects {...world} /></Suspense>
           <FeatureSurfaces {...world} />
           {id === props.sceneId && <>
-            <OrbitalResidents {...world} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} drawerInteraction={drawerInteraction} interaction={interaction}
+            <OrbitalResidents {...world} outfit={props.sceneObjects.habitat.wardrobe?.active ? 'snowflower' : 'everyday'} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} drawerInteraction={drawerInteraction} interaction={interaction}
               drawerEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)} onDrawerAction={props.onAction} walkTarget={walkTarget} onArrive={() => setWalkTarget(null)} enabled={inCabin && (!props.focusedObject || props.focusedObject === 'bed') && (!props.library || props.library.view.phase === 'idle') && !props.gestureActive && ['idle', 'active', 'error'].includes(props.transition.phase)} />
           </>}
         </group>
