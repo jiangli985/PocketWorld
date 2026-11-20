@@ -260,3 +260,39 @@ test('云朵装两侧 Shape Keys 随各自的手臂受压和回弹', async () =>
     assert.deepEqual([cloth.morphTargetInfluences[left], cloth.morphTargetInfluences[right]], [1, 1]);
   } finally { rig.dispose(); }
 });
+
+test('云朵装贴臂时两只袖筒在肘部上下都保有宽度和厚度', async () => {
+  const path = new URL('../../../assets/public/models/resident/luna-cloudhoodie.glb', import.meta.url);
+  const { gltf } = await load(path);
+  const rig = createResidentRig(gltf.scene, gltf.animations.find(a => a.name === 'Walk_Grounded_Loop'), true);
+  try {
+    rig.applyPose(0, 0);
+    compile('./wardrobe/sleeveContact.ts').createSleeveContact(gltf.scene)();
+    rig.mesh.updateMatrixWorld(true);
+    const cloth = gltf.scene.getObjectByProperty('isSkinnedMesh', true);
+    const { skinIndex, position } = cloth.geometry.attributes;
+    const point = new THREE.Vector3();
+    for (const side of ['Left', 'Right']) {
+      const [upper, elbow, wrist] = ['Arm', 'ForeArm', 'Hand'].map(name =>
+        cloth.skeleton.getBoneByName('mixamorig' + side + name));
+      const height = joint => cloth.worldToLocal(joint.getWorldPosition(point)).y;
+      const bands = [upper, wrist].map(joint => ({
+        y: THREE.MathUtils.lerp(height(elbow), height(joint), .32),
+        section: new THREE.Box3(),
+      }));
+      for (let i = 0; i < position.count; i++) {
+        const primary = cloth.skeleton.bones[skinIndex.getX(i)];
+        if (primary !== upper && primary !== elbow) continue;
+        cloth.getVertexPosition(i, point);
+        for (const band of bands) {
+          if (Math.abs(point.y - band.y) < .006) band.section.expandByPoint(point);
+        }
+      }
+      for (const { section } of bands) {
+        const { x: width, z: depth } = section.getSize(point);
+        assert.ok(width > .032 && depth > .040 && width / depth > .44,
+          side + ' sleeve cross-section ' + JSON.stringify({ width, depth }));
+      }
+    }
+  } finally { rig.dispose(); }
+});

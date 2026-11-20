@@ -90,8 +90,8 @@
       "source": "User-supplied Tripo model 1115d436-5d3e-444c-be63-a6141e1f346c.glb. Motion sources are shared with the existing Luna walk, chair, low-sofa, bed and library assets.",
       "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
       "used": true,
-      "bytes": 9928364,
-      "sha256": "a3450bffb708ff883032813cb02deabc72b2ba05c77f5aa0b646d15a7b93c227",
+      "bytes": 9936032,
+      "sha256": "8fae3d17e21b70ae5993172947dd79abd7d9e6ba39acf273e09edd1e31023513",
       "processing": "Fitted Luna skeleton, rounded jaw with head-led skinning, relaxed arm poses, wrist weights and independent sparse SleeveContact_L/R morph targets for fabric compression. Reworked flat sock feet, retouched facial albedo and grounded walk. Includes chair contact IDs, support vertices and book markers."
     },
     {
