@@ -90,9 +90,9 @@
       "source": "User-supplied Tripo model 1115d436-5d3e-444c-be63-a6141e1f346c.glb. Motion sources are shared with the existing Luna walk, chair, low-sofa, bed and library assets.",
       "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
       "used": true,
-      "bytes": 9937336,
-      "sha256": "ffcc0abd0e0fdc5218e36ccd3099cc4e0c34596606b3a6c163a4a21dd4935967",
-      "processing": "Fitted Luna skeleton, rounded jaw with head-led skinning, relaxed arm poses, wrist weights and independent sparse SleeveContact_L/R morph targets for fabric compression. Reworked flat sock feet, retouched facial albedo and grounded walk. Includes chair contact IDs, support vertices and book markers."
+      "bytes": 9968848,
+      "sha256": "8b41d7f2b2e56a30258cae8e9c27251df54b551dbe4df0146a335426c96aab06",
+      "processing": "Fitted Luna skeleton, rounded jaw with head-led skinning, relaxed arm poses, wrist weights and independent sparse SleeveContact_L/R morph targets baked from a 72-frame Blender cloth simulation of the torso and both sleeves, with clearance for the decorated mesh. Reworked flat sock feet, retouched facial albedo and grounded walk. Includes chair contact IDs, support vertices and book markers."
     },
     {
       "file": "resident/luna-cloudhoodie-seat.bin",
