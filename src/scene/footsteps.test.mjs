@@ -246,6 +246,91 @@ test('the floor sofa blocks walking from the rug only inside the habitat', () =>
   }
 });
 
+test('the pedal trash can blocks walking and chair rolling only inside the habitat', () => {
+  const [x, , z] = cabinLayout.TRASH_CAN.position;
+  const foot = cabinLayout.TRASH_CAN.footprint;
+  for (const sceneId of ['habitat', 'observatory']) {
+    // 1. Resident walking straight east (+X) into the front pedal side of the trash can.
+    const viewX = mount('orbital', { sceneId });
+    try {
+      viewX.root.position.set(x - 1.1, 0, z);
+      viewX.key('KeyD');
+      for (let i = 0; i < 150; i++) viewX.frame(1 / 60);
+      const endX = viewX.root.position.x;
+      if (sceneId === 'habitat') {
+        assert.ok(endX > x - 1.1 && endX <= x + foot.left - 0.23 + 1e-4, `habitat +X walk stopped at ${endX}`);
+      } else {
+        assert.ok(endX > x + foot.left, `observatory should not collide with habitat trash can (${endX})`);
+      }
+    } finally { viewX.dispose(); }
+
+    // 2. Resident walking straight south (+Z) into the north side of the trash can.
+    const viewZ = mount('orbital', { sceneId });
+    try {
+      viewZ.root.position.set(x - 0.1, 0, z - 1.1);
+      viewZ.key('KeyS');
+      for (let i = 0; i < 150; i++) viewZ.frame(1 / 60);
+      const endZ = viewZ.root.position.z;
+      if (sceneId === 'habitat') {
+        assert.ok(endZ > z - 1.1 && endZ <= z + foot.back - 0.23 + 1e-4, `habitat +Z walk stopped at ${endZ}`);
+      } else {
+        assert.ok(endZ > z + foot.back, `observatory should not collide with habitat trash can (${endZ})`);
+      }
+    } finally { viewZ.dispose(); }
+
+    // 3. Rolling chair pushed east (+X) stops at the trash can collision box in habitat.
+    if (sceneId === 'habitat') {
+      const viewChair = mount('orbital', { sceneId });
+      try {
+        const chair = viewChair.chair;
+        Object.assign(chair, { x: x - 1.25, z, vx: 4, vz: 0, spin: 0 });
+        for (let i = 0; i < 120; i++) viewChair.frame(1 / 60);
+        assert.ok(chair.x > x - 1.25 && chair.x <= x + foot.left - 0.50 + 1e-4, `habitat chair stopped at ${chair.x}`);
+      } finally { viewChair.dispose(); }
+    }
+  }
+});
+
+test('trash-can.glb bounds fit cleanly inside TRASH_CAN.footprint after scaling and rotation', async () => {
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const raw = fs.readFileSync(new URL('../../assets/public/models/furniture/trash-can.glb', import.meta.url));
+  const jsonLen = raw.readUInt32LE(12);
+  const doc = JSON.parse(raw.subarray(20, 20 + jsonLen).toString('utf8'));
+  doc.materials = doc.materials.map(m => ({ name: m.name, pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1] } }));
+  doc.images = [];
+  doc.textures = [];
+  const json = Buffer.from(JSON.stringify(doc));
+  const padded = Buffer.alloc(Math.ceil(json.length / 4) * 4, 32);
+  json.copy(padded);
+  const binary = raw.subarray(20 + jsonLen);
+  const buffer = Buffer.alloc(20 + padded.length + binary.length);
+  buffer.writeUInt32LE(0x46546c67, 0);
+  buffer.writeUInt32LE(2, 4);
+  buffer.writeUInt32LE(buffer.length, 8);
+  buffer.writeUInt32LE(padded.length, 12);
+  buffer.writeUInt32LE(0x4e4f534a, 16);
+  padded.copy(buffer, 20);
+  binary.copy(buffer, 20 + padded.length);
+
+  const gltf = await new GLTFLoader().parseAsync(buffer.buffer, '');
+  const model = gltf.scene.clone(true);
+  model.updateMatrixWorld(true);
+  const rawBox = new THREE.Box3().setFromObject(model);
+  const rawSize = rawBox.getSize(new THREE.Vector3());
+  const scale = cabinLayout.TRASH_CAN.height / rawSize.y;
+  model.scale.setScalar(scale);
+  model.position.set(-(rawBox.min.x + rawSize.x / 2) * scale, -rawBox.min.y * scale, -(rawBox.min.z + rawSize.z / 2) * scale);
+  const placed = new THREE.Group();
+  placed.rotation.set(0, cabinLayout.TRASH_CAN.yaw, 0);
+  placed.add(model);
+  placed.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(placed);
+  const foot = cabinLayout.TRASH_CAN.footprint;
+  assert.ok(box.min.x >= foot.left && box.max.x <= foot.right, `X bounds [${box.min.x}, ${box.max.x}] must fit inside [${foot.left}, ${foot.right}]`);
+  assert.ok(box.min.z >= foot.back && box.max.z <= foot.front, `Z bounds [${box.min.z}, ${box.max.z}] must fit inside [${foot.back}, ${foot.front}]`);
+  assert.ok(Math.abs(box.min.y) < 1e-4 && Math.abs(box.max.y - cabinLayout.TRASH_CAN.height) < 1e-4);
+});
+
 test('the old bed shortcut no longer starts room interactions', () => {
   const view = mount('app');
   try {

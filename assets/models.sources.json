@@ -12,6 +12,14 @@
       "processing": "Editable source assets/models/furniture/floor-sofa.blend with packed linen and twill maps. scripts/export-floor-sofa.py converts the piping, topstitching and fringe to mesh and reduces the runtime geometry."
     },
     {
+      "file": "furniture/trash-can.glb",
+      "source": "PocketWorld original procedural Blender pedal wastebin, scripts/build-trash-can.py -> assets/models/furniture/trash-can.blend.",
+      "used": true,
+      "bytes": 738652,
+      "sha256": "96431941cca68297d3b32df1ad154c6fe263a4aabf38657118641d744632fcef",
+      "processing": "Procedural Blender 5.2.3 LTS warm porcelain, honey-oak, apricot-band, and brushed-brass pedal wastebin with packed 256px/128px PBR textures (25 watertight meshes, 17,604 triangles). Rebuild/export with scripts/build-trash-can.py."
+    },
+    {
       "file": "furniture/throw_pillows_01.glb",
       "sourcePage": "https://polyhaven.com/a/throw_pillows_01",
       "license": "CC0-1.0",

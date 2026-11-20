@@ -16,6 +16,15 @@ export const FLOOR_SOFA = {
   footprint: { left: -.69, right: .83, back: -.86, front: .93 },
 };
 
+// Pedal trash can placed against the starboard wall north of the bookcase, pedal facing the room (-X).
+export const TRASH_CAN = {
+  position: [3.64, 0, 0.42] as [number, number, number],
+  yaw: -Math.PI / 2,
+  height: 0.56,
+  // X/Z offsets measured from trash-can.glb after ReusableAsset centering, scaling and yaw rotation.
+  footprint: { left: -0.24, right: 0.24, back: -0.22, front: 0.22 },
+};
+
 // The table top is a fixed part of the authored cabin mesh.
 export const NIGHTSTAND_X = -2.52;
 export const NIGHTSTAND_Z = -2.825;
