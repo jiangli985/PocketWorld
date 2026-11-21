@@ -208,10 +208,6 @@ body,
   pointer-events: none;
 }
 
-.protagonist-bubble-sleep {
-  color: #fde68a;
-}
-
 .scene-hover-badge {
   display: flex;
   flex-direction: column;

@@ -1,11 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CARTRIDGE_HEIGHT, CARTRIDGE_SLOT, cartridgePosition, clampCartridgeDrag, isCartridgeDrop, cartridgeDragState, cartridgeTransferPoint } from './cartridge-motion.ts';
+import fs from 'node:fs';
+import path from 'node:path';
+import {
+  CARTRIDGE_HEIGHT,
+  CARTRIDGE_REST_HEIGHT,
+  CARTRIDGE_SLOT,
+  CARTRIDGE_STAND_LEAN,
+  cartridgePosition,
+  clampCartridgeDrag,
+  isCartridgeDrop,
+  cartridgeDragState,
+  cartridgeTransferPitch,
+  cartridgeTransferPoint,
+} from './cartridge-motion.ts';
 
 const { CRT_SIZE } = await import('./computerLayout.ts');
 const monitor = { min: [1.55 - CRT_SIZE[0] / 2, 1.12, -2.67 - CRT_SIZE[2] / 2],
   max: [1.55 + CRT_SIZE[0] / 2, 1.12 + CRT_SIZE[1], -2.67 + CRT_SIZE[2] / 2] };
-const halfSize = [.11, CARTRIDGE_HEIGHT / 2, .051];
+const halfSize = [.11, CARTRIDGE_HEIGHT / 2, .025];
 const overlapsMonitor = point => point.every((value, axis) => value + halfSize[axis] > monitor.min[axis] && value - halfSize[axis] < monitor.max[axis]);
 
 test('only the slot accepts a cartridge, including a forgiving approach from the front', () => {
@@ -30,11 +43,12 @@ test('held cartridges stay in front of the entire monitor and above the keyboard
   }
 });
 
-test('both shelf positions and all insertion, ejection and return paths clear the CRT', () => {
+test('both display-stand positions and all insertion, ejection and return paths clear the CRT and each other', () => {
   for (const game of ['mario', 'shooter']) {
     const shelf = cartridgePosition(game);
     const other = cartridgePosition(game === 'mario' ? 'shooter' : 'mario');
-    assert.ok(Math.abs(shelf[1] - halfSize[1] - 1.12) < 1e-9, 'cartridge rests on the desk');
+    assert.equal(shelf[1], CARTRIDGE_REST_HEIGHT, 'cartridge seats inside display stand felt cradle');
+    assert.ok(shelf[1] - halfSize[1] > 1.12, 'cartridge clears desk surface inside stand');
     const paths = [[shelf, CARTRIDGE_SLOT], [CARTRIDGE_SLOT, shelf], [[1.55, 1.7, -2.05], shelf], [[2.8, 2.7, -2.05], shelf], [[2.1, 1.44, -2.05], CARTRIDGE_SLOT]];
     assert.equal(overlapsMonitor(shelf), false);
     for (const [from, to] of paths) {
@@ -47,5 +61,31 @@ test('both shelf positions and all insertion, ejection and return paths clear th
         assert.ok(point.some((value, axis) => Math.abs(value - other[axis]) >= 2 * halfSize[axis]), 'cartridge crossed the other cartridge');
       }
     }
+    // Verify smooth pitch transition between angled display stand (-14 deg) and upright dock (0 deg).
+    assert.equal(cartridgeTransferPitch(shelf, CARTRIDGE_SLOT, 0), CARTRIDGE_STAND_LEAN);
+    assert.equal(cartridgeTransferPitch(shelf, CARTRIDGE_SLOT, 1), 0);
+    assert.equal(cartridgeTransferPitch(CARTRIDGE_SLOT, shelf, 0), 0);
+    assert.equal(cartridgeTransferPitch(CARTRIDGE_SLOT, shelf, 1), CARTRIDGE_STAND_LEAN);
+  }
+});
+
+test('all four retro cartridge, display-stand and expansion-dock GLB assets are valid glTF 2.0', () => {
+  const expected = [
+    ['cartridge-mario.glb', ['Cartridge_mario_Root', 'Cart_mario_CoverSticker', 'Cart_mario_SpineSticker', 'Cart_mario_PCB', 'Cart_mario_GoldPin_0']],
+    ['cartridge-shooter.glb', ['Cartridge_shooter_Root', 'Cart_shooter_CoverSticker', 'Cart_shooter_SpineSticker', 'Cart_shooter_PCB', 'Cart_shooter_GoldPin_0']],
+    ['cartridge-stand.glb', ['CartridgeStand_Root', 'Stand_CenterDivider', 'Stand_BrassBackRail', 'Stand_SlotFelt_0', 'Stand_SlotFelt_1']],
+    ['cartridge-dock.glb', ['CartridgeDock_Root', 'Dock_SlotCollar_Front', 'Dock_SlotPin_0', 'Dock_SwitchBushing', 'Dock_LedBezel']],
+  ];
+  for (const [file, requiredNodes] of expected) {
+    const glbPath = path.resolve('assets/public/models/furniture', file);
+    assert.ok(fs.existsSync(glbPath), `${file} must exist`);
+    const buf = fs.readFileSync(glbPath);
+    assert.equal(buf.toString('ascii', 0, 4), 'glTF');
+    assert.equal(buf.readUInt32LE(4), 2);
+    const jsonLen = buf.readUInt32LE(12);
+    const gltf = JSON.parse(buf.toString('utf8', 20, 20 + jsonLen));
+    const names = new Set((gltf.nodes ?? []).map(n => n.name));
+    for (const node of requiredNodes) assert.ok(names.has(node), `${file} missing node ${node}`);
+    assert.ok(buf.length < 1024 * 1024, `${file} unexpectedly large: ${buf.length} bytes`);
   }
 });

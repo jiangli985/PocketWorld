@@ -16,7 +16,7 @@ function restore(bone: THREE.Bone, pose: BonePose) {
 }
 const tilt = (from: THREE.Vector3, to: THREE.Vector3) => Math.atan2(to.z - from.z, from.y - to.y);
 
-export function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE.Vector3, sole: THREE.Quaternion) {
+function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE.Vector3, sole: THREE.Quaternion) {
   const worldPosition = (joint: THREE.Bone) => joint.getWorldPosition(new THREE.Vector3());
   const worldRotation = (joint: THREE.Object3D) => joint.getWorldQuaternion(new THREE.Quaternion());
   const hip = worldPosition(thigh), knee = worldPosition(shin), ankle = worldPosition(foot);
@@ -318,6 +318,40 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     });
   }
 
-  return { mesh, legs, arms, torso, neck, head, skirtFront, skirtBack, applyPose, followMotion, neutralPose: neutral,
+  const correctives = (['Left', 'Right'] as const).flatMap(side => {
+    const targets = skinned.flatMap(object => {
+      const index = object.morphTargetDictionary?.[side + 'ArmContact'];
+      return index === undefined || !object.morphTargetInfluences ? [] : [{ index, weights: object.morphTargetInfluences }];
+    });
+    return targets.length ? [{ upper: bone(side + 'Arm'), elbow: bone(side + 'ForeArm'),
+      wrist: bone(side + 'Hand'), targets }] : [];
+  });
+  const down = new THREE.Vector3(), facing = new THREE.Vector3();
+  const shoulderPoint = new THREE.Vector3(), elbowPoint = new THREE.Vector3(), wristPoint = new THREE.Vector3();
+  const direction = new THREE.Vector3(), orientation = new THREE.Quaternion();
+  function applyArmCorrectives(enabled: boolean) {
+    if (!correctives.length) return;
+    if (enabled) {
+      down.copy(hips.getWorldPosition(shoulderPoint)).sub(neckBone.getWorldPosition(elbowPoint)).normalize();
+      facing.set(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(orientation));
+    }
+    for (const { upper, elbow, wrist, targets } of correctives) {
+      let weight = 0;
+      if (enabled) {
+        upper.getWorldPosition(shoulderPoint);
+        elbow.getWorldPosition(elbowPoint);
+        wrist.getWorldPosition(wristPoint);
+        const upperDown = direction.copy(elbowPoint).sub(shoulderPoint).normalize().dot(down);
+        const lowerDown = direction.copy(wristPoint).sub(elbowPoint).normalize().dot(down);
+        const reachForward = direction.copy(wristPoint).sub(shoulderPoint).normalize().dot(facing);
+        weight = THREE.MathUtils.smoothstep(upperDown, .925, .989)
+          * THREE.MathUtils.smoothstep(lowerDown, .76, .925)
+          * (1 - THREE.MathUtils.smoothstep(reachForward, .14, .31));
+      }
+      for (const { index, weights } of targets) weights[index] = weight;
+    }
+  }
+
+  return { mesh, legs, arms, torso, neck, head, skirtFront, skirtBack, applyPose, followMotion, applyArmCorrectives,
     dispose: () => { for (const object of skinned) object.skeleton.dispose(); } };
 }
