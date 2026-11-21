@@ -10,7 +10,7 @@ const upperY = UPPER_DECK_OFFSET[1];
 const upperRight = CABIN_DIVIDER_X + UPPER_DECK_OFFSET[0];
 
 export const HOME_TARGET = new THREE.Vector3(.52, 3.52, -.20);
-const HOME_DIRECTION = new THREE.Vector3(-.27, .22, 1).normalize();
+const HOME_DIRECTION = new THREE.Vector3(.11, .18, 1).normalize();
 export const OUTFIT_TARGET = new THREE.Vector3(HABITAT_SPAWN[0], .76, HABITAT_SPAWN[1]);
 const outfitDirection = new THREE.Vector3(-.75, .17, 1).normalize();
 export function outfitCameraPosition(aspect: number) {
@@ -26,7 +26,7 @@ const lowerBounds: Bounds[] = [
 const upperBounds: Bounds[] = [
   { x: [CABIN_DIVIDER_X, upperRight], y: [upperY - .23, upperY + .76], z: [-3.41, 3.19] },
   { x: [CABIN_DIVIDER_X, upperRight], y: [upperY, upperY + 3.77], z: [-3.41, -3.1] },
-  { x: [upperRight - .03, upperRight + BEDROOM_WALL_OUTSET], y: [upperY - .21, upperY + 3.77], z: [-3.41, BEDROOM_WALL_FRONT] },
+  { x: [CABIN_DIVIDER_X - BEDROOM_WALL_OUTSET, CABIN_DIVIDER_X + .07], y: [upperY - .21, upperY + 3.77], z: [-3.41, BEDROOM_WALL_FRONT] },
   {
     x: [STAIR_LANDING_WALL.left - .011, STAIR_LANDING_WALL.right + .011],
     y: [upperY, upperY + STAIR_LANDING_WALL.height],
@@ -47,7 +47,7 @@ const viewpoints = {
   },
   upper: {
     target: new THREE.Vector3(.30, upperY + 1.26, -.18),
-    direction: new THREE.Vector3(-.31, .43, 1).normalize(),
+    direction: new THREE.Vector3(.64, .43, 1).normalize(),
     bounds: upperBounds,
   },
 };
@@ -69,6 +69,17 @@ export function cabinCameraFrame(view: CabinView, aspect: number) {
     ));
   }
   return { target, position: target.clone().addScaledVector(direction, distance), distance };
+}
+
+/** Follow the resident from the open side of the flight while the bedroom wall is in view. */
+export function stairCameraFrames(aspect: number) {
+  const offset = new THREE.Vector3(-.44, .27, 1).normalize().multiplyScalar(Math.max(8.9, 4.1 / Math.max(.1, aspect)));
+  const lowerTarget = new THREE.Vector3(CABIN_STAIRS.x + .20, .98, CABIN_STAIRS.lowerZ - .18);
+  const upperTarget = new THREE.Vector3(CABIN_STAIRS.x + .20, upperY + .98, CABIN_STAIRS.upperZ + .18);
+  return {
+    lower: { target: lowerTarget, position: lowerTarget.clone().add(offset) },
+    upper: { target: upperTarget, position: upperTarget.clone().add(offset) },
+  };
 }
 
 /** Place the limb in the lower panorama for the initial composition. */

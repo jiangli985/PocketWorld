@@ -1,9 +1,10 @@
 """Export the two deck sets and the observatory shell from open-cabin.blend."""
 from pathlib import Path
-from math import cos, sin, tau
+from math import cos, pi, sin, tau
 
 import bmesh
 import bpy
+from mathutils import Matrix
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,7 +12,8 @@ DIVIDER_X = -1.86  # Keep aligned with cabinLayout.ts.
 WINDOW_CUT_X = -2.61  # The leftmost panorama trim is at -2.55 m.
 CABIN_LEFT = -6.57
 CABIN_RIGHT = 4.24
-BEDROOM_FRONT_Z = 1.20  # Finished front face of the bedroom return wall.
+BEDROOM_FRONT_Z = 3.16
+BEDROOM_STAIR_DOOR = (-2.21, -1.13, 2.33)  # Match the opening beside the fixed upper landing.
 
 collections = {collection.name[:2]: list(collection.objects) for collection in bpy.context.scene.collection.children}
 depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -151,40 +153,52 @@ def bedroom_walls():
     window_green = finish("Bedroom | window inset", "527166", .62)
     ivory = bpy.data.materials["Porcelain | cut edges"]
 
-    inner_x, outer_x = DIVIDER_X - .015, DIVIDER_X + .096
+    inner_x, outer_x = CABIN_LEFT + .015, CABIN_LEFT - .096
     wall_x = (inner_x + outer_x) / 2
     back, front = -3.385, BEDROOM_FRONT_Z - .025
     depth = front - back
     wall_z = (back + front) / 2
-    rear_right = inner_x + .03
-    rear_crown_left, rear_crown_right = CABIN_LEFT - .014, wall_x - .159 / 2
-    win_back, win_front, sill, lintel = window = (-2.26, -.96, 1.405, 3.01)
-    box("Bedroom rear wall", ((CABIN_LEFT + rear_right) / 2, 1.853, -3.30),
-        (rear_right - CABIN_LEFT, 3.754, .20), limewash, .008)
-    parts.append(bedroom_return(inner_x, outer_x, back, front, window, limewash))
+    rear_right = DIVIDER_X + .016
+    rear_crown_left, rear_crown_right = wall_x + .159 / 2, rear_right + .02
+    win_back, win_front, sill, lintel = window = (1.18, 2.48, 1.405, 3.01)
+    door_back, door_front, door_height = BEDROOM_STAIR_DOOR
+    thickness = inner_x - outer_x
+    box("Bedroom rear wall", ((inner_x + rear_right) / 2, 1.853, -3.30),
+        (rear_right - inner_x, 3.754, .20), limewash, .008)
+    box("Wall beside the upper landing", (wall_x, 1.853, (back + door_back) / 2),
+        (thickness, 3.754, door_back - back), limewash)
+    box("Stair doorway lintel", (wall_x, (3.73 + door_height) / 2, (door_back + door_front) / 2),
+        (thickness, 3.73 - door_height, door_front - door_back), limewash)
+    parts.append(bedroom_return(inner_x, outer_x, door_front, front, window, limewash))
     box("Rear wall crown", ((rear_crown_left + rear_crown_right) / 2, 3.73, -3.288),
         (rear_crown_right - rear_crown_left, .064, .246), ivory, .014)
     box("Side wall crown", (wall_x, 3.73, wall_z), (.159, .064, depth + .04), ivory, .015)
     box("Side wall edge trim", (wall_x, 1.85, BEDROOM_FRONT_Z - .04), (.155, 3.71, .08), ivory, .012)
     box("Side wall foundation trim", (wall_x, -.115, wall_z), (.16, .192, depth + .03), ivory, .022)
-    box("Side baseboard", (inner_x - .015, .082, (-3.20 + front) / 2), (.045, .165, front + 3.20), ivory, .012)
+    for z in (door_back, door_front):
+        box("Maple stair jamb", (wall_x, door_height / 2, z), (.176, door_height, .064), maple, .012)
+    box("Maple stair header", (wall_x, door_height, (door_back + door_front) / 2),
+        (.176, .072, door_front - door_back + .064), maple, .012)
 
     # Barely raised boards cast fine, tonal shadow lines on the two interior walls.
     first_y, last_y, rows = .161, 1.115, 7
     row_height = (last_y - first_y) / rows
-    rear_x = (CABIN_LEFT + inner_x) / 2
-    rear_width = inner_x - CABIN_LEFT
-    side_z = (-3.19 + front) / 2
-    side_width = front + 3.19
+    rear_x = (inner_x + rear_right) / 2
+    rear_width = rear_right - inner_x
     center_y = (first_y + last_y) / 2
     box("Rear wainscot backing", (rear_x, center_y, -3.199), (rear_width, last_y - first_y, .011), sage_seams)
-    box("Side wainscot backing", (inner_x - .003, center_y, side_z), (.012, last_y - first_y, side_width), sage_seams)
     for row in range(rows):
         y = first_y + row_height * (row + .5)
         box("Rear wainscot board", (rear_x, y, -3.192), (rear_width, row_height - .004, .023), sage, .003)
-        box("Side wainscot board", (inner_x - .009, y, side_z), (.025, row_height - .004, side_width), sage, .003)
     box("Rear dado rail", (rear_x, last_y + .012, -3.181), (rear_width, .036, .035), sage, .008)
-    box("Side dado rail", (inner_x - .010, last_y + .012, side_z), (.041, .036, side_width), sage, .008)
+    for start, end in ((-3.19, door_back), (door_front, front)):
+        side_z, side_width = (start + end) / 2, end - start
+        box("Side baseboard", (inner_x + .015, .082, side_z), (.045, .165, side_width), ivory, .012)
+        box("Side wainscot backing", (inner_x + .003, center_y, side_z), (.012, last_y - first_y, side_width), sage_seams)
+        for row in range(rows):
+            y = first_y + row_height * (row + .5)
+            box("Side wainscot board", (inner_x + .009, y, side_z), (.025, row_height - .004, side_width), sage, .003)
+        box("Side dado rail", (inner_x + .010, last_y + .012, side_z), (.041, .036, side_width), sage, .008)
 
     # The aperture opens straight onto the existing sky, with a maple casing and inset mullions.
     aperture_width, aperture_height = win_front - win_back, lintel - sill
@@ -192,7 +206,7 @@ def bedroom_walls():
     for z in (win_back, win_front):
         box("Maple window jamb", (wall_x, window_y, z), (.182, aperture_height, .084), maple, .011)
     box("Maple window header", (wall_x, lintel, window_z), (.184, .093, aperture_width + .084), maple, .013)
-    box("Deep maple sill", (wall_x - .057, sill, window_z), (.299, .074, aperture_width + .16), maple, .014)
+    box("Deep maple sill", (wall_x + .057, sill, window_z), (.299, .074, aperture_width + .16), maple, .014)
     box("Window center mullion", (wall_x, window_y, window_z), (.067, aperture_height, .041), window_green, .009)
     for y in (sill + aperture_height / 3, sill + aperture_height * 2 / 3):
         box("Window transom", (wall_x, y, window_z), (.067, .035, aperture_width), window_green, .008)
@@ -257,13 +271,25 @@ bpy.data.objects.remove(parquet, do_unlink=True)
 rugs = collections["06"]
 lower_rugs = [obj for obj in rugs if obj.location.x >= DIVIDER_X]
 upper_rugs = [obj for obj in rugs if obj.location.x < DIVIDER_X]
+wardrobe_prefixes = ("Wardrobe", "Sliding panel", "Recessed brass pull", "Pull inset")
+wardrobe = [obj for obj in collections["03"] if obj.name.startswith(wardrobe_prefixes)]
+nightstand = [obj for obj in collections["03"] if obj not in wardrobe]
+# Pivot the cupboard off its original rear wall and face into the room from the stair wall.
+turn_wardrobe = (
+    Matrix.Translation((-6.10, -.22, 0))
+    @ Matrix.Rotation(pi / 2, 4, "Z")
+    @ Matrix.Translation((5.72, -2.76, 0))
+)
+for obj in wardrobe:
+    obj.matrix_world = turn_wardrobe @ obj.matrix_world
 
 join_as("Shell", collections["01"])
 join_as("Duplex_LowerShell", lower_shell)
 join_as("Duplex_UpperShell", upper_shell)
 join_as("Floor_Parquet", [lower_parquet])
 join_as("Floor_Parquet_Upper", [upper_parquet])
-join_as("Wardrobe_Nightstand", collections["03"])
+join_as("Interactable_Wardrobe", wardrobe)
+join_as("Nightstand", nightstand)
 join_as("Stationery", collections["04"])
 join_as("Shelf_Gallery", collections["05"])
 join_as("Rugs", lower_rugs)

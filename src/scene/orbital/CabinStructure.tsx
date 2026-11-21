@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
 import type { ThreeEvent } from '@react-three/fiber';
-import { BEDROOM_WALL_FRONT, CABIN_DIVIDER_X, UPPER_DECK_OFFSET } from './cabinLayout';
+import { BEDROOM_STAIR_DOOR, CABIN_DIVIDER_X, UPPER_DECK_OFFSET } from './cabinLayout';
 import { CABIN_STAIRS, STAIR_LANDING_WALL, STAIR_RISE, STAIR_RUN, STAIR_TREAD_RUN, STAIR_UPPER_PLATFORM_BACK } from './cabinStairs';
 import { UpperDeckVisibility } from './CabinUpperDeck';
 import { SoftBox } from './Primitives';
@@ -10,7 +10,6 @@ const DARK_WOOD = '#75503a';
 const BRASS = '#996f47';
 const [shift, upperY] = UPPER_DECK_OFFSET;
 const GUARD_HEIGHT = .76;
-const BEDROOM_RAIL_GAP = .62;
 
 function Guard({ from, to }: { from: [number, number]; to: [number, number] }) {
   const dx = to[0] - from[0], dz = to[1] - from[1];
@@ -27,18 +26,15 @@ function Guard({ from, to }: { from: [number, number]; to: [number, number] }) {
   </>;
 }
 
-/** The bedroom deck's rail leaves the west landing open for the stairs. */
+/** The stair-side wall closes the left edge of the bedroom deck. */
 export function BedroomGuard() {
   const left = CABIN_DIVIDER_X - shift + .035;
   const right = CABIN_DIVIDER_X - .035;
   const front = 3.10;
-  const opening = CABIN_STAIRS.width / 2;
   return <group name="Bedroom_Guardrail">
-    <Guard from={[left, -3.16]} to={[left, CABIN_STAIRS.upperZ - opening]} />
-    <Guard from={[left, CABIN_STAIRS.upperZ + opening]} to={[left, front]} />
     <Guard from={[left, front]} to={[right, front]} />
     <group name="Bedroom_Right_Guardrail">
-      <Guard from={[right, front]} to={[right, BEDROOM_WALL_FRONT + BEDROOM_RAIL_GAP]} />
+      <Guard from={[right, front]} to={[right, -2.58]} />
     </group>
   </group>;
 }
@@ -68,6 +64,7 @@ function StairLandingWall() {
 }
 
 export function CabinStaircase({ onCross }: { onCross: () => void }) {
+  const showDoorstep = useContext(UpperDeckVisibility);
   const { x, width, lowerZ, upperZ, steps } = CABIN_STAIRS;
   const flightAngle = Math.atan2(upperY, STAIR_RUN);
   const flightLength = Math.hypot(upperY, STAIR_RUN);
@@ -87,6 +84,9 @@ export function CabinStaircase({ onCross }: { onCross: () => void }) {
         position={[platformCenter, -.105, lowerZ]} />
       <SoftBox name="Stair_Upper_Landing" dims={[platformWidth, .23, width]} color={WOOD} radius={.026}
         position={[platformCenter, upperY - .115, STAIR_UPPER_PLATFORM_BACK + width / 2]} />
+      {showDoorstep && <SoftBox name="Bedroom_Doorstep" color={WOOD} radius={.012}
+        dims={[.46, .028, BEDROOM_STAIR_DOOR.front - BEDROOM_STAIR_DOOR.back - .08]}
+        position={[CABIN_DIVIDER_X + .10, upperY + .007, (BEDROOM_STAIR_DOOR.front + BEDROOM_STAIR_DOOR.back) / 2]} />}
       <group position-y={upperY}>
         <Guard from={[guardX, upperZ]} to={[guardX, STAIR_LANDING_WALL.front]} />
       </group>

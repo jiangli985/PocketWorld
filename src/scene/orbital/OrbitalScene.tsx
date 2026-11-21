@@ -7,7 +7,7 @@ import type { OrbitControls as Controls } from 'three-stdlib';
 import * as THREE from 'three';
 import { SCENE_ORIGINS, type WorldAction, type WorldObjectState, type WorldSceneId, type WorldSceneProps } from '../../types/world';
 import { roomAudio } from '../audioEngine';
-import { CAMERA_FOV, HOME_TARGET, HOME_ZOOM, OUTFIT_TARGET, outfitCameraPosition, cabinCameraFrame, type CabinView } from './cabinView';
+import { CAMERA_FOV, HOME_TARGET, HOME_ZOOM, OUTFIT_TARGET, outfitCameraPosition, cabinCameraFrame, stairCameraFrames, type CabinView } from './cabinView';
 import { CabinUpperDeck, UpperDeckVisibility } from './CabinUpperDeck';
 import { BedroomGuard, CabinStaircase } from './CabinStructure';
 import { stairDestination, type CabinResidentView } from './cabinStairs';
@@ -98,6 +98,7 @@ function CameraRig(props: CameraRigProps) {
     lower: cabinCameraFrame('lower', aspect),
     upper: cabinCameraFrame('upper', aspect),
   }), [aspect]);
+  const stairFrames = useMemo(() => stairCameraFrames(aspect), [aspect]);
   const deckCamera = useRef({ viewRevision: props.viewRevision, settling: false, onStairs: false, upperVisible: !props.outfitPreview });
   const stairEye = useRef(new THREE.Vector3());
   const stairTarget = useRef(new THREE.Vector3());
@@ -322,8 +323,8 @@ function CameraRig(props: CameraRigProps) {
       controls.current.enabled = !locked && !adjusting;
       if (!adjusting) return;
       const end = cabinFrames[props.cabinView];
-      const eye = onStairs ? stairEye.current.lerpVectors(cabinFrames.lower.position, cabinFrames.upper.position, ascent) : end.position;
-      const pivot = onStairs ? stairTarget.current.lerpVectors(cabinFrames.lower.target, cabinFrames.upper.target, ascent) : end.target;
+      const eye = onStairs ? stairEye.current.lerpVectors(stairFrames.lower.position, stairFrames.upper.position, ascent) : end.position;
+      const pivot = onStairs ? stairTarget.current.lerpVectors(stairFrames.lower.target, stairFrames.upper.target, ascent) : end.target;
       const blend = props.reducedMotion ? 1 : 1 - Math.exp(-Math.min(delta, .1) * (onStairs ? 6 : 10));
       camera.position.lerp(eye, blend);
       controls.current.target.lerp(pivot, blend);
@@ -333,9 +334,14 @@ function CameraRig(props: CameraRigProps) {
       }
       camera.lookAt(controls.current.target);
       if (!onStairs && camera.position.distanceToSquared(eye) < .0001 && controls.current.target.distanceToSquared(pivot) < .0001) {
+        // Consume the previous drag's remaining damping before restoring the preset.
+        const damping = controls.current.enableDamping;
+        controls.current.enableDamping = false;
+        controls.current.update();
         camera.position.copy(eye);
         controls.current.target.copy(pivot);
         controls.current.update();
+        controls.current.enableDamping = damping;
         deck.settling = false;
         controls.current.enabled = !locked;
       }

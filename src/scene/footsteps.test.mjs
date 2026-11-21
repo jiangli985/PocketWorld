@@ -329,7 +329,7 @@ test('the three sitting plush dolls can be kicked around and block solidly when 
   const kickChecks = [
     // Bunny beside floor sofa: kick south (+Z) into open front floor.
     { id: 'plush-bunny', startOffset: [0, -0.85], key: 'KeyS', deltaSign: 1, testPinned: true },
-    // Bear in wardrobe nook: kick north (-Z) toward the wardrobe and keep pushing into it once pinned!
+    // Bear beside the bed: kick north (-Z) toward the back wall and keep pushing once pinned.
     { id: 'plush-bear', startOffset: [0, 0.85], key: 'KeyW', deltaSign: -1, testPinned: true },
     // Penguin near cat corner: kick south (+Z) into the front wall and keep pushing once pinned!
     { id: 'plush-penguin', startOffset: [0, -0.85], key: 'KeyS', deltaSign: 1, testPinned: true },
@@ -528,7 +528,7 @@ test('clicking the wardrobe leads to its doors and E changes the outfit at the s
     const [x, z] = cabinLayout.WARDROBE_STAND;
     const request = { sceneId: 'habitat', objectId: 'wardrobe', kind: 'toggle' };
     let reached = false;
-    view.props.interaction.current([-6.22, 1.45, -2.3], request, () => { reached = true; });
+    view.props.interaction.current([cabinLayout.WARDROBE_FOOTPRINT[1], 1.45, z], request, () => { reached = true; });
     for (let i = 0; i < 900 && !reached; i++) view.frame(1 / 60);
     assert.ok(reached);
     assert.ok(Math.hypot(view.root.position.x - x, view.root.position.z - z) < .06);

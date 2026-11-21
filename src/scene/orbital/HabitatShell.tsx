@@ -1,4 +1,4 @@
-import { CABIN_DIVIDER_X, CABIN_LEFT, CABIN_RIGHT, UPPER_DECK_OFFSET, WARDROBE_FOOTPRINT, type CabinDeck } from './cabinLayout';
+import { CABIN_DIVIDER_X, CABIN_LEFT, CABIN_RIGHT, type CabinDeck } from './cabinLayout';
 import React, { Suspense, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
@@ -16,7 +16,7 @@ interface HabitatShellProps {
 }
 
 const LOWER_PARTS = ['Duplex_LowerShell', 'Floor_Parquet', 'Stationery', 'Shelf_Gallery', 'Rugs'];
-const UPPER_PARTS = ['Duplex_UpperShell', 'Floor_Parquet_Upper', 'Wardrobe_Nightstand', 'Rugs_Upper'];
+const UPPER_PARTS = ['Duplex_UpperShell', 'Floor_Parquet_Upper', 'Nightstand', 'Interactable_Wardrobe', 'Rugs_Upper'];
 const OBSERVATORY_PARTS = ['Shell', 'Floor_Parquet', 'Floor_Parquet_Upper'];
 
 function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) {
@@ -37,7 +37,7 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
       if (remountSlippers && isSlipperMaterial(node.material)) slippers.push(node);
     });
     slippers.forEach(node => node.removeFromParent());
-    const wardrobe = shell.getObjectByName('Wardrobe_Nightstand');
+    const wardrobe = shell.getObjectByName('Interactable_Wardrobe');
     wardrobe?.removeFromParent();
     return { shell, wardrobe };
   }, [scene, variant, deck]);
@@ -46,7 +46,6 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
     <primitive object={cabin.shell} dispose={null} />
     {cabin.wardrobe && <ObjectHandle id="wardrobe" action="toggle" panorama world={world}
       hint={outfitHint(readOutfit(world.objects.wardrobe?.itemId))}
-      acceptsHit={point => point.x <= WARDROBE_FOOTPRINT[1] + UPPER_DECK_OFFSET[0]}
       onClick={event => event.stopPropagation()}>
       <primitive object={cabin.wardrobe} dispose={null} />
     </ObjectHandle>}

@@ -15,8 +15,9 @@ export const WALK_BOUNDS = { left: CABIN_LEFT + .25 + RESIDENT_RADIUS, right: 3.
 export const CABIN_DIVIDER_X = -1.86;
 export const UPPER_DECK_OFFSET: [number, number, number] = [CABIN_DIVIDER_X - CABIN_LEFT, 3.82, 0];
 // Matches the finished return-wall trim in scripts/export-open-cabin.py.
-export const BEDROOM_WALL_FRONT = 1.20;
+export const BEDROOM_WALL_FRONT = 3.16;
 export const BEDROOM_WALL_OUTSET = .135;
+export const BEDROOM_STAIR_DOOR = { back: -2.21, front: -1.13 };
 export type CabinDeck = 'lower' | 'upper';
 
 export const DECK_WALK_BOUNDS = {
@@ -34,9 +35,9 @@ export function authoredCabinPoint(point: [number, number, number], deck: CabinD
 
 export const BED_POSITION: [number, number, number] = [-4.05, 0, -1.897];
 
-// The wardrobe occupies the west half of the combined Wardrobe_Nightstand mesh.
-export const WARDROBE_FOOTPRINT: [number, number, number, number] = [-6.47, -4.97, -3.18, -2.29];
-export const WARDROBE_STAND: [number, number] = [-5.72, -1.90];
+// Bounds after turning the wardrobe toward the room from the stair-side wall.
+export const WARDROBE_FOOTPRINT: [number, number, number, number] = [-6.49, -5.62, -.53, .97];
+export const WARDROBE_STAND: [number, number] = [-5.25, .22];
 
 // Armless floor sofa at the open corner in front of the bedside rug.
 export const FLOOR_SOFA = {
@@ -89,7 +90,7 @@ export const PLUSH_DOLLS: readonly PlushDollPlacement[] = [
     id: 'plush-bear',
     name: 'Furniture_PlushBear',
     path: 'furniture/plush-bear.glb',
-    position: [-5.58, 0, -1.48],
+    position: [-5.77, 0, -2.28],
     yaw: 0.40,
     height: 0.55,
     radius: 0.23,
