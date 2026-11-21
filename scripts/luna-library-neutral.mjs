@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { load } from '../src/scene/orbital/load-for-validation.mjs';
 
 const cache = new Map();
@@ -13,6 +14,7 @@ function loadTS(path) {
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } });
   vm.runInNewContext(outputText, { exports: mod.exports, require: id => {
     if (id === 'three') return THREE;
+    if (id === 'three/examples/jsm/loaders/GLTFLoader.js') return { GLTFLoader };
     if (id.startsWith('.')) return loadTS(new URL(id + '.ts', path));
     throw new Error('Unexpected handoff dependency ' + id);
   } });
@@ -20,9 +22,18 @@ function loadTS(path) {
   return mod.exports;
 }
 const path = new URL('../assets/public/models/resident/luna-walk-room.glb', import.meta.url);
-const { gltf } = await load(path);
-const rig = loadTS(new URL('../src/scene/orbital/residentRig.ts', import.meta.url)).createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'));
+const { gltf, mesh } = await load(path);
+const { createResidentRig, RESIDENT_SCALE } = loadTS(new URL('../src/scene/orbital/residentRig.ts', import.meta.url));
+const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'));
 rig.applyPose(0, 0);
+const armContact = process.argv.includes('--arm-contact');
+if (armContact) {
+  const { createIdleState, createIdlePlayer } = loadTS(new URL('../src/scene/orbital/standingIdle.ts', import.meta.url));
+  const idle = createIdleState();
+  idle.restWeight = 1;
+  createIdlePlayer(rig.mesh)(idle, false);
+  rig.applyArmCorrectives(true);
+}
 let centered = new THREE.Matrix4();
 if (process.argv.includes('--handoff')) {
   const dir = new URL('../src/scene/orbital/library/', import.meta.url);
@@ -45,4 +56,6 @@ const pose = {};
 gltf.scene.traverse(joint => {
   if (joint.isBone) pose[joint.name] = joint.matrixWorld.clone().premultiply(centered).toArray();
 });
-process.stdout.write(JSON.stringify(pose));
+process.stdout.write(JSON.stringify(armContact ? {
+  pose, scale: RESIDENT_SCALE, influences: mesh.morphTargetInfluences ?? [.85, .85],
+} : pose));

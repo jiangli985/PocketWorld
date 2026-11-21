@@ -68,7 +68,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     const down = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       const editable = event.target instanceof HTMLElement && (['INPUT', 'TEXTAREA'].includes(event.target.tagName) || event.target.isContentEditable);
-      if (editable) return;
+      if (editable || (event.target instanceof HTMLElement && event.target.closest?.('.cat-interaction[open]'))) return;
       if (viewMode === 'approach' || viewMode === 'orbit') {
         if (event.code === 'Space' || event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
           event.preventDefault();

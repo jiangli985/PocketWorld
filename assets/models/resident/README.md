@@ -10,7 +10,7 @@
 
 双脚在堆袜下沿裁去原鞋面、鞋底和鞋跟。新袜脚按 Luna 的足跟、内侧足弓和前掌轮廓接入，沿切口采样袜色，并匹配两侧 98 个边界点的位置、法线与骨骼权重。行走动作以袜底重新求解双腿 IK。走停混合阶段按袜脚几何的 `soleContacts` 支撑点修正脚尖高度。
 
-[运行模型](../../public/models/resident/luna-cloudhoodie.glb)包含 57,543 个三角形，内嵌行走、打哈欠、环顾、固定椅、低沙发、上床及三层取书动作。固定椅使用[专属接触缓存](../../public/models/resident/luna-cloudhoodie-seat.bin)，按新网格在椅子局部坐标中逐帧采样坐垫和扶手，98 帧、744 个修形点。重新编辑网格或坐姿后，须同步重烘缓存与模型中的 `_CONTACT_ID`。衣柜标识为 `cloudhoodie`。
+[运行模型](../../public/models/resident/luna-cloudhoodie.glb)包含 57,543 个三角形，内嵌行走、打哈欠、环顾、固定椅、低沙发及三层取书动作，另保留供制作参考的上床动作。固定椅使用[专属接触缓存](../../public/models/resident/luna-cloudhoodie-seat.bin)，按新网格在椅子局部坐标中逐帧采样坐垫和扶手，98 帧、744 个修形点。重新编辑网格或坐姿后，须同步重烘缓存与模型中的 `_CONTACT_ID`。衣柜标识为 `cloudhoodie`。
 
 ## 雪花裙装绑定
 
@@ -20,7 +20,7 @@
 
 文件默认打开站立姿势的脸部近景。在骨架的 Action Editor 中可选择行走、站立、转椅落座、低沙发落座、环顾、伸懒腰、三层取书或上床。角色沿用 Luna 的 115 个骨骼及父子关系，五官跟随头骨，下颌向颈部渐变。手指、发束和裙骨按角色位置对齐，取书时前裙骨随抬膝量调整。袜脚分别使用小腿、脚掌与脚趾权重，脚踝接缝两侧权重一致。26 节发骨的 `hairDrape` 和 `hairSway` 分别控制每节的下垂补偿和回摆幅度，导出至 GLB 节点的 `extras`。发中和发尾的权重高于发根，后发的回摆大于脸侧发束。更新材质和发骨参数时保留 GLB 网格、动作及 `_CONTACT_ID` 索引。
 
-生活舱从衣柜按需加载 [luna-snowflower.glb](../../public/models/resident/luna-snowflower.glb)，共 54,784 个三角形。模型包含适配该骨架的行走、固定椅、沙发、上床与三层取书动作。书本的位姿沿用既有书架标记，环顾与伸懒腰共用原有上身旋转资源。室内材质为雪纺、发色和眼睛加入了低强度的贴图补光。
+生活舱从衣柜按需加载 [luna-snowflower.glb](../../public/models/resident/luna-snowflower.glb)，共 54,784 个三角形。运行时使用适配该骨架的行走、固定椅、沙发与三层取书动作。书本的位姿沿用既有书架标记，环顾与伸懒腰共用原有上身旋转资源。室内材质为雪纺、发色和眼睛加入了低强度的贴图补光。
 
 固定椅使用独立的 [luna-snowflower-seat.bin](../../public/models/resident/luna-snowflower-seat.bin)。制作时以 30 fps 采样雪花裙装的 98 帧坐姿，根据实际软垫和扶手表面高度计算位移，再按每个顶点的蒙皮矩阵反解回绑定空间。GLB 的 `_CONTACT_ID` 对应缓存的 1,740 个修形点。角色和缓存须成对替换。
 
@@ -66,40 +66,26 @@ python scripts/pack-luna-chair.py --output <外部目录>
 
 制作脚本检查原生 98 帧的接触面；运行时单测检查时间原点、绑定、独立实例、恢复、骨长与有限坐标。网页动作和导出后网格还需单独验收，不能用原生检查替代浏览器检查。验证结果及截图放在任务 PR，临时模型、报告和录屏不提交。
 
-## 上床三版
+## 日常裙装的站姿修形
 
-`luna-bed-v3.blend` 是可编辑的 24 fps、0–222 帧动作；运行时使用 [独立动画库](../../public/models/resident/luna-bed-v3.glb)，复用既有 Luna 网格、115 骨骼、贴图与 Walk。制作源包含真实床接触尺寸、角色、关键帧、相机和灯光，不进入网页构建。
+[`Luna-ArmContact.blend`](Luna-ArmContact.blend) 打开时显示放松后的站姿，可在 `Luna_Surface` 的 Shape Keys 中分别调节 `LeftArmContact` 和 `RightArmContact`。两侧修形对应裙侧的受压和腋下过渡。运行时按同侧上臂、前臂朝下的程度和前伸幅度调节权重，抬手时释放。固定椅、沙发和取阅书籍使用已有接触姿势。
 
-### 动作与坐标
+在仓库根目录复建可编辑文件及运行时 GLB：
 
-- 0–48：从运行时中立站姿直接手撑落座，无独立弯腰探床阶段。
-- 48 对齐二版 113；61 对齐二版 126；95 起保持二版 160 以后的转髋、抬腿、脚跟落床与 Mixamo 搭腹收尾。
-- 右小腿保持踝位置，按左侧健康解剖朝向修正轴向扭转；右踝、脚趾在坐姿提前放松，抬腿前短促转动做局部四元数平滑。未把脚锁平。
-- Blender 米制 Z 向上；角色缩放 1.43，床按运行时 contact-fit 1.72 × 1.40 × 2.60。运行时入口为 `[-1.48, 0, 0.73]`、朝向 `Math.PI / 2`。外层位置固定，全部上床根运动由 Hips 通道负责。
-- 最后睡姿保持；醒来或取消逆向采样当前动作，返回精确站姿后恢复行走。未新增闭眼或循环睡眠动作。
-
-### 来源
-
-沿用用户提供的二版 Luna 上床试片。二版前身为用户提供的 Plask XBot 动作，后半段重定向并按真实床适配；Mixamo「Laying Sleeping」只提供最后上身微动与搭腹手势，不包含落腿动作。Luna 与床来自项目既有 Tripo 模型。本次不新增外部模型或纹理，不把来源不明的素材声明为 CC0。运行时登记见 [来源清单](../../models.sources.json)。
-
-### 复建与验证
-
-使用 Blender 5.2.3：
-
-```powershell
-blender --background --python scripts/export-luna-bed.py
-npm test
+```bash
+reviewDir=$(mktemp -d)
+git show 80d880c:assets/public/models/resident/luna-walk-room.glb > "$reviewDir/luna-base.glb"
+blender --background --factory-startup --python-exit-code 1 \
+  --python scripts/sculpt-luna-arm-contact.py -- --base "$reviewDir/luna-base.glb"
 ```
 
-导出脚本从此制作源和既有 `luna-walk-room.glb` 的绑定矩阵重建动画库，避免 Blender 骨骼坐标轴与 glTF 的差异。不需要临时试片目录。GLB 仅有 115 节点、230 通道，799,688 bytes，无网格、蒙皮或图片。
-
-床专项测试覆盖中立首帧、单层根运动、恢复 Walk、暂坐足轴、全段半帧右踝连续性、30/60/120 Hz、后台时间截断、反向取消与减少动态效果。视觉与接触证据存放在仓库外并在 PR 交付；不是通用布料或连续碰撞验证。继承的裙摆/发束局部交叠与二版臀部约 6 mm 接触压入仍有待后续处理。
+直接在 Blender 修改形态键后，给同一命令追加 `--from-blend assets/models/resident/Luna-ArmContact.blend` 将修改导出。打包只添加稀疏目标，保留原始顶点顺序、坐姿接触索引、骨骼、动作和贴图数据。偏头与拢手的角度来自 Luna 本地动作试演，由网页按时间包络播放。
 
 ## 站立伸懒腰
 
 用户提供的 Mixamo `Yawn.fbx` 为 30 FPS、1–251 帧骨骼动作。`scripts/export-luna-yawn.py` 将上身世界旋转相对绑定姿态的变化转换到 Luna 的绑定坐标，导出 `luna-yawn.glb`，232,092 bytes、54 条旋转轨道、8.33 秒。骨盆、腿和脚沿用运行时中立站姿。首次普通待机时加载，运行时淡入淡出整段动作。
 
-复建命令为 `blender --background --python scripts/export-luna-yawn.py -- <Yawn.fbx路径>`。输入由用户下载提供，许可见来源清单中的 Adobe Mixamo FAQ。普通待机复用现有骨骼，加入小幅胸腔呼吸、上身侧摆、转头及肩臂放松。9 秒普通待机采样中，头部移动范围约 1.7 cm，双手约 6.7–7.5 cm，脚部位置固定。
+复建命令为 `blender --background --python scripts/export-luna-yawn.py -- <Yawn.fbx路径>`。输入由用户下载提供，许可见来源清单中的 Adobe Mixamo FAQ。普通待机与额外动作的节奏及打断条件见 SPEC.md。
 
 
 ## 站立环顾
@@ -108,7 +94,7 @@ Mixamo 页面按描述 `Idle Stand Looking Around` 确认的 `Looking Around`，
 
 复用 `scripts/export-luna-yawn.py` 的绑定姿态与肩臂方向修正：`blender --background --python scripts/export-luna-yawn.py -- "<Looking Around.fbx路径>" looking-around`。生成 `luna-looking-around.glb`：180,012 bytes，54 条上身旋转轨道，6.33 秒；无网格、纹理和根位移。骨盆、腿及脚由原中立姿态负责，环顾期间保持原地。源 FBX 留在仓库外，SHA-256 与许可入口见来源清单。
 
-两种偶发动作独立按需加载；某一资源失败不阻塞另一动作或普通待机。时序与打断由 `standingIdle.ts` 统一管理，数值参数及产品行为见 SPEC.md。
+环顾和伸懒腰各自按需加载；偏头、拢手和松弛站姿由运行时直接计算。时序与打断由 `standingIdle.ts` 统一管理，数值参数及产品行为见 SPEC.md。
 
 ## 书柜取书与归还
 

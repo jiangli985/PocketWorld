@@ -16,7 +16,7 @@
 - `orbital/` 根目录保留舱室、家具、住民、交互基础组件、材质与场景样式。
 - `orbital/chairMotion.ts` 管理固定椅的入座、离座与取消；`chairAnimation.ts` 采样坐姿与局部接触缓存。资源与复建方法见 [Luna 制作源](../../assets/models/resident/README.md)。
 - `orbital/media/RecordPlayer.tsx` 保留唱机/唱片的原有几何，`record-motion.ts` 统一管理舱室局部坐标路径、唱臂和串行播放阶段；架位在本次会话中稳定，音乐淡入淡出不影响房间音效。
-- `audioEngine.ts` 提供音乐播放、静音、环境与脚步音效。
+- `audioEngine.ts` 提供音乐播放、静音、环境、脚步和团子音效。团子叫声的来源与许可见 [音效素材](../../assets/audio/cat/README.md)。
 - `geometry.ts` 提供场景共用的几何工具。
 
 ## 模块接入
@@ -43,6 +43,18 @@ blender --background assets/models/furniture/floor-sofa.blend --python scripts/e
 
 ```sh
 blender --background --factory-startup --python scripts/build-trash-can.py
+```
+
+书桌左后方的[桌面黑胶唱片架制作源](../../assets/models/furniture/vinyl-rack.blend)由 `scripts/build-vinyl-rack.py` 程序化生成并打包贴图（胡桃木 30° 斜铣凹槽、炭灰羊毛毡垫、7 根拉丝黄铜弓形分隔杆与双后横杆、镂空铜框胡桃木端板与锥形铜套支脚，与 `record-motion.ts` 共用六架位坐标），在仓库根目录运行以下命令可重建 `.blend` 并导出[运行时模型](../../assets/public/models/furniture/vinyl-rack.glb)。
+
+```sh
+blender --background --factory-startup --python scripts/build-vinyl-rack.py
+```
+
+电脑右侧的复古游戏卡带套件（[奶娃滑雪大冒险卡带](../../assets/models/furniture/cartridge-mario.blend)、[团团魔法录卡带](../../assets/models/furniture/cartridge-shooter.blend)、[双槽斜倾胡桃木展示架](../../assets/models/furniture/cartridge-stand.blend)与[奶油胡桃木卡带扩展坞](../../assets/models/furniture/cartridge-dock.blend)）由 `scripts/build-game-cartridges.py` 程序化生成并打包 16-bit 像素封绘与 PBR 贴图，在仓库根目录运行以下命令可一次重建全部 `.blend` 并导出 `assets/public/models/furniture/cartridge-*.glb`。
+
+```sh
+blender --background --factory-startup --python scripts/build-game-cartridges.py
 ```
 
 舱内三只坐姿毛绒娃娃的制作源（[奶油垂耳兔](../../assets/models/furniture/plush-bunny.blend)、[焦糖泰迪熊](../../assets/models/furniture/plush-bear.blend)、[雾蓝胖企鹅](../../assets/models/furniture/plush-penguin.blend)）由 `scripts/build-plush-dolls.py` 程序化生成并打包贴图，在仓库根目录运行以下命令可一次重建全部 `.blend` 并导出对应的 `assets/public/models/furniture/plush-*.glb` 运行时模型（也支持 `-- --only bunny|bear|penguin` 单独生成）。

@@ -25,13 +25,13 @@ export interface ResidentArm {
   setFingers?: (curl: number, thumbOppose?: number) => void;
 }
 export interface ResidentRig {
-  neutralPose: { joint: THREE.Bone; pose: { position: THREE.Vector3; quaternion: THREE.Quaternion; scale: THREE.Vector3 } }[];
   legs: ResidentLeg[]; arms: ResidentArm[]; torso: THREE.Bone; neck: THREE.Bone; head?: THREE.Bone;
   skirtFront: THREE.Bone; skirtBack: THREE.Bone; mesh: THREE.Group;
   applyPose: (phase: number, walkWeight: number) => void;
   followMotion: (dt: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => void;
   fitted?: ResidentAssets['fitted'];
   updateSleeveContact?: () => void;
+  applyArmCorrectives: (enabled: boolean) => void;
   applyChairPose?: (time: number, weight: number) => void;
   dispose: () => void;
 }
