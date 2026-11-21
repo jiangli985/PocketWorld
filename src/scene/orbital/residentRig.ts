@@ -44,8 +44,8 @@ export function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE
 }
 
 /** A spring with an analytic update so its settling time is independent of the display rate. */
-function followSpring(frequency: number) {
-  const damping = frequency * .72;
+function followSpring(frequency: number, dampingRatio = .72) {
+  const damping = frequency * dampingRatio;
   const oscillation = Math.sqrt(frequency ** 2 - damping ** 2);
   let value = 0;
   let velocity = 0;
@@ -70,7 +70,10 @@ function createLongHairMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone, mes
       next instanceof THREE.Bone; next = next.children.find(child => child instanceof THREE.Bone && typeof child.userData.hairDrape === 'number')) {
       joints.push(next);
     }
-    return joints.map(joint => ({ joint, weight: THREE.MathUtils.clamp(joint.userData.hairDrape, 0, 1) }));
+    return joints.map(joint => {
+      const drape = THREE.MathUtils.clamp(joint.userData.hairDrape, 0, 1);
+      return { joint, drape, inertia: THREE.MathUtils.clamp(joint.userData.hairSway ?? drape, 0, 1) };
+    });
   });
   if (!chains.length) return;
   const vertical = new THREE.Vector3(0, 1, 0);
@@ -80,25 +83,26 @@ function createLongHairMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone, mes
   const headRotation = new THREE.Quaternion(), tiltCorrection = new THREE.Quaternion();
   const authored = new THREE.Quaternion(), parent = new THREE.Quaternion(), corrected = new THREE.Quaternion();
   const sway = new THREE.Quaternion(), pitchAxis = new THREE.Vector3(1, 0, 0);
-  const turnAxis = new THREE.Vector3(0, .86, .51).normalize();
-  const turnLag = followSpring(10);
+  // For a downward, rearward strand, the yaw and lateral roll both oppose the turn.
+  const turnAxis = new THREE.Vector3(0, .55, -.83).normalize();
+  const turnLag = followSpring(8, .50);
   return {
     reset: turnLag.reset,
     apply(dt: number, pitch: number, turn: number) {
       headRotation.copy(mesh.getWorldQuaternion(meshRotation).invert()).multiply(head.getWorldQuaternion(authored));
       headUp.copy(vertical).applyQuaternion(neutralHeadInverse).applyQuaternion(headRotation);
       tiltCorrection.setFromUnitVectors(headUp, vertical);
-      const yawLag = turnLag.step(-.21 * turn, dt);
+      const yawLag = turnLag.step(-.40 * turn, dt);
       for (const chain of chains) {
         authored.copy(headRotation);
         parent.copy(headRotation);
-        for (const { joint, weight } of chain) {
+        for (const { joint, drape, inertia } of chain) {
           authored.multiply(joint.quaternion);
           // The weights describe cumulative rotation along the chain in the resident's frame.
           // Solving each local rotation against the corrected parent keeps the roots anchored.
-          corrected.copy(identity).slerp(tiltCorrection, weight);
-          corrected.premultiply(sway.setFromAxisAngle(pitchAxis, pitch * weight * .6));
-          corrected.premultiply(sway.setFromAxisAngle(turnAxis, yawLag * weight));
+          corrected.copy(identity).slerp(tiltCorrection, drape);
+          corrected.premultiply(sway.setFromAxisAngle(pitchAxis, pitch * inertia * .6));
+          corrected.premultiply(sway.setFromAxisAngle(turnAxis, yawLag * inertia));
           corrected.multiply(authored);
           joint.quaternion.copy(parent.invert()).multiply(corrected);
           parent.copy(corrected);

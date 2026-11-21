@@ -108,9 +108,9 @@
       "source": "User-supplied Tripo model ab1c7402-ed3c-428e-bf63-d4d73a8b9d7d.glb and 蓝发少女与雪花裙装.png. Animation sources are shared with the Luna wardrobe, book, bed and low-sofa assets.",
       "license": "User-supplied character and artwork; no separate license declaration supplied.",
       "used": true,
-      "bytes": 10028396,
-      "sha256": "b94ad3c7e824174b3b59b586082b99989ef19177249bb06a5853854c6b25b2cb",
-      "processing": "Fitted Luna skeleton, closed sock feet with matched ankle shading, sculpted and repainted face, and authored hair drape weights. Embeds the fitted motions, book marker channels and outfit-specific chair contact IDs. See assets/models/resident/README.md."
+      "bytes": 10028804,
+      "sha256": "d7b2bcc3393f30ae6cd984df804469f55874254a718b348f3603f06e2e9803cf",
+      "processing": "Fitted Luna skeleton, closed sock feet with matched ankle shading, sculpted and repainted face, and authored hair drape and sway weights. Embeds the fitted motions, book marker channels and outfit-specific chair contact IDs. See assets/models/resident/README.md."
     },
     {
       "file": "resident/luna-snowflower-seat.bin",

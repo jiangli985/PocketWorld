@@ -232,23 +232,26 @@ test('snowflower back hair hangs during a held bow, lags a turn, and settles', a
     const bow = update(.48, 0);
     const held = update(.48, 0);
     assert(held.root.distanceTo(held.authoredRoot) < .0001, 'strand root stays attached');
-    assert(held.tip.y < held.authoredTip.y - .03, 'tip drops below the uncorrected pose');
+    assert(held.tip.y < held.authoredTip.y - .055, 'tip drops below the uncorrected pose');
     const drop = pose => pose.root.y - pose.tip.y;
-    assert(Math.abs(drop(held) - drop(rest)) < .05, 'the long strand remains hanging');
+    assert(Math.abs(drop(held) - drop(rest)) < .024, 'the long strand remains hanging');
     assert(held.tip.distanceTo(bow.tip) < .0001, 'bow compensation holds at rest');
     assert(update(.48, 0, false).tip.distanceTo(held.authoredTip) < .0001, 'disabled follow motion keeps the authored pose');
     assert(update(0, 0).tip.distanceTo(rest.tip) < .0001, 'returns to neutral after lifting the head');
-    let yaw = 0, movement = 0, earlier;
-    for (let frame = 0; frame < 30; frame++) {
-      yaw = Math.min(frame, 16) * .036;
-      const pose = update(0, yaw);
-      movement = Math.max(movement, pose.tip.distanceTo(pose.authoredTip));
+    const roomRight = new THREE.Vector3(1, 0, 0).transformDirection(rig.mesh.matrixWorld);
+    let lag = 0, rebound = 0, earlier;
+    for (let frame = 0; frame <= 120; frame++) {
+      const progress = Math.min(frame / 25, 1);
+      const pose = update(0, .6 * progress ** 2 * (3 - 2 * progress));
+      const sideways = pose.tip.clone().sub(pose.authoredTip).dot(roomRight);
+      if (frame <= 25) lag = Math.max(lag, sideways);
+      else rebound = Math.max(rebound, -sideways);
       if (earlier) assert(pose.tip.distanceTo(earlier) < .03, 'turn remains continuous');
       earlier = pose.tip;
     }
-    assert(movement > .005 && movement < .085, 'visible but bounded turn lag');
-    for (let i = 0; i < 120; i++) update(0, yaw);
-    const settled = update(0, yaw);
+    assert(lag > .03 && lag < .065, 'the tip visibly lags behind the turn');
+    assert(rebound > .004 && rebound < lag * .35, 'the tip rebounds once the head stops');
+    const settled = update(0, .6);
     assert(settled.tip.distanceTo(settled.authoredTip) < .0001, 'turn lag settles without drift');
   } finally { rig.dispose(); }
 });
