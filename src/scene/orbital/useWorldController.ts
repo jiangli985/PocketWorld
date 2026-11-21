@@ -13,7 +13,8 @@ export function nextObjectState(previous: WorldObjectState, action: WorldAction)
     case 'toggle': return { ...previous, active: !previous.active, value: previous.active ? 0 : 1 };
     case 'insert': case 'select': return { ...previous, active: true, itemId: action.payload?.itemId };
     case 'eject': return { ...previous, active: false, itemId: undefined };
-    case 'water': case 'pet': return { ...previous, value: previous.value + 1 };
+    case 'water': return { ...previous, value: previous.value + 1 };
+    case 'pet': return { ...previous, value: previous.value + 1, itemId: action.payload?.itemId };
     case 'travel': return { ...previous, open: true };
     default: return { ...previous };
   }

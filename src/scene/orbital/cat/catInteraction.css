@@ -1,0 +1,48 @@
+.cat-interaction {
+  position: fixed;
+  inset: auto 0 max(1.5rem, env(safe-area-inset-bottom)) 0;
+  width: min(21rem, calc(100% - 2rem));
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 1rem;
+  border: 1px solid #ceae8e;
+  border-radius: 14px;
+  background: #fff0da;
+  color: #4c3021;
+  font: 14px system-ui, sans-serif;
+}
+
+.cat-interaction::backdrop { background: #21173229; }
+
+.cat-interaction h2 {
+  margin: 0 0 .65rem;
+  font: 700 1.25rem/1.35 'Songti SC', serif;
+}
+
+.cat-interaction-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem;
+}
+
+.cat-interaction button {
+  min-height: 44px;
+  padding: .4rem .65rem;
+  border: 1px solid #b49477;
+  border-radius: 7px;
+  background: #f6ddbf;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.cat-interaction button:hover { background: #ecd0ad; }
+.cat-interaction button:focus-visible { outline: 2px solid #805335; outline-offset: 2px; }
+
+.cat-interaction .cat-interaction-cancel {
+  display: block;
+  margin: .3rem 0 0 auto;
+  border-color: transparent;
+  background: transparent;
+}

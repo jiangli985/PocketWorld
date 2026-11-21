@@ -41,3 +41,43 @@ test('rejected and cancelled playback never becomes playing; prepared resources 
  state.reject=true;assert.equal(await engine.startMusic(local),false);assert.equal(engine.getSnapshot().status,'error');
  state.reject=false;const pending=engine.startMusic(local);engine.pauseMusic();assert.equal(await pending,false);assert.equal(engine.getSnapshot().isPlaying,false);
 });
+
+test('Tuanzi meows once per interaction, reuses the sample, and stops when muted', () => {
+  const { engine, audios } = setup();
+  const meow = './assets/tuanzi-meow.mp3';
+  engine.setMuted(true);
+  engine.playCatMeow(meow);
+  assert.equal(audios.length, 0);
+  engine.setMuted(false);
+  engine.playCatMeow(meow);
+  const [audio] = audios;
+  assert.equal(audio.src, meow);
+  assert.equal(audio.paused, false);
+  audio.currentTime = .3;
+  engine.playCatMeow(meow);
+  assert.equal(audios.length, 1);
+  assert.equal(audio.currentTime, .3, 'a second request does not restart the sound that is playing');
+  engine.setMuted(true);
+  assert.equal(audio.paused, true);
+  assert.equal(audio.currentTime, 0);
+  engine.setMuted(false);
+  assert.equal(audio.paused, true, 'unmuting does not replay an old reply');
+  engine.playCatMeow(meow);
+  assert.equal(audios.length, 1);
+  assert.equal(audio.paused, false);
+  engine.stopCatMeow();
+  assert.equal(audio.paused, true);
+});
+
+test('a blocked cat audio playback can be retried on the next interaction', async () => {
+  const state = setup();
+  const meow = './assets/tuanzi-meow.mp3';
+  state.reject = true;
+  state.engine.playCatMeow(meow);
+  await Promise.resolve();
+  assert.equal(state.audios[0].paused, true);
+  state.reject = false;
+  state.engine.playCatMeow(meow);
+  assert.equal(state.audios.length, 2);
+  assert.equal(state.audios[1].paused, false);
+});

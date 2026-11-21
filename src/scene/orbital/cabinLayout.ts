@@ -3,6 +3,11 @@ export const CABIN_LEFT = -6.57;
 export const CABIN_RIGHT = 4.24;
 export const CABIN_CENTER_X = (CABIN_LEFT + CABIN_RIGHT) / 2;
 
+export const CAT_HOME = [3.02, 2.38] as const;
+export const CAT_YAW = -.75;
+export const CAT_MAT_Y = .015;
+export const CAT_CUSHION_TOP = .08;
+
 // Floor area shared by the resident walker and loose props such as the slippers.
 export const RESIDENT_RADIUS = 0.23;
 export const WALK_BOUNDS = { left: CABIN_LEFT + .25 + RESIDENT_RADIUS, right: 3.76, back: -2.96, front: 2.96 };
