@@ -63,7 +63,52 @@ function followSpring(frequency: number) {
   };
 }
 
-function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
+function createLongHairMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone, mesh: THREE.Object3D) {
+  const chains = Array.from(bones).filter(joint => joint.parent === head && typeof joint.userData.hairDrape === 'number').map(root => {
+    const joints = [root];
+    for (let next = root.children.find(child => child instanceof THREE.Bone && typeof child.userData.hairDrape === 'number');
+      next instanceof THREE.Bone; next = next.children.find(child => child instanceof THREE.Bone && typeof child.userData.hairDrape === 'number')) {
+      joints.push(next);
+    }
+    return joints.map(joint => ({ joint, weight: THREE.MathUtils.clamp(joint.userData.hairDrape, 0, 1) }));
+  });
+  if (!chains.length) return;
+  const vertical = new THREE.Vector3(0, 1, 0);
+  const headUp = new THREE.Vector3();
+  const identity = new THREE.Quaternion(), meshRotation = new THREE.Quaternion();
+  const neutralHeadInverse = head.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const headRotation = new THREE.Quaternion(), tiltCorrection = new THREE.Quaternion();
+  const authored = new THREE.Quaternion(), parent = new THREE.Quaternion(), corrected = new THREE.Quaternion();
+  const sway = new THREE.Quaternion(), pitchAxis = new THREE.Vector3(1, 0, 0);
+  const turnAxis = new THREE.Vector3(0, .86, .51).normalize();
+  const turnLag = followSpring(10);
+  return {
+    reset: turnLag.reset,
+    apply(dt: number, pitch: number, turn: number) {
+      headRotation.copy(mesh.getWorldQuaternion(meshRotation).invert()).multiply(head.getWorldQuaternion(authored));
+      headUp.copy(vertical).applyQuaternion(neutralHeadInverse).applyQuaternion(headRotation);
+      tiltCorrection.setFromUnitVectors(headUp, vertical);
+      const yawLag = turnLag.step(-.21 * turn, dt);
+      for (const chain of chains) {
+        authored.copy(headRotation);
+        parent.copy(headRotation);
+        for (const { joint, weight } of chain) {
+          authored.multiply(joint.quaternion);
+          // The weights describe cumulative rotation along the chain in the resident's frame.
+          // Solving each local rotation against the corrected parent keeps the roots anchored.
+          corrected.copy(identity).slerp(tiltCorrection, weight);
+          corrected.premultiply(sway.setFromAxisAngle(pitchAxis, pitch * weight * .6));
+          corrected.premultiply(sway.setFromAxisAngle(turnAxis, yawLag * weight));
+          corrected.multiply(authored);
+          joint.quaternion.copy(parent.invert()).multiply(corrected);
+          parent.copy(corrected);
+        }
+      }
+    },
+  };
+}
+
+function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone, longHair?: ReturnType<typeof createLongHairMotion>) {
   const inverse = new THREE.Quaternion();
   const forward = head.getWorldQuaternion(inverse).invert();
   const headForward = new THREE.Vector3(0, 0, 1).applyQuaternion(forward);
@@ -73,6 +118,7 @@ function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
     const match = /^(Hair|Dress)_(.+)_0([1-4])$/.exec(joint.name);
     if (!match) return [];
     const hair = match[1] === 'Hair';
+    if (hair && longHair && typeof joint.userData.hairDrape === 'number') return [];
     const depth = Number(match[3]);
     const weight = (hair ? [.17, .34, .42, .40] : [.21, .41, .48])[depth - 1]
       * (hair && match[2].startsWith('Front') ? .45 : 1);
@@ -92,6 +138,7 @@ function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
   return (rawDelta: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => {
     if (!enabled || rawDelta > .2) {
       previous = null;
+      longHair?.reset();
       hairPitch.reset(); hairRoll.reset(); skirtPitch.reset(); skirtRoll.reset();
       return;
     }
@@ -108,6 +155,7 @@ function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
     const swing = Math.sin(phase * Math.PI * 2);
     const hairPitchAngle = hairPitch.step(.15 * forwardSpeed + .090 * swing * walk, dt);
     const hairRollAngle = hairRoll.step(-.31 * headTurn + .105 * swing * walk, dt);
+    longHair?.apply(dt, hairPitchAngle, headTurn + .16 * swing * walk);
     const skirtPitchAngle = skirtPitch.step(.085 * forwardSpeed + .060 * swing * walk, dt);
     const skirtRollAngle = skirtRoll.step(-.20 * turning + .145 * swing * walk, dt);
     for (const { joint, hair, weight, pitchAxis, rollAxis } of parts) {
@@ -282,7 +330,8 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     neutral: target.getWorldQuaternion(new THREE.Quaternion()),
     front: target.name.includes('Front'), side: /^Dress_(Left|Right)_/.test(target.name),
   }));
-  const followMotion = createFollowMotion(bones.values(), bone('Head'));
+  const hair = createLongHairMotion(bones.values(), bone('Head'), mesh);
+  const followMotion = createFollowMotion(bones.values(), bone('Head'), hair);
   const neutral = Array.from(bones.values(), joint => ({ joint, pose: capture(joint) }));
   const walkPose = neutral.map(({ joint }) => capture(joint));
   const axisX = new THREE.Vector3(1, 0, 0);
