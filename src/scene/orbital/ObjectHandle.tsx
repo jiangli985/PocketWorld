@@ -9,6 +9,7 @@ interface ObjectHandleProps extends Omit<ThreeElements['group'], 'id' | 'onPoint
   hint: string;
   world: WorldModelProps;
   panorama?: boolean;
+  acceptsHit?: (point: THREE.Vector3) => boolean;
   drag?: 'x' | 'y' | 'z';
   payload?: WorldAction['payload'];
 }
@@ -23,7 +24,7 @@ function belongsToFocus(id: string, focused: string | null) {
 }
 
 /** A real object's input ownership, not an invisible menu hotspot. */
-export function ObjectHandle({ id, action, hint, world, panorama = false, drag, payload, children, onClick, ...props }: ObjectHandleProps) {
+export function ObjectHandle({ id, action, hint, world, panorama = false, acceptsHit, drag, payload, children, onClick, ...props }: ObjectHandleProps) {
   const held = useRef<{ x: number; y: number; pointerId: number; target: EventTarget | null; point: [number, number, number] } | null>(null);
   const movable = useRef<THREE.Group>(null);
   const callbacks = useRef(world);
@@ -45,7 +46,7 @@ export function ObjectHandle({ id, action, hint, world, panorama = false, drag, 
   const enabled = (!world.focusedObject && panorama) || belongsToFocus(id, world.focusedObject);
   useEffect(() => { if (!enabled) release(); }, [enabled]);
   const down = (event: ThreeEvent<PointerEvent>) => {
-    if (!enabled || event.button !== 0 || held.current) return;
+    if (!enabled || event.button !== 0 || held.current || (acceptsHit && !acceptsHit(event.point))) return;
     event.stopPropagation();
     const origin = SCENE_ORIGINS[world.sceneId];
     const point: [number, number, number] = [event.point.x - origin[0], event.point.y - origin[1], event.point.z - origin[2]];
@@ -68,9 +69,9 @@ export function ObjectHandle({ id, action, hint, world, panorama = false, drag, 
     }
   };
   return <group {...props} name={`Interactable_${id}`} userData={{ objectId: id, action, sceneId: world.sceneId }}
-    onPointerOver={e => { if (enabled) { e.stopPropagation(); world.onHover(id, hint); } }}
+    onPointerOver={e => { if (enabled && (!acceptsHit || acceptsHit(e.point))) { e.stopPropagation(); world.onHover(id, hint); } }}
     onPointerOut={() => { if (enabled && !held.current) world.onHover(null); }}
-    onClick={enabled ? onClick : undefined}
+    onClick={enabled && onClick ? e => { if (!acceptsHit || acceptsHit(e.point)) onClick(e); } : undefined}
     onPointerDown={down} onPointerUp={up}
     onPointerMove={event => {
       if (!held.current || !drag || !movable.current) return;

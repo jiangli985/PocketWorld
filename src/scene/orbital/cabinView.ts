@@ -1,10 +1,15 @@
-import { CABIN_LEFT, CABIN_RIGHT, CABIN_CENTER_X } from './cabinLayout.ts';
+import { CABIN_LEFT, CABIN_RIGHT, CABIN_CENTER_X, HABITAT_SPAWN } from './cabinLayout.ts';
 import * as THREE from 'three';
 
 export const CAMERA_FOV = 34;
 export const HOME_ZOOM = 1.55;
 export const HOME_TARGET = new THREE.Vector3(CABIN_CENTER_X, 1.08, -.10);
 export const HOME_DIRECTION = new THREE.Vector3(-7.8, 7.6, 13.5).normalize();
+export const OUTFIT_TARGET = new THREE.Vector3(HABITAT_SPAWN[0], .76, HABITAT_SPAWN[1]);
+const outfitDirection = new THREE.Vector3(-.75, .17, 1).normalize();
+export function outfitCameraPosition(aspect: number) {
+  return OUTFIT_TARGET.clone().addScaledVector(outfitDirection, Math.max(5.2, 2.3 / aspect));
+}
 export const EARTH_RADIUS = 195;
 const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), HOME_DIRECTION).normalize();
 const up = new THREE.Vector3().crossVectors(HOME_DIRECTION, right);

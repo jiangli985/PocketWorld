@@ -1,4 +1,4 @@
-import { CABIN_LEFT, CABIN_RIGHT, CABIN_CENTER_X } from './cabinLayout';
+import { CABIN_LEFT, CABIN_RIGHT, CABIN_CENTER_X, WARDROBE_FOOTPRINT } from './cabinLayout';
 import React, { Suspense, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
@@ -6,12 +6,17 @@ import * as THREE from 'three';
 import { AssetBoundary } from './ReusableAsset';
 import { extractSlipperModel, isSlipperMaterial } from './slipperModel';
 
+import { ObjectHandle } from './ObjectHandle';
+import { outfitHint, readOutfit } from './wardrobe/outfit';
+import type { WorldModelProps } from '../../types/world';
+
 interface HabitatShellProps {
-  variant: 'habitat' | 'observatory';
+  world: WorldModelProps;
   onFloorClick?: (point: [number, number, number]) => void;
 }
 
-function CabinModel({ variant }: Pick<HabitatShellProps, 'variant'>) {
+function CabinModel({ world }: Pick<HabitatShellProps, 'world'>) {
+  const variant = world.sceneId;
   const { scene } = useGLTF(`${import.meta.env.BASE_URL}models/cabin/open-cabin.glb`);
   const cabin = useMemo(() => {
     const copy = scene.clone(true);
@@ -26,13 +31,23 @@ function CabinModel({ variant }: Pick<HabitatShellProps, 'variant'>) {
       copy.traverse(node => { if (node instanceof THREE.Mesh && isSlipperMaterial(node.material)) slippers.push(node); });
       slippers.forEach(node => node.removeFromParent());
     }
-    return copy;
+    const wardrobe = copy.getObjectByName('Wardrobe_Nightstand');
+    wardrobe?.removeFromParent();
+    return { shell: copy, wardrobe };
   }, [scene, variant]);
 
-  return <primitive object={cabin} />;
+  return <>
+    <primitive object={cabin.shell} />
+    {cabin.wardrobe && <ObjectHandle id="wardrobe" action="toggle" panorama world={world}
+      hint={outfitHint(readOutfit(world.objects.wardrobe?.itemId))} acceptsHit={point => point.x <= WARDROBE_FOOTPRINT[1]}
+      onClick={event => event.stopPropagation()}>
+      <primitive object={cabin.wardrobe} />
+    </ObjectHandle>}
+  </>;
 }
 
-export function HabitatShell({ variant, onFloorClick }: HabitatShellProps) {
+export function HabitatShell({ world, onFloorClick }: HabitatShellProps) {
+  const variant = world.sceneId;
   const root = useRef<THREE.Group>(null);
   const floorPointer = useRef<number | null>(null);
   const fallback = <mesh name="Floor_Parquet" position={[CABIN_CENTER_X, -.12, 0]} receiveShadow>
@@ -51,7 +66,7 @@ export function HabitatShell({ variant, onFloorClick }: HabitatShellProps) {
       event.stopPropagation();
       floorPointer.current = isFloor(event.object) ? event.pointerId : null;
     }} onPointerCancel={() => { floorPointer.current = null; }} onClick={onFloor}>
-      <AssetBoundary fallback={fallback}><Suspense fallback={fallback}><CabinModel variant={variant} /></Suspense></AssetBoundary>
+      <AssetBoundary fallback={fallback}><Suspense fallback={fallback}><CabinModel world={world} /></Suspense></AssetBoundary>
     </group>
   </group>;
 }

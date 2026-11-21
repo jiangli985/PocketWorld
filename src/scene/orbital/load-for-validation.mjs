@@ -7,7 +7,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 export async function load(path) {
   const raw = await fs.readFile(path), size = raw.readUInt32LE(12);
   const doc = JSON.parse(raw.subarray(20, 20 + size));
-  doc.materials = [{ pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1] } }]; doc.images = []; doc.textures = [];
+  doc.materials = (doc.materials ?? []).map(({ name }) => ({ name, pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1] } })); doc.images = []; doc.textures = [];
   const json = Buffer.from(JSON.stringify(doc)), padded = Buffer.alloc(Math.ceil(json.length / 4) * 4, 32); json.copy(padded);
   const binary = raw.subarray(20 + size), buffer = Buffer.alloc(20 + padded.length + binary.length);
   buffer.writeUInt32LE(0x46546c67, 0); buffer.writeUInt32LE(2, 4); buffer.writeUInt32LE(buffer.length, 8);

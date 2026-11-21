@@ -211,3 +211,47 @@ test('hair and skirt follow movement without shifting body bones and settle afte
     assert(angles.Hair_ < .00001 && angles.Dress_ < .00001, 'contact and reduced motion use the base pose');
   } finally { rig.dispose(); }
 });
+
+test('snowflower back hair hangs during a held bow, lags a turn, and settles', async () => {
+  const { gltf: snowflower } = await load(new URL('../../../assets/public/models/resident/luna-snowflower.glb', import.meta.url));
+  const rig = createResidentRig(snowflower.scene, snowflower.animations.find(c => c.name === 'Walk_Grounded_Loop'), true);
+  const root = rig.mesh.getObjectByName('Hair_Back_C_01');
+  const tip = rig.mesh.getObjectByName('Hair_Back_C_04');
+  const position = joint => joint.getWorldPosition(new THREE.Vector3());
+  const update = (pitch, yaw, enabled = true) => {
+    rig.head.rotation.set(pitch, yaw, 0, 'YXZ');
+    rig.applyPose(0, 0);
+    const authoredRoot = position(root), authoredTip = position(tip);
+    rig.followMotion(1 / 60, enabled, 0, 0, 0, 0);
+    return { root: position(root), tip: position(tip), authoredRoot, authoredTip };
+  };
+  try {
+    rig.mesh.rotation.y = Math.PI / 3;
+    const rest = update(0, 0);
+    assert(rest.tip.distanceTo(rest.authoredTip) < .0001, 'neutral hair matches the authored silhouette');
+    const bow = update(.48, 0);
+    const held = update(.48, 0);
+    assert(held.root.distanceTo(held.authoredRoot) < .0001, 'strand root stays attached');
+    assert(held.tip.y < held.authoredTip.y - .055, 'tip drops below the uncorrected pose');
+    const drop = pose => pose.root.y - pose.tip.y;
+    assert(Math.abs(drop(held) - drop(rest)) < .024, 'the long strand remains hanging');
+    assert(held.tip.distanceTo(bow.tip) < .0001, 'bow compensation holds at rest');
+    assert(update(.48, 0, false).tip.distanceTo(held.authoredTip) < .0001, 'disabled follow motion keeps the authored pose');
+    assert(update(0, 0).tip.distanceTo(rest.tip) < .0001, 'returns to neutral after lifting the head');
+    const roomRight = new THREE.Vector3(1, 0, 0).transformDirection(rig.mesh.matrixWorld);
+    let lag = 0, rebound = 0, earlier;
+    for (let frame = 0; frame <= 120; frame++) {
+      const progress = Math.min(frame / 25, 1);
+      const pose = update(0, .6 * progress ** 2 * (3 - 2 * progress));
+      const sideways = pose.tip.clone().sub(pose.authoredTip).dot(roomRight);
+      if (frame <= 25) lag = Math.max(lag, sideways);
+      else rebound = Math.max(rebound, -sideways);
+      if (earlier) assert(pose.tip.distanceTo(earlier) < .03, 'turn remains continuous');
+      earlier = pose.tip;
+    }
+    assert(lag > .03 && lag < .065, 'the tip visibly lags behind the turn');
+    assert(rebound > .004 && rebound < lag * .35, 'the tip rebounds once the head stops');
+    const settled = update(0, .6);
+    assert(settled.tip.distanceTo(settled.authoredTip) < .0001, 'turn lag settles without drift');
+  } finally { rig.dispose(); }
+});

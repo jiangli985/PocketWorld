@@ -44,8 +44,8 @@ function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE.Vector
 }
 
 /** A spring with an analytic update so its settling time is independent of the display rate. */
-function followSpring(frequency: number) {
-  const damping = frequency * .72;
+function followSpring(frequency: number, dampingRatio = .72) {
+  const damping = frequency * dampingRatio;
   const oscillation = Math.sqrt(frequency ** 2 - damping ** 2);
   let value = 0;
   let velocity = 0;
@@ -63,7 +63,56 @@ function followSpring(frequency: number) {
   };
 }
 
-function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
+function createLongHairMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone, mesh: THREE.Object3D) {
+  const chains = Array.from(bones).filter(joint => joint.parent === head && typeof joint.userData.hairDrape === 'number').map(root => {
+    const joints = [root];
+    for (let next = root.children.find(child => child instanceof THREE.Bone && typeof child.userData.hairDrape === 'number');
+      next instanceof THREE.Bone; next = next.children.find(child => child instanceof THREE.Bone && typeof child.userData.hairDrape === 'number')) {
+      joints.push(next);
+    }
+    return joints.map(joint => {
+      const drape = THREE.MathUtils.clamp(joint.userData.hairDrape, 0, 1);
+      return { joint, drape, inertia: THREE.MathUtils.clamp(joint.userData.hairSway ?? drape, 0, 1) };
+    });
+  });
+  if (!chains.length) return;
+  const vertical = new THREE.Vector3(0, 1, 0);
+  const headUp = new THREE.Vector3();
+  const identity = new THREE.Quaternion(), meshRotation = new THREE.Quaternion();
+  const neutralHeadInverse = head.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const headRotation = new THREE.Quaternion(), tiltCorrection = new THREE.Quaternion();
+  const authored = new THREE.Quaternion(), parent = new THREE.Quaternion(), corrected = new THREE.Quaternion();
+  const sway = new THREE.Quaternion(), pitchAxis = new THREE.Vector3(1, 0, 0);
+  // For a downward, rearward strand, the yaw and lateral roll both oppose the turn.
+  const turnAxis = new THREE.Vector3(0, .55, -.83).normalize();
+  const turnLag = followSpring(8, .50);
+  return {
+    reset: turnLag.reset,
+    apply(dt: number, pitch: number, turn: number) {
+      headRotation.copy(mesh.getWorldQuaternion(meshRotation).invert()).multiply(head.getWorldQuaternion(authored));
+      headUp.copy(vertical).applyQuaternion(neutralHeadInverse).applyQuaternion(headRotation);
+      tiltCorrection.setFromUnitVectors(headUp, vertical);
+      const yawLag = turnLag.step(-.40 * turn, dt);
+      for (const chain of chains) {
+        authored.copy(headRotation);
+        parent.copy(headRotation);
+        for (const { joint, drape, inertia } of chain) {
+          authored.multiply(joint.quaternion);
+          // The weights describe cumulative rotation along the chain in the resident's frame.
+          // Solving each local rotation against the corrected parent keeps the roots anchored.
+          corrected.copy(identity).slerp(tiltCorrection, drape);
+          corrected.premultiply(sway.setFromAxisAngle(pitchAxis, pitch * inertia * .6));
+          corrected.premultiply(sway.setFromAxisAngle(turnAxis, yawLag * inertia));
+          corrected.multiply(authored);
+          joint.quaternion.copy(parent.invert()).multiply(corrected);
+          parent.copy(corrected);
+        }
+      }
+    },
+  };
+}
+
+function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone, longHair?: ReturnType<typeof createLongHairMotion>) {
   const inverse = new THREE.Quaternion();
   const forward = head.getWorldQuaternion(inverse).invert();
   const headForward = new THREE.Vector3(0, 0, 1).applyQuaternion(forward);
@@ -73,6 +122,7 @@ function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
     const match = /^(Hair|Dress)_(.+)_0([1-4])$/.exec(joint.name);
     if (!match) return [];
     const hair = match[1] === 'Hair';
+    if (hair && longHair && typeof joint.userData.hairDrape === 'number') return [];
     const depth = Number(match[3]);
     const weight = (hair ? [.17, .34, .42, .40] : [.21, .41, .48])[depth - 1]
       * (hair && match[2].startsWith('Front') ? .45 : 1);
@@ -92,6 +142,7 @@ function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
   return (rawDelta: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => {
     if (!enabled || rawDelta > .2) {
       previous = null;
+      longHair?.reset();
       hairPitch.reset(); hairRoll.reset(); skirtPitch.reset(); skirtRoll.reset();
       return;
     }
@@ -108,6 +159,7 @@ function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
     const swing = Math.sin(phase * Math.PI * 2);
     const hairPitchAngle = hairPitch.step(.15 * forwardSpeed + .090 * swing * walk, dt);
     const hairRollAngle = hairRoll.step(-.31 * headTurn + .105 * swing * walk, dt);
+    longHair?.apply(dt, hairPitchAngle, headTurn + .16 * swing * walk);
     const skirtPitchAngle = skirtPitch.step(.085 * forwardSpeed + .060 * swing * walk, dt);
     const skirtRollAngle = skirtRoll.step(-.20 * turning + .145 * swing * walk, dt);
     for (const { joint, hair, weight, pitchAxis, rollAxis } of parts) {
@@ -121,7 +173,7 @@ function createFollowMotion(bones: Iterable<THREE.Bone>, head: THREE.Bone) {
   };
 }
 
-export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationClip): ResidentRig {
+export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationClip, authoredStanding = false): ResidentRig {
   const bones = new Map<string, THREE.Bone>();
   const skinned: THREE.SkinnedMesh[] = [];
   asset.traverse(object => {
@@ -150,46 +202,48 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     for (const { value, curve } of channels) value.fromArray(curve.evaluate(t));
   };
 
-  // Build a two-foot neutral pose using the planted phase of each leg, and
-  // average the upper body at the two mid-swing phases for a relaxed stance.
-  const leftLeg = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => bone('Left' + name));
-  const rightLeg = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => bone('Right' + name));
-  const support = (leg: THREE.Bone[]) => ({
-    pose: leg.map(capture),
-    point: leg[2].getWorldPosition(new THREE.Vector3()),
-    toe: leg[3].getWorldPosition(new THREE.Vector3()),
-    sole: leg[2].getWorldQuaternion(new THREE.Quaternion()),
-  });
-  sample(.20);
-  const leftSupport = support(leftLeg);
-  sample(.70);
-  const rightSupport = support(rightLeg);
-  sample(.32);
-  const opposite = Array.from(bones.values(), capture);
-  sample(.82);
-  Array.from(bones.values()).forEach((joint, i) => {
-    joint.position.lerp(opposite[i].position, .5);
-    joint.quaternion.slerp(opposite[i].quaternion, .5);
-    joint.scale.lerp(opposite[i].scale, .5);
-  });
-  leftLeg.forEach((joint, i) => restore(joint, leftSupport.pose[i]));
-  rightLeg.forEach((joint, i) => restore(joint, rightSupport.pose[i]));
-  // Mid-swing averages leave the pelvis behind the planted feet and the trunk
-  // leaning back. Balance the pelvis over the rear/middle of the sole, then
-  // align the neck above it. Replant both legs below, preserving their soles.
   const hips = bone('Hips');
-  const hipPosition = hips.getWorldPosition(new THREE.Vector3());
-  const neckPosition = bone('Neck').getWorldPosition(new THREE.Vector3());
-  const forward = (leftSupport.point.z + rightSupport.point.z) * .5
-    + ((leftSupport.toe.z - leftSupport.point.z) + (rightSupport.toe.z - rightSupport.point.z)) * .175;
-  const pitch = Math.atan2(hipPosition.z - neckPosition.z, neckPosition.y - hipPosition.y);
-  const balancedRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitch)
-    .multiply(hips.getWorldQuaternion(new THREE.Quaternion()));
-  hips.position.copy(hips.parent!.worldToLocal(hipPosition.clone().setZ(forward)));
-  hips.quaternion.copy(hips.parent!.getWorldQuaternion(new THREE.Quaternion()).invert()).multiply(balancedRotation);
-  hips.updateWorldMatrix(false, true);
-  plantResidentLeg(leftLeg, leftSupport.point, leftSupport.sole);
-  plantResidentLeg(rightLeg, rightSupport.point, rightSupport.sole);
+  if (!authoredStanding) {
+    // Build a two-foot neutral pose using the planted phase of each leg, and
+    // average the upper body at the two mid-swing phases for a relaxed stance.
+    const leftLeg = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => bone('Left' + name));
+    const rightLeg = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => bone('Right' + name));
+    const support = (leg: THREE.Bone[]) => ({
+      pose: leg.map(capture),
+      point: leg[2].getWorldPosition(new THREE.Vector3()),
+      toe: leg[3].getWorldPosition(new THREE.Vector3()),
+      sole: leg[2].getWorldQuaternion(new THREE.Quaternion()),
+    });
+    sample(.20);
+    const leftSupport = support(leftLeg);
+    sample(.70);
+    const rightSupport = support(rightLeg);
+    sample(.32);
+    const opposite = Array.from(bones.values(), capture);
+    sample(.82);
+    Array.from(bones.values()).forEach((joint, i) => {
+      joint.position.lerp(opposite[i].position, .5);
+      joint.quaternion.slerp(opposite[i].quaternion, .5);
+      joint.scale.lerp(opposite[i].scale, .5);
+    });
+    leftLeg.forEach((joint, i) => restore(joint, leftSupport.pose[i]));
+    rightLeg.forEach((joint, i) => restore(joint, rightSupport.pose[i]));
+    // Mid-swing averages leave the pelvis behind the planted feet and the trunk
+    // leaning back. Balance the pelvis over the rear/middle of the sole, then
+    // align the neck above it. Replant both legs below, preserving their soles.
+    const hipPosition = hips.getWorldPosition(new THREE.Vector3());
+    const neckPosition = bone('Neck').getWorldPosition(new THREE.Vector3());
+    const forward = (leftSupport.point.z + rightSupport.point.z) * .5
+      + ((leftSupport.toe.z - leftSupport.point.z) + (rightSupport.toe.z - rightSupport.point.z)) * .175;
+    const pitch = Math.atan2(hipPosition.z - neckPosition.z, neckPosition.y - hipPosition.y);
+    const balancedRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitch)
+      .multiply(hips.getWorldQuaternion(new THREE.Quaternion()));
+    hips.position.copy(hips.parent!.worldToLocal(hipPosition.clone().setZ(forward)));
+    hips.quaternion.copy(hips.parent!.getWorldQuaternion(new THREE.Quaternion()).invert()).multiply(balancedRotation);
+    hips.updateWorldMatrix(false, true);
+    plantResidentLeg(leftLeg, leftSupport.point, leftSupport.sole);
+    plantResidentLeg(rightLeg, rightSupport.point, rightSupport.sole);
+  }
   asset.updateMatrixWorld(true);
   const mesh = new THREE.Group();
   mesh.name = 'Resident';
@@ -280,7 +334,8 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     neutral: target.getWorldQuaternion(new THREE.Quaternion()),
     front: target.name.includes('Front'), side: /^Dress_(Left|Right)_/.test(target.name),
   }));
-  const followMotion = createFollowMotion(bones.values(), bone('Head'));
+  const hair = createLongHairMotion(bones.values(), bone('Head'), mesh);
+  const followMotion = createFollowMotion(bones.values(), bone('Head'), hair);
   const neutral = Array.from(bones.values(), joint => ({ joint, pose: capture(joint) }));
   const walkPose = neutral.map(({ joint }) => capture(joint));
   const axisX = new THREE.Vector3(1, 0, 0);
@@ -288,9 +343,38 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
   asset.scale.setScalar(RESIDENT_SCALE);
   mesh.add(asset);
 
+  const socks = skinned.find(surface => surface.geometry.userData.soleContacts);
+  const contactLegs = socks ? (['Left', 'Right'] as const).map(side => ({
+    vertices: socks.geometry.userData.soleContacts[side] as number[],
+    joints: ['UpLeg', 'Leg', 'Foot'].map(name => bone(side + name)),
+  })) : [];
+  const samplePoint = new THREE.Vector3(), ankle = new THREE.Vector3(), footRotation = new THREE.Quaternion();
+
+  // Local joint interpolation on walk start/stop can lower the toes between two grounded poses.
+  // Lift only a penetrating foot, using the fitted sock's support vertices and the existing leg IK.
+  function correctBlendedContact() {
+    if (!socks) return;
+    mesh.updateWorldMatrix(true, true);
+    const floor = mesh.getWorldPosition(samplePoint).y;
+    for (const { vertices, joints } of contactLegs) {
+      let lowest = floor;
+      for (const vertex of vertices) {
+        socks.getVertexPosition(vertex, samplePoint).applyMatrix4(socks.matrixWorld);
+        lowest = Math.min(lowest, samplePoint.y);
+      }
+      if (lowest >= floor) continue;
+      const foot = joints[2];
+      foot.getWorldPosition(ankle).y += floor - lowest + .0002;
+      plantResidentLeg(joints, ankle, foot.getWorldQuaternion(footRotation));
+    }
+  }
+
   function applyPose(phase: number, walkWeight: number) {
     if (walkWeight === 1) sample(phase);
-    else applyBlendedPose(phase, walkWeight);
+    else {
+      applyBlendedPose(phase, walkWeight);
+      if (walkWeight > 0) correctBlendedContact();
+    }
   }
 
   function applyBlendedPose(phase: number, walkWeight: number) {
