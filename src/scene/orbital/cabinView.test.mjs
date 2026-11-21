@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { CABIN_DIVIDER_X, CABIN_RIGHT, UPPER_DECK_OFFSET } from './cabinLayout.ts';
+import { BEDROOM_WALL_FRONT, BEDROOM_WALL_OUTSET, CABIN_DIVIDER_X, CABIN_RIGHT, UPPER_DECK_OFFSET } from './cabinLayout.ts';
 import { CAMERA_FOV, EARTH_RADIUS, HOME_ZOOM, cabinCameraFrame, earthPositionForAspect } from './cabinView.ts';
 import { CABIN_STAIRS, STAIR_DISTANCE, sampleCabinStairs, stairLanding } from './cabinStairs.ts';
 
@@ -15,6 +15,7 @@ const lower = [
 const upper = [
   [CABIN_DIVIDER_X, upperY + .76, 3.19], [upperRight, upperY + .76, 3.19],
   [CABIN_DIVIDER_X, upperY + 3.77, -3.41], [upperRight, upperY + 3.77, -3.41],
+  [upperRight + BEDROOM_WALL_OUTSET, upperY + 3.77, BEDROOM_WALL_FRONT],
 ];
 const stairsLeft = CABIN_STAIRS.x - CABIN_STAIRS.width / 2;
 const stairs = [

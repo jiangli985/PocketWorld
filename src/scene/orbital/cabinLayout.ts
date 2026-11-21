@@ -14,6 +14,9 @@ export const WALK_BOUNDS = { left: CABIN_LEFT + .25 + RESIDENT_RADIUS, right: 3.
 
 export const CABIN_DIVIDER_X = -1.86;
 export const UPPER_DECK_OFFSET: [number, number, number] = [CABIN_DIVIDER_X - CABIN_LEFT, 3.82, 0];
+// Matches the finished return-wall trim in scripts/export-open-cabin.py.
+export const BEDROOM_WALL_FRONT = 1.20;
+export const BEDROOM_WALL_OUTSET = .135;
 export type CabinDeck = 'lower' | 'upper';
 
 export const DECK_WALK_BOUNDS = {

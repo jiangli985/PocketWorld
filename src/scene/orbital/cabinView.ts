@@ -1,4 +1,4 @@
-import { CABIN_DIVIDER_X, CABIN_RIGHT, HABITAT_SPAWN, UPPER_DECK_OFFSET, type CabinDeck } from './cabinLayout.ts';
+import { BEDROOM_WALL_FRONT, BEDROOM_WALL_OUTSET, CABIN_DIVIDER_X, CABIN_RIGHT, HABITAT_SPAWN, UPPER_DECK_OFFSET, type CabinDeck } from './cabinLayout.ts';
 import { CABIN_STAIRS } from './cabinStairs.ts';
 import * as THREE from 'three';
 
@@ -26,6 +26,7 @@ const lowerBounds: Bounds[] = [
 const upperBounds: Bounds[] = [
   { x: [CABIN_DIVIDER_X, upperRight], y: [upperY - .23, upperY + .76], z: [-3.41, 3.19] },
   { x: [CABIN_DIVIDER_X, upperRight], y: [upperY, upperY + 3.77], z: [-3.41, -3.1] },
+  { x: [upperRight - .03, upperRight + BEDROOM_WALL_OUTSET], y: [upperY - .21, upperY + 3.77], z: [-3.41, BEDROOM_WALL_FRONT] },
 ];
 const stairBounds: Bounds = {
   x: [CABIN_STAIRS.x - CABIN_STAIRS.width / 2, CABIN_DIVIDER_X],

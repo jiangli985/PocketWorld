@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ThreeEvent } from '@react-three/fiber';
-import { CABIN_DIVIDER_X, UPPER_DECK_OFFSET } from './cabinLayout';
+import { BEDROOM_WALL_FRONT, CABIN_DIVIDER_X, UPPER_DECK_OFFSET } from './cabinLayout';
 import { CABIN_STAIRS, STAIR_RISE, STAIR_RUN, STAIR_TREAD_RUN } from './cabinStairs';
 import { SoftBox } from './Primitives';
 
@@ -35,7 +35,7 @@ export function BedroomGuard() {
     <Guard from={[left, -3.16]} to={[left, CABIN_STAIRS.upperZ - opening]} />
     <Guard from={[left, CABIN_STAIRS.upperZ + opening]} to={[left, front]} />
     <Guard from={[left, front]} to={[right, front]} />
-    <Guard from={[right, front]} to={[right, -3.16]} />
+    <Guard from={[right, front]} to={[right, BEDROOM_WALL_FRONT]} />
   </group>;
 }
 
