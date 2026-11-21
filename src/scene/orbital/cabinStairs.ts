@@ -1,4 +1,4 @@
-import { DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, type CabinDeck } from './cabinLayout.ts';
+import { CABIN_DIVIDER_X, DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, type CabinDeck } from './cabinLayout.ts';
 
 type Point = [number, number];
 type Position = [number, number, number];
@@ -9,6 +9,14 @@ export const CABIN_STAIRS = {
   lowerZ: 2.62,
   upperZ: -1.47,
   steps: 18,
+};
+export const STAIR_UPPER_PLATFORM_BACK = CABIN_STAIRS.upperZ - CABIN_STAIRS.width + .14;
+export const STAIR_LANDING_WALL = {
+  left: CABIN_STAIRS.x - CABIN_STAIRS.width / 2 + .014,
+  right: CABIN_DIVIDER_X + .02,
+  back: STAIR_UPPER_PLATFORM_BACK + .017,
+  front: STAIR_UPPER_PLATFORM_BACK + .137,
+  height: 2.05,
 };
 const lowerX = DECK_WALK_BOUNDS.lower.left + .04;
 const upperLocalX = DECK_WALK_BOUNDS.upper.left + .04;

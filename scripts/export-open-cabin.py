@@ -11,7 +11,7 @@ DIVIDER_X = -1.86  # Keep aligned with cabinLayout.ts.
 WINDOW_CUT_X = -2.61  # The leftmost panorama trim is at -2.55 m.
 CABIN_LEFT = -6.57
 CABIN_RIGHT = 4.24
-BEDROOM_FRONT_Z = 1.20  # The rail meets the front face of the return wall.
+BEDROOM_FRONT_Z = 1.20  # Finished front face of the bedroom return wall.
 
 collections = {collection.name[:2]: list(collection.objects) for collection in bpy.context.scene.collection.children}
 depsgraph = bpy.context.evaluated_depsgraph_get()

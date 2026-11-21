@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { BEDROOM_WALL_FRONT, BEDROOM_WALL_OUTSET, CABIN_DIVIDER_X, CABIN_RIGHT, UPPER_DECK_OFFSET } from './cabinLayout.ts';
+import { BEDROOM_WALL_FRONT, BEDROOM_WALL_OUTSET, CABIN_DIVIDER_X, CABIN_RIGHT, RESIDENT_RADIUS, UPPER_DECK_OFFSET } from './cabinLayout.ts';
 import { CAMERA_FOV, EARTH_RADIUS, HOME_ZOOM, cabinCameraFrame, earthPositionForAspect } from './cabinView.ts';
-import { CABIN_STAIRS, STAIR_DISTANCE, sampleCabinStairs, stairLanding } from './cabinStairs.ts';
+import { CABIN_STAIRS, STAIR_DISTANCE, STAIR_LANDING_WALL, sampleCabinStairs, stairLanding } from './cabinStairs.ts';
 
 const [upperX, upperY] = UPPER_DECK_OFFSET;
 const upperRight = CABIN_DIVIDER_X + upperX;
@@ -16,6 +16,7 @@ const upper = [
   [CABIN_DIVIDER_X, upperY + .76, 3.19], [upperRight, upperY + .76, 3.19],
   [CABIN_DIVIDER_X, upperY + 3.77, -3.41], [upperRight, upperY + 3.77, -3.41],
   [upperRight + BEDROOM_WALL_OUTSET, upperY + 3.77, BEDROOM_WALL_FRONT],
+  [STAIR_LANDING_WALL.left - .011, upperY + STAIR_LANDING_WALL.height, STAIR_LANDING_WALL.front + .037],
 ];
 const stairsLeft = CABIN_STAIRS.x - CABIN_STAIRS.width / 2;
 const stairs = [
@@ -57,6 +58,7 @@ test('the stair path connects the authored landings at their actual deck elevati
     const next = sampleCabinStairs(STAIR_DISTANCE * index / 1000);
     assert.ok(next.position[1] >= last.position[1] - 1e-10);
     assert.ok(Math.hypot(...next.position.map((value, axis) => value - last.position[axis])) < .03);
+    assert.ok(next.position[2] - RESIDENT_RADIUS > STAIR_LANDING_WALL.front + .037, 'the landing wall clears the stair path');
     last = next;
   }
 });
