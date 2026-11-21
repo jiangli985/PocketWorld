@@ -15,6 +15,7 @@
 - `orbital/media/` 管理电脑屏幕布局、游戏卡带单击插入、拖放与加载、唱片交互、实体键盘和相关测试。
 - `orbital/` 根目录保留舱室、家具、住民、交互基础组件、材质与场景样式。
 - `orbital/chairMotion.ts` 管理固定椅的入座、离座与取消；`chairAnimation.ts` 采样坐姿与局部接触缓存。资源与复建方法见 [Luna 制作源](../../assets/models/resident/README.md)。
+- `orbital/seatedIdle.ts` 在生活舱的入座动作结束后采样托腮与晃腿，并在起身前淡出。[动捕来源和复建方法](../../assets/models/resident/README.md#坐姿待机)
 - `orbital/media/RecordPlayer.tsx` 保留唱机/唱片的原有几何，`record-motion.ts` 统一管理舱室局部坐标路径、唱臂和串行播放阶段；架位在本次会话中稳定，音乐淡入淡出不影响房间音效。
 - `audioEngine.ts` 提供音乐播放、静音、环境、脚步和团子音效。团子叫声的来源与许可见 [音效素材](../../assets/audio/cat/README.md)。
 - `geometry.ts` 提供场景共用的几何工具。

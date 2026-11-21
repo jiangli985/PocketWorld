@@ -20,6 +20,7 @@ import { HIP_HEIGHT as HIP, ResidentModel, type ResidentLeg, type ResidentRig } 
 import { WALK_SPEED } from './residentRig';
 import { createIdlePlayer, createIdleState, loadYawn, loadLookingAround, stepIdle, STANDING_IDLE } from './standingIdle';
 import { CHAIR_SIT_SECONDS, createChairMotion, stepChairMotion } from './chairMotion';
+import { createSeatedIdle, stepSeatedIdle } from './seatedIdle';
 import { SlipperPair } from './Slippers';
 import { PlushDolls } from './PlushDolls';
 import { createPlushBodies, isValidPlushBody, plushObstacleBoxes, resolveMoverAgainstPlush, stepPlushDolls, type PlushBody } from './plushMotion';
@@ -243,6 +244,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   }, [props.objects.sofa?.active, props.sceneId]);
   const exit = useRef({ from: new THREE.Vector3(), yaw: 0, sit: 0, progress: 0 });
   const chairMotion = useRef(createChairMotion());
+  const seatedIdle = useRef(createSeatedIdle());
   const movement = useMemo(() => ({ forward: new THREE.Vector3(), right: new THREE.Vector3(), step: new THREE.Vector3() }), []);
 
   const act = (objectId: string, kind: WorldActionKind) => {
@@ -504,9 +506,15 @@ export function OrbitalResidents(props: ResidentsProps) {
       sofa.apply = rig.current && sofaClip ? sofaPlayer(rig.current.mesh, sofaClip) : null;
       sofa.rig = rig.current;
     }
+    const seatedIdleEnabled = p.sceneId === 'habitat' && p.enabled && !p.reducedMotion
+      && !document.hidden && !p.focusedObject && !!rig.current;
+    const settledChair = s.posture === 'chair' && chairMotion.current.phase === 'seated';
+    const settledSofa = s.posture === 'sofa' && sofaClip && sofa.time >= SOFA_STEPS + sofaClip.duration;
+    const settledSeat = seatedIdleEnabled ? (settledChair ? 'chair' : settledSofa ? 'sofa' : null) : null;
+    const holdSeat = stepSeatedIdle(seatedIdle.current, dt, settledSeat, s.exiting);
     if (p.sceneId === 'habitat' && s.posture === 'chair') {
       const cm = chairMotion.current;
-      const result = stepChairMotion(cm, dt, s.exiting, p.reducedMotion);
+      const result = stepChairMotion(cm, dt, s.exiting && !holdSeat, p.reducedMotion);
       s.blend = cm.time / CHAIR_SIT_SECONDS;
       s.sit = result.weight;
       const start = chairFront(pose, result.offset), u = ease(cm.align);
@@ -523,7 +531,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     } else if (s.posture === 'sofa' && sofaClip) {
       const previous = sofa.time;
       const speed = sofa.time < SOFA_STEPS ? 1 : p.reducedMotion ? 4 : 1;
-      sofa.time = clamp(previous + dt * speed * (s.exiting ? -1 : 1), 0, SOFA_STEPS + sofaClip.duration);
+      sofa.time = clamp(previous + dt * speed * (holdSeat ? 0 : s.exiting ? -1 : 1), 0, SOFA_STEPS + sofaClip.duration);
       const retreat = Math.min(sofa.time, SOFA_STEPS) * WALK_SPEED;
       root.position.set(SOFA_ENTRY[0] - Math.sin(FLOOR_SOFA.yaw) * retreat, 0,
         SOFA_ENTRY[1] - Math.cos(FLOOR_SOFA.yaw) * retreat);
@@ -743,6 +751,7 @@ export function OrbitalResidents(props: ResidentsProps) {
         playingChair ? ease(chairMotion.current.align) : 0,
       );
       if (s.posture === 'sofa' && !sofaSteps) sofa.apply?.(sofa.time - SOFA_STEPS);
+      rig.current.applySeatedIdle?.(seatedIdle.current);
       // Add the offsets after authored animation, only when there is no contact pose to preserve.
       rig.current.followMotion(rawDelta,
         !interactionPose && !libraryActive && !p.focusedObject && !p.reducedMotion && !document.hidden,
