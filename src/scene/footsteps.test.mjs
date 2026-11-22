@@ -426,7 +426,11 @@ test('the old bed shortcut no longer starts room interactions', () => {
 });
 
 test('chair pushes survive nearby walking sounds while duplicate contacts stay throttled', () => {
-  const engine = load('./audioEngine.ts', {}).roomAudio;
+  const engine = load('./audioEngine.ts', {
+    '../../assets/audio/records/sweden.mp3': 'sweden.mp3',
+    '../../assets/audio/records/aria-math.mp3': 'aria-math.mp3',
+    '../../assets/audio/records/subwoofer-lullaby.mp3': 'subwoofer-lullaby.mp3',
+  }).roomAudio;
   const ctx = { currentTime: 0, state: 'running' };
   const voices = [];
   engine.ensureContext = () => ctx;
