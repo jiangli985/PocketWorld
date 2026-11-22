@@ -1,4 +1,4 @@
-import { CABIN_DIVIDER_X, CABIN_LEFT, CABIN_RIGHT, type CabinDeck } from './cabinLayout';
+import { BEDROOM_LEFT, CABIN_DIVIDER_X, CABIN_LEFT, CABIN_RIGHT, type CabinDeck } from './cabinLayout';
 import React, { Suspense, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
@@ -15,7 +15,7 @@ interface HabitatShellProps {
 }
 
 const LOWER_PARTS = ['Duplex_LowerShell', 'Floor_Parquet', 'Stationery', 'Shelf_Gallery', 'Rugs'];
-const UPPER_PARTS = ['Duplex_UpperShell', 'Floor_Parquet_Upper', 'Nightstand', 'Interactable_Wardrobe', 'Rugs_Upper'];
+const UPPER_PARTS = ['Duplex_UpperShell', 'Floor_Parquet_Bedroom', 'Nightstand', 'Interactable_Wardrobe', 'Rugs_Upper'];
 const OBSERVATORY_PARTS = ['Shell', 'Floor_Parquet', 'Floor_Parquet_Upper'];
 
 function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) {
@@ -66,7 +66,7 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
 export function HabitatShell({ world, deck, onFloorClick }: HabitatShellProps) {
   const root = useRef<THREE.Group>(null);
   const floorPointer = useRef<number | null>(null);
-  const left = deck === 'upper' || world.sceneId === 'observatory' ? CABIN_LEFT : CABIN_DIVIDER_X;
+  const left = deck === 'upper' ? BEDROOM_LEFT : world.sceneId === 'observatory' ? CABIN_LEFT : CABIN_DIVIDER_X;
   const right = deck === 'upper' ? CABIN_DIVIDER_X : CABIN_RIGHT;
   const fallback = <mesh name="Floor_Parquet" position={[(left + right) / 2, -.12, 0]} receiveShadow>
     <boxGeometry args={[right - left, .24, 6.38]} /><meshStandardMaterial color="#cb9c74" />

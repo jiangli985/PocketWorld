@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ThreeEvent } from '@react-three/fiber';
-import { CABIN_LEFT, CABIN_DIVIDER_X, UPPER_DECK_OFFSET } from './cabinLayout';
+import { BEDROOM_LEFT, CABIN_DIVIDER_X, UPPER_DECK_OFFSET } from './cabinLayout';
 import { CABIN_STAIRS, STAIR_RISE, STAIR_RUN, STAIR_TREAD_RUN, STAIR_UPPER_PLATFORM_BACK, STAIR_UPPER_ENTRY_FRONT } from './cabinStairs';
 import { SoftBox } from './Primitives';
 
@@ -27,7 +27,7 @@ function Guard({ from, to }: { from: [number, number]; to: [number, number] }) {
 
 /** Keep the left landing open between the two runs of bedroom railing. */
 export function BedroomGuard() {
-  const left = CABIN_LEFT + .035;
+  const left = BEDROOM_LEFT + .035;
   const right = CABIN_DIVIDER_X - .035;
   const front = 3.10;
   return <group name="Bedroom_Guardrail">
