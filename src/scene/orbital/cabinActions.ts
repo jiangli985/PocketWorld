@@ -13,7 +13,7 @@ type CabinActionName = typeof CABIN_ACTIONS[number];
 type CabinClips = Record<CabinActionName, AnimationClip>;
 export type PaperPickup = { id: string; position: Vector3 };
 
-export const isRugSeat = (id: string) => id === 'rug-cross' || id === 'rug-hug';
+export const isRugSeat = (id: string) => id === 'rug-seat';
 export const isPaperPickup = (id: string) => id.startsWith(PAPER_PICKUP_PREFIX);
 
 const pending = new Map<ResidentOutfit, Promise<CabinClips>>();
@@ -62,8 +62,8 @@ type PickupPerformance = {
   offset: Vector3 | null; complete: () => void;
 };
 export type CabinPerformance = FloorPerformance | PickupPerformance;
-export const newRugPerformance = (wantsHug: boolean): FloorPerformance => ({
-  kind: 'floor', phase: 'sit', time: 0, wantsHug, leaving: false,
+export const newRugPerformance = (random = Math.random): FloorPerformance => ({
+  kind: 'floor', phase: 'sit', time: 0, wantsHug: random() < .5, leaving: false,
 });
 export function leaveCabinPerformance(performance: CabinPerformance) {
   performance.leaving = true;

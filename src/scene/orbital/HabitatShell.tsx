@@ -58,7 +58,7 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
   });
   return <>
     <primitive object={cabin.shell} dispose={null} />
-    {cabin.rug && <ObjectHandle id="rug-cross" action="sit" panorama world={world} hint="坐在地毯上"
+    {cabin.rug && <ObjectHandle id="rug-seat" action="sit" panorama world={world} hint="坐在地毯上"
       onClick={event => event.stopPropagation()}>
       <primitive object={cabin.rug} dispose={null} />
     </ObjectHandle>}

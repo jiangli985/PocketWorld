@@ -88,6 +88,39 @@ function moveEnd(shoulder, elbow, wrist, target) {
   worldQuaternion(wrist, wristRotation);
 }
 
+// Fit each three-joint panel to the lap in room coordinates. The middle of the
+// front hem sags between the knees while each outside pleat clears its own knee.
+function drapeCrossedLap(panels, leftKnee, rightKnee, weight, snowflower) {
+  for (const panel of panels) {
+    const { joints, side, front, back } = panel;
+    const root = point(joints[0].joint);
+    const knee = side > 0 ? leftKnee : side < 0 ? rightKnee : leftKnee.clone().lerp(rightKnee, .5);
+    let rim, overhang;
+    if (front) {
+      // The shorter snowflower overskirt shares more hip and thigh weight.
+      const height = snowflower ? (side ? .150 : .065) : (side ? .030 : -.002);
+      rim = knee.clone().add(new Vector3(side * (snowflower ? -.012 : .012), height, snowflower ? .118 : .019));
+      overhang = new Vector3(side * .16, side ? -.76 : -.94, .50);
+    } else if (back) {
+      rim = root.clone().add(new Vector3(side * .145, 0, side ? -.152 : -.206));
+      rim.y = snowflower ? .060 : .082;
+      overhang = new Vector3(side * .68, -.16, side ? -.72 : -1);
+    } else {
+      rim = knee.clone().add(new Vector3(side * .078, snowflower ? -.018 : -.072, -.085));
+      overhang = new Vector3(side * .42, -.91, .10);
+    }
+    const middle = root.clone().lerp(rim, .5);
+    middle.y += front ? .016 : back ? .008 : .040;
+    const curve = [root, middle, rim];
+    for (const [i, { joint, bindRotation, bindAxis }] of joints.entries()) {
+      if (i > 0) joint.position.lerp(joint.parent.worldToLocal(curve[i].clone()), weight);
+      const tangent = i === 2 ? overhang : curve[i + 1].clone().sub(curve[i]);
+      const oriented = new Quaternion().setFromUnitVectors(bindAxis, tangent.normalize()).multiply(bindRotation);
+      worldQuaternion(joint, rotation(joint).slerp(oriented, weight));
+    }
+  }
+}
+
 function skinContactVertices(rig, matches) {
   const contact = [];
   const v = new Vector3();
@@ -143,8 +176,16 @@ async function bake(outfit, file) {
     if (!joint.isBone || !/^Dress_.+_0[123]$/.test(joint.name)) return;
     const child = joint.children.find(value => value.isBone && value.name.startsWith('Dress_'));
     const forward = child ? direction(joint, child) : direction(joint.parent, joint);
-    const axis = forward.applyQuaternion(rotation(joint).invert());
-    dress.push({ joint, child, axis });
+    const axis = forward.clone().applyQuaternion(rotation(joint).invert());
+    dress.push({ joint, child, axis, bindRotation: rotation(joint), bindAxis: forward });
+  });
+  const panels = dress.filter(({ joint }) => joint.name.endsWith('_01')).map(({ joint }) => {
+    const prefix = joint.name.slice(0, -2);
+    return {
+      joints: dress.filter(entry => entry.joint.name.slice(0, -2) === prefix).sort((a, b) => a.joint.name.localeCompare(b.joint.name)),
+      side: /_(L|Left)_/.test(prefix) ? 1 : /_(R|Right)_/.test(prefix) ? -1 : 0,
+      front: prefix.includes('Front'), back: prefix.includes('Back'),
+    };
   });
   const legLength = (a, b, c) => a.distanceTo(b) + b.distanceTo(c);
   const fittedLength = legLength(point(target.get('RightUpLeg')), point(target.get('RightLeg')), point(target.get('RightFoot')));
@@ -172,6 +213,10 @@ async function bake(outfit, file) {
     const tracks = sampleBones.map(([, joint]) => ({ joint, path: 'rotation', values: [] }));
     if (!upperOnly) tracks.push({ joint: hips, path: 'translation', values: [] });
     if (seated || name === 'pickUp') for (const { joint } of dress) tracks.push({ joint, path: 'rotation', values: [] });
+    const lapDrape = seated && outfit !== 'cloudhoodie';
+    if (lapDrape) for (const { joint } of dress) {
+      if (!joint.name.endsWith('_01')) tracks.push({ joint, path: 'translation', values: [] });
+    }
     const anchors = [];
     for (let frame = 0; frame < frameCount; frame++) {
       const t = frame / 30;
@@ -221,6 +266,9 @@ async function bake(outfit, file) {
             const mixed = natural.clone().lerp(desired.normalize(), lift).normalize();
             worldQuaternion(joint, new Quaternion().setFromUnitVectors(natural, mixed).multiply(world));
           }
+          const lapWeight = name === 'floorSit' ? MathUtils.smoothstep(t, 2.5, 3.7)
+            : name === 'floorStand' ? 1 - MathUtils.smoothstep(t, .15, 1.05) : 0;
+          if (lapDrape && lapWeight > 0) drapeCrossedLap(panels, leftKnee, rightKnee, lapWeight, outfit === 'snowflower');
         }
       }
       if (name === 'rubEye' || name === 'think') {

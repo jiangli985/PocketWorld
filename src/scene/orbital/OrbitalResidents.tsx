@@ -320,8 +320,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     if (p.sceneId === 'habitat') {
       targets.push({ id: 'wardrobe', kind: 'open', hint: '打开衣柜', point: WARDROBE_STAND, reach: .75 });
       targets.push({ id: 'sofa', kind: 'sit', hint: '坐进懒人沙发', point: SOFA_ENTRY, reach: .85 });
-      targets.push({ id: 'rug-cross', kind: 'sit', hint: '盘腿坐在地毯上', point: RUG_SEAT, reach: .72 });
-      targets.push({ id: 'rug-hug', kind: 'sit', hint: '在地毯上抱膝', point: RUG_SEAT, reach: .72 });
+      targets.push({ id: 'rug-seat', kind: 'sit', hint: '坐在地毯上', point: RUG_SEAT, reach: .72 });
       targets.push({ id: 'clock', kind: 'inspect', hint: '设置闹钟', point: [NIGHTSTAND_X + .22, NIGHTSTAND_Z + .64], reach: 0.46 });
     }
     const deck = deckFromAuthoredX(root.position.x);
@@ -430,8 +429,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       const rug = isRugSeat(action.objectId), paper = isPaperPickup(action.objectId);
       if ((rug || paper) && (!p.approachEnabled || cabinMotion.current.failed)) return false;
       if (rug && cabinPerformance.current?.kind === 'floor') {
-        if (action.objectId === 'rug-cross') stand();
-        else setRugPose(cabinPerformance.current, true);
+        stand();
         return true;
       }
       if (action.kind === 'stand') { cancelApproach(); perform(); return true; }
@@ -785,7 +783,7 @@ export function OrbitalResidents(props: ResidentsProps) {
             root.rotation.y = yaw;
             if (rug) {
               root.position.set(RUG_SEAT[0], RUG_TOP, RUG_SEAT[1]);
-              cabinPerformance.current = newRugPerformance(id === 'rug-hug');
+              cabinPerformance.current = newRugPerformance();
             } else cabinPerformance.current = { kind: 'paper', time: 0, leaving: false, id: id.slice(PAPER_PICKUP_PREFIX.length),
               point: new THREE.Vector3(request.point[0], request.height, request.point[1]), offset: null, complete: request.perform };
             cancelApproach();

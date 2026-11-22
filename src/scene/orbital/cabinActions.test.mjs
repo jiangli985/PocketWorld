@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { Vector3 } from 'three';
+import { Raycaster, SkinnedMesh, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   CABIN_ACTIONS, advanceCabinPerformance, applyCabinPerformance, createCabinActionPlayer,
@@ -15,12 +15,12 @@ const model = name => new URL('../../../assets/public/models/resident/luna-' + n
 
 test('rug exit undoes a partial sit and uses the authored rise after either held pose', () => {
   const clips = { floorSit: { duration: 5 }, hugKnees: { duration: 6 }, floorStand: { duration: 5 } };
-  const partial = newRugPerformance(false);
+  const partial = newRugPerformance(() => .5);
   advanceCabinPerformance(partial, .9, clips);
   leaveCabinPerformance(partial);
   assert.equal(partial.phase, 'undo-sit');
   assert.equal(advanceCabinPerformance(partial, .9, clips), true);
-  const rest = newRugPerformance(true);
+  const rest = newRugPerformance(() => 0);
   advanceCabinPerformance(rest, 5, clips);
   assert.equal(rest.phase, 'hug');
   advanceCabinPerformance(rest, 5.8, clips);
@@ -33,6 +33,20 @@ test('rug exit undoes a partial sit and uses the authored rise after either held
   applyCabinPerformance(rest, clips, (...args) => applied.push(args));
   assert.deepEqual(applied, [['floorSit', 5], ['floorStand', 0, 0]]);
   assert.equal(advanceCabinPerformance(rest, 5, clips), true);
+});
+
+test('rug entry draws either resting pose once and respects a later manual selection', () => {
+  const clips = { floorSit: { duration: 5 } };
+  for (const [draw, phase] of [[0, 'hug'], [.4999, 'hug'], [.5, 'seated'], [.9999, 'seated']]) {
+    let draws = 0;
+    const seat = newRugPerformance(() => { draws++; return draw; });
+    advanceCabinPerformance(seat, 2, clips);
+    advanceCabinPerformance(seat, 3, clips);
+    assert.equal(seat.phase, phase);
+    setRugPose(seat, phase === 'seated');
+    assert.equal(seat.phase, phase === 'seated' ? 'hug' : 'unhug');
+    assert.equal(draws, 1);
+  }
 });
 
 test('interrupted pickup returns to the start without visiting the completion pose', () => {
@@ -56,6 +70,44 @@ test('rub eye and think participate in the short idle schedule without overlappi
   stepIdle(idle, .05, false, 8, () => 0, 6);
   assert.equal(idle.elapsed, 0);
 });
+
+function checkLapCoverage(root) {
+  root.updateMatrixWorld(true);
+  const surfaces = [];
+  root.traverse(mesh => {
+    if (mesh.isSkinnedMesh) {
+      mesh.skeleton.update();
+      mesh.computeBoundingSphere();
+      surfaces.push(mesh);
+    }
+  });
+  const ray = new Raycaster();
+  const down = new Vector3(0, -1, 0);
+  for (const side of ['Left', 'Right']) {
+    const point = bone => root.getObjectByName('mixamorig' + side + bone).getWorldPosition(new Vector3());
+    const hip = point('UpLeg'), knee = point('Leg');
+    for (const fraction of [.85, .96]) {
+      const origin = hip.clone().lerp(knee, fraction);
+      origin.y = 1;
+      ray.set(origin, down);
+      const hits = [];
+      for (const mesh of surfaces) SkinnedMesh.prototype.raycast.call(mesh, ray, hits);
+      hits.sort((a, b) => a.distance - b.distance);
+      const joint = hit => {
+        const { skinIndex, skinWeight } = hit.object.geometry.attributes;
+        const vertex = hit.face.a;
+        let strongest = 0;
+        for (let slot = 1; slot < 4; slot++) {
+          if (skinWeight.getComponent(vertex, slot) > skinWeight.getComponent(vertex, strongest)) strongest = slot;
+        }
+        return hit.object.skeleton.bones[skinIndex.getComponent(vertex, strongest)].name;
+      };
+      const cloth = hits.find(hit => joint(hit).startsWith('Dress_Front'));
+      const leg = hits.find(hit => ['mixamorig' + side + 'Leg', 'mixamorig' + side + 'UpLeg'].includes(joint(hit)));
+      assert.ok(cloth && leg && cloth.point.y > leg.point.y + .002, side + ' front skirt clears the bent knee at ' + fraction);
+    }
+  }
+}
 
 for (const [outfit, name] of [['everyday', 'walk-room'], ['snowflower', 'snowflower'], ['cloudhoodie', 'cloudhoodie']]) {
   test(`seven MotionSmith takes bind and keep ${outfit} close to the rug during floor holds`, async () => {
@@ -81,6 +133,7 @@ for (const [outfit, name] of [['everyday', 'walk-room'], ['snowflower', 'snowflo
         apply(action, clips[action].duration);
         assert.ok(boneY('Hips') < .23, 'seated pelvis stays close to the rug');
         assert.ok(Math.min(boneY('LeftFoot'), boneY('RightFoot')) < .16);
+        if (action === 'floorSit' && outfit !== 'cloudhoodie') checkLapCoverage(rig.mesh);
       }
       rig.applyPose(0, 0);
       apply('floorStand', clips.floorStand.duration);

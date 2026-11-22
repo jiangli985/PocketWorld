@@ -335,8 +335,8 @@
       "license": "The MotionSmith gallery permits commercial game use without attribution.",
       "licensePage": "https://cosindra.ai/license",
       "used": true,
-      "bytes": 1089284,
-      "sha256": "c1b2566054d2425613853f7b11eec7f982e47e62c1676f4e0e065e264fb839d1",
+      "bytes": 1192284,
+      "sha256": "7b929eccf479deac19993483f29638d9fde5eb2c7fca65a5429f0b75144dabcf",
       "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, adjusts the wrist against the face and exports animation tracks without meshes or textures."
     },
     {
@@ -347,8 +347,8 @@
       "license": "The MotionSmith gallery permits commercial game use without attribution.",
       "licensePage": "https://cosindra.ai/license",
       "used": true,
-      "bytes": 1089284,
-      "sha256": "7577b1bf4c211a500ac8ddf7b5fe5814ca3680d0fa5772b56eba25c47e85368f",
+      "bytes": 1192284,
+      "sha256": "309625e1423212b1052de0ef6af0b84b5b5fcb686e95457bcdc1b29743502d95",
       "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, adjusts the wrist against the face and exports animation tracks without meshes or textures."
     },
     {
