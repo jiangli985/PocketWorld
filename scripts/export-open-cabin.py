@@ -13,6 +13,10 @@ WINDOW_CUT_X = -2.61  # The leftmost panorama trim is at -2.55 m.
 CABIN_LEFT = -6.57
 CABIN_RIGHT = 4.24
 BEDROOM_FRONT_Z = 3.16
+BEDROOM_EXTENSION = 1.26  # The upper floor spans the same exterior wall plane as the lower floor.
+BEDROOM_LEFT = CABIN_LEFT - BEDROOM_EXTENSION
+UPPER_DECK_X = DIVIDER_X - BEDROOM_LEFT
+UPPER_RIGHT_X = CABIN_RIGHT - UPPER_DECK_X
 
 collections = {collection.name[:2]: list(collection.objects) for collection in bpy.context.scene.collection.children}
 depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -73,6 +77,30 @@ def join_as(name, objects):
     if len(objects) > 1:
         bpy.ops.object.join()
     bpy.context.object.name = name
+    return bpy.context.object
+
+
+def finish_wardrobe_mesh(obj):
+    # The authored bevels collapse at a few corners. Weld before exporting the moving parts.
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=.00001)
+    bmesh.ops.dissolve_degenerate(bm, edges=list(bm.edges), dist=.00001)
+    bmesh.ops.triangulate(bm, faces=list(bm.faces))
+    bm.normal_update()
+    uv = bm.loops.layers.uv.verify()
+    for face in bm.faces:
+        # Boolean cuts and new shelf bevels need UVs. Preserve the original panel grain.
+        a, b, c = (loop[uv].uv for loop in face.loops)
+        if abs((b - a).cross(c - a)) < 1e-10:
+            normal = face.normal
+            axis = max(range(3), key=lambda i: abs(normal[i]))
+            for loop in face.loops:
+                point = loop.vert.co
+                loop[uv].uv = (point[(axis + 1) % 3], point[(axis + 2) % 3])
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
 
 
 def finish(name, hex_color, roughness=.78):
@@ -152,13 +180,15 @@ def bedroom_walls():
     window_green = finish("Bedroom | window inset", "527166", .62)
     ivory = bpy.data.materials["Porcelain | cut edges"]
 
-    inner_x, outer_x = DIVIDER_X - .015, DIVIDER_X + .096
+    inner_x, outer_x = DIVIDER_X - .015, UPPER_RIGHT_X
     wall_x = (inner_x + outer_x) / 2
     back, front = -3.385, BEDROOM_FRONT_Z - .025
     depth = front - back
     wall_z = (back + front) / 2
-    rear_left = CABIN_LEFT - .016
-    rear_crown_left, rear_crown_right = rear_left - .02, wall_x - .159 / 2
+    rear_left = BEDROOM_LEFT - .016
+    trim_left, trim_right = inner_x - .024, outer_x + .006
+    trim_width, trim_x = trim_right - trim_left, (trim_left + trim_right) / 2
+    rear_crown_left, rear_crown_right = rear_left - .02, trim_left
     win_back, win_front, sill, lintel = window = (1.69, 2.99, 1.405, 3.01)
     rear_x = (rear_left + inner_x) / 2
     rear_width = inner_x - rear_left
@@ -166,9 +196,8 @@ def bedroom_walls():
     parts.append(bedroom_return(inner_x, outer_x, back, front, window, limewash))
     box("Rear wall crown", ((rear_crown_left + rear_crown_right) / 2, 3.73, -3.288),
         (rear_crown_right - rear_crown_left, .064, .246), ivory, .014)
-    box("Side wall crown", (wall_x, 3.73, wall_z), (.159, .064, depth + .04), ivory, .015)
-    box("Side wall edge trim", (wall_x, 1.85, BEDROOM_FRONT_Z - .04), (.155, 3.71, .08), ivory, .012)
-    box("Side wall foundation trim", (wall_x, -.115, wall_z), (.16, .192, depth + .03), ivory, .022)
+    box("Side wall crown", (trim_x, 3.73, wall_z), (trim_width, .064, depth + .04), ivory, .015)
+    box("Side wall edge trim", (trim_x, 1.85, BEDROOM_FRONT_Z - .025), (trim_width, 3.71, .098), ivory, .012)
 
     # Barely raised boards cast fine, tonal shadow lines on the two interior walls.
     first_y, last_y, rows = .161, 1.115, 7
@@ -226,6 +255,7 @@ def bedroom_walls():
     return parts
 
 
+deck_base = []
 lower_shell = []
 upper_shell = []
 for source in collections["01"]:
@@ -243,11 +273,20 @@ for source in collections["01"]:
         lower = copy_mesh(source)
         lower.location.x = DIVIDER_X - CABIN_LEFT
         lower_shell.append(lower)
-        upper_shell.append(copy_mesh(source))
+        upper = copy_mesh(source)
+        upper.location.x = -BEDROOM_EXTENSION
+        upper_shell.append(upper)
+    elif name.startswith("Rounded porcelain"):
+        deck_base.append(cut_x(copy_mesh(source), DIVIDER_X, False))
+    elif name.startswith("Parquet substrate"):
+        # Recess the substrate's cut face from the porcelain fascia.
+        deck_base.append(cut_x(copy_mesh(source), DIVIDER_X + .006, False))
     else:
         lower_shell.append(cut_x(copy_mesh(source), DIVIDER_X, False))
-        if name.startswith(("Aft skirting", "Parquet substrate", "Rounded porcelain")):
-            upper_shell.append(cut_x(copy_mesh(source), DIVIDER_X, True))
+        if name.startswith("Aft skirting"):
+            upper = cut_x(copy_mesh(source), DIVIDER_X, True)
+            remap_x(upper, CABIN_LEFT, DIVIDER_X, BEDROOM_LEFT, DIVIDER_X)
+            upper_shell.append(upper)
 
 upper_shell.extend(bedroom_walls())
 
@@ -273,9 +312,62 @@ for obj in wardrobe:
 join_as("Shell", collections["01"])
 join_as("Duplex_LowerShell", lower_shell)
 join_as("Duplex_UpperShell", upper_shell)
-join_as("Floor_Parquet", [lower_parquet])
 join_as("Floor_Parquet_Upper", [upper_parquet])
-join_as("Interactable_Wardrobe", wardrobe)
+base = join_as("Duplex_DeckBase", deck_base)
+floor = join_as("Floor_Parquet", [lower_parquet])
+# Both decks use the same slab and floor meshes. Offset the bedroom copies
+# back into their authored coordinates before the runtime deck translation.
+for part, name in ((base, "Duplex_BedroomBase"), (floor, "Floor_Parquet_Bedroom")):
+    bedroom_part = part.copy()
+    bedroom_part.name = name
+    bpy.context.scene.collection.objects.link(bedroom_part)
+    bedroom_part.location.x -= UPPER_DECK_X
+# The front leaf rides out onto a parallel track, then slides over the rear leaf.
+moving_leaf = [obj for obj in wardrobe if obj.name in ("Sliding panel 1", "Pull inset.001", "Recessed brass pull.001")]
+frame_parts = [obj for obj in wardrobe if obj not in moving_leaf]
+door = join_as("Wardrobe_SlidingDoor", moving_leaf)
+carcass = next(obj for obj in frame_parts if "carcass" in obj.name)
+shadow = next(obj for obj in frame_parts if "shadow reveal" in obj.name)
+frame_parts.remove(shadow)
+bpy.data.objects.remove(shadow, do_unlink=True)
+oak = carcass.data.materials[0]
+# Cut a real cavity into the original bent-oak case, keeping its exterior bevels.
+cutter = bedroom_box("Wardrobe cavity cutter", (-2.56, 1.53, .75), (1.04, 2.86, 1.34), oak)
+bpy.context.view_layer.objects.active = carcass
+for modifier in list(carcass.modifiers):
+    bpy.ops.object.modifier_apply(modifier=modifier.name)
+cut = carcass.modifiers.new("Cupboard interior", "BOOLEAN")
+cut.operation = "DIFFERENCE"
+cut.object = cutter
+bpy.ops.object.modifier_apply(modifier=cut.name)
+bpy.data.objects.remove(cutter, do_unlink=True)
+# Rebate behind the sliding leaves. It overlaps their edges in elevation, with
+# a 4 mm running clearance in depth, so the closed door hides the compartment.
+for z in (.092, 1.408):
+    frame_parts.append(bedroom_box("Wardrobe door jamb", (-2.681, 1.53, z),
+                                   (.073, 2.86, .064), oak, .003))
+for y in (.115, 2.945):
+    frame_parts.append(bedroom_box("Wardrobe door rail", (-2.681, y, .75),
+                                   (.073, .055, 1.265), oak, .003))
+frame_parts.append(bedroom_box("Fixed door meeting strip", (-2.706, 1.52, .748),
+                               (.026, 2.81, .046), oak, .002))
+for height in (.50, 1.27, 2.04):
+    frame_parts.append(bedroom_box("Linen shelf", (-2.36, height, .75), (.61, .035, 1.34), oak, .008))
+linen = [finish("Linen | " + name, color, .96) for name, color in
+         (("mist", "a3b6c7"), ("cream", "e9dfce"), ("heather", "b2a4bb"))]
+for level, height in enumerate((.50, 1.27, 2.04)):
+    for layer in range(3 - level % 2):
+        frame_parts.append(bedroom_box("Folded linen", (-2.39, height + .062 + layer * .089,
+                                       1.05 + .012 * layer), (.42, .088, .48 - .018 * layer),
+                                       linen[(level + layer) % len(linen)], .034))
+frame = join_as("Wardrobe_Case", frame_parts)
+# Keep children in room axes so the travel is authored in metres.
+root = bpy.data.objects.new("Interactable_Wardrobe", None)
+bpy.context.scene.collection.objects.link(root)
+for part in (frame, door):
+    finish_wardrobe_mesh(part)
+    part.parent = root
+
 join_as("Nightstand", nightstand)
 join_as("Stationery", collections["04"])
 join_as("Shelf_Gallery", collections["05"])

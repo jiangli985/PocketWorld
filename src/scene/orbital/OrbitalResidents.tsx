@@ -1,5 +1,5 @@
 import { SOFA_ENTRY, SOFA_STEPS, loadSofaClip, sofaPlayer } from './sofaMotion';
-import { CABIN_DIVIDER_X, DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, PLUSH_FLOOR_BOUNDS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
+import { BEDROOM_LEFT, CABIN_DIVIDER_X, DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, PLUSH_FLOOR_BOUNDS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
 import { STAIR_DISTANCE, atStairEntrance, otherDeck, sampleCabinStairs, stairDestination, stairLanding, type CabinResidentView } from './cabinStairs';
 import type { CabinDeck } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef } from 'react';
@@ -8,7 +8,8 @@ import * as THREE from 'three';
 import type { WorldAction, WorldActionKind, WorldModelProps } from '../../types/world';
 import { roomAudio } from '../audioEngine';
 import { ObjectHandle } from './ObjectHandle';
-import { outfitHint, type ResidentOutfit } from './wardrobe/outfit';
+import { INSPECTION_SECONDS, inspectOutfit } from './wardrobe/inspectPose';
+import type { ResidentOutfit } from './wardrobe/outfit';
 import { JOURNAL_POSITION } from './journalLayout';
 import { SCHEDULE_BOOK_POSITION } from './schedule/bookLayout';
 import { Cat } from './Cat';
@@ -33,6 +34,9 @@ type StairTravel = { from: CabinDeck; distance: number };
 type Posture = 'standing' | 'chair' | 'sofa';
 type ResidentsProps = WorldModelProps & {
   outfit: ResidentOutfit;
+  inspectionId?: number;
+  onInspectionEnd: () => void;
+  onOutfitMounted: (outfit: ResidentOutfit, ready: boolean) => void;
   walkTarget: [number, number, number] | null;
   onArrive: () => void;
   enabled: boolean;
@@ -262,14 +266,15 @@ export function OrbitalResidents(props: ResidentsProps) {
   }, [props.objects.sofa?.active, props.sceneId]);
   const exit = useRef({ from: new THREE.Vector3(), yaw: 0, sit: 0, progress: 0 });
   const chairMotion = useRef(createChairMotion());
+  const inspection = useRef({ id: 0, elapsed: 0, finished: false });
   const movement = useMemo(() => ({ forward: new THREE.Vector3(), right: new THREE.Vector3(), step: new THREE.Vector3() }), []);
 
   const act = (objectId: string, kind: WorldActionKind) => {
     const p = current.current;
     const action: WorldAction = { sceneId: p.sceneId, objectId, kind };
-    if (kind === 'sit') {
+    if (kind === 'sit' || objectId === 'wardrobe') {
       const pose = CHAIR_POSES[p.sceneId];
-      const [x, z] = objectId === 'sofa' ? SOFA_ENTRY : [pose.x, pose.z];
+      const [x, z] = objectId === 'wardrobe' ? WARDROBE_STAND : objectId === 'sofa' ? SOFA_ENTRY : [pose.x, pose.z];
       p.interaction.current?.([x, 0, z], action, () => current.current.onAction(action));
     } else p.onAction(action);
   };
@@ -296,7 +301,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       { id: 'chair', kind: 'sit', hint: '坐下', point: [pose.x, pose.z], reach: CHAIR_REACH },
     ];
     if (p.sceneId === 'habitat') {
-      targets.push({ id: 'wardrobe', kind: 'toggle', hint: outfitHint(p.outfit), point: WARDROBE_STAND, reach: .75 });
+      targets.push({ id: 'wardrobe', kind: 'open', hint: '打开衣柜', point: WARDROBE_STAND, reach: .75 });
       targets.push({ id: 'sofa', kind: 'sit', hint: '坐进懒人沙发', point: SOFA_ENTRY, reach: .85 });
       targets.push({ id: 'clock', kind: 'inspect', hint: '设置闹钟', point: [NIGHTSTAND_X + .22, NIGHTSTAND_Z + .64], reach: 0.46 });
     }
@@ -389,7 +394,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (s.posture === 'standing' && !s.exiting && !s.stairs
         && (room.observatory || deckFromAuthoredX(root.position.x) === deckFromAuthoredX(target[0]))
         && action.objectId !== 'chair' && action.objectId !== 'sofa'
-        && Math.hypot(root.position.x - target[0], root.position.z - target[1]) <= (action.objectId === 'pet' ? PET_REACH : action.objectId === 'wardrobe' ? .75 : 1.15)) {
+        && Math.hypot(root.position.x - target[0], root.position.z - target[1]) <= (action.objectId === 'pet' ? PET_REACH : action.objectId === 'wardrobe' ? .06 : 1.15)) {
         cancelApproach(); perform(); return true;
       }
       if (!p.approachEnabled) { p.onHover(action.objectId, '先返回房间，再走近这个物品'); return false; }
@@ -742,7 +747,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       stepPlushDolls(floorDolls.lower, dt, deck === 'lower' ? [mover] : [], room.plushBoxes,
         { ...PLUSH_FLOOR_BOUNDS, left: CABIN_DIVIDER_X + .05 }, p.reducedMotion);
       stepPlushDolls(floorDolls.upper, dt, deck === 'upper' ? [mover] : [], room.plushBoxes,
-        { ...PLUSH_FLOOR_BOUNDS, right: CABIN_DIVIDER_X - .05 }, p.reducedMotion);
+        { ...PLUSH_FLOOR_BOUNDS, left: BEDROOM_LEFT + .15, right: CABIN_DIVIDER_X - .05 }, p.reducedMotion);
       if (s.posture === 'standing' && !s.exiting && !libraryActive && !stairSample) {
         resolveMoverAgainstPlush(root.position, RADIUS, floorDolls[deck], (x, z) => free([x, z], room.boxes, DECK_WALK_BOUNDS[deck]));
       }
@@ -804,6 +809,24 @@ export function OrbitalResidents(props: ResidentsProps) {
     if (rig.current && flow) {
       if (librarySample && librarySample.coverProgress === undefined) resetArms(rig.current, 1);
       else applyLibraryPose(rig.current, root, p.sceneId, libraryCoverFlow(flow, librarySample), dt, authored);
+    }
+    if (p.focusedObject === 'wardrobe') {
+      const yaw = p.objects.wardrobe?.open ? Math.PI / 2 : -.63;
+      root.rotation.y = angle(root.rotation.y, yaw, p.reducedMotion ? 1 : 1 - Math.exp(-dt * 9));
+    }
+    if (p.inspectionId && rig.current) {
+      const take = inspection.current;
+      if (take.id !== p.inspectionId) {
+        take.id = p.inspectionId; take.elapsed = 0; take.finished = false;
+      }
+      if (!take.finished) {
+        take.elapsed = p.reducedMotion ? INSPECTION_SECONDS : Math.min(INSPECTION_SECONDS, take.elapsed + Math.min(rawDelta, .1));
+        inspectOutfit(rig.current, take.elapsed);
+        if (take.elapsed === INSPECTION_SECONDS) { take.finished = true; p.onInspectionEnd(); }
+      }
+    } else if (inspection.current.id) {
+      if (rig.current) inspectOutfit(rig.current, 0);
+      inspection.current.id = 0;
     }
     const standingAtRest = !!rig.current && p.enabled && !p.focusedObject
       && !document.hidden && s.posture === 'standing' && wanted === 'standing' && !s.exiting
@@ -883,7 +906,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   return <group name={`OrbitalResidents_${props.sceneId}`}>
     <group ref={deckFrame} name="Resident_DeckPlacement">
       <group ref={resident} name="OrbitalResident" position={spawn} rotation-y={-.78}>
-        <ResidentModel rig={rig} outfit={props.outfit} onFailure={props.library?.fail} />
+        <ResidentModel rig={rig} outfit={props.outfit} onMounted={props.onOutfitMounted} onFailure={props.focusedObject === 'wardrobe' ? undefined : props.library?.fail} />
       </group>
     </group>
     {props.sceneId === 'habitat' && <Suspense fallback={null}><SlipperPair resident={resident} room={slipperRoom.current} reducedMotion={props.reducedMotion} /></Suspense>}
