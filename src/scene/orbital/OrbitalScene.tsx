@@ -1,5 +1,5 @@
-import { previewOutfit, readOutfit } from './wardrobe/outfit';
-import { CLOCK_POSITION, LAMP_POSITION, UPPER_DECK_OFFSET } from './cabinLayout';
+import { previewOutfit, readOutfit, type ResidentOutfit } from './wardrobe/outfit';
+import { CLOCK_POSITION, LAMP_POSITION, UPPER_DECK_OFFSET, WARDROBE_STAND } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, events, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer, OrbitControls, PerspectiveCamera } from '@react-three/drei';
@@ -54,9 +54,11 @@ const FOCUS: Record<string, { target: [number, number, number]; offset: [number,
   'schedule-glass': { target: [0.69, 2.53, -3.13], offset: [0, 0.02, 1.75] },
   'book-01': { target: [-.07, 1.03, .9], offset: [1.35, 1.12, 2.5] },
   cabinet: { target: [0, 0.48, .32], offset: [0.9, 0.71, 2.35] },
+  wardrobe: { target: [WARDROBE_STAND[0], 1.20, WARDROBE_STAND[1]], offset: [-3.45, .80, 3.80] },
   clock: { target: [-2.06, 1.01, -2.615], offset: [0.10, 0.24, 1.15] },
 };
 interface OrbitalSceneProps extends WorldSceneProps {
+  onOutfitMounted: (outfit: ResidentOutfit, ready: boolean) => void;
   sceneObjects: Record<WorldSceneId, Record<string, WorldObjectState>>;
   gestureActive: boolean;
   viewMode: SpacecraftViewMode;
@@ -221,7 +223,8 @@ function CameraRig(props: CameraRigProps) {
         target.current.fromArray(shelfPoint(props.transition.toScene, target.current.x, target.current.y, target.current.z)).add(origin);
         offset.fromArray(shelfVector(props.transition.toScene, offset.x, offset.y, offset.z));
       }
-      if (props.focusedObject === 'clock' && props.transition.toScene === 'habitat') target.current.add(new THREE.Vector3(...UPPER_DECK_OFFSET));
+      if (props.focusedObject === 'wardrobe' && narrow) offset.multiplyScalar(Math.max(1, .51 / aspect));
+      if ((props.focusedObject === 'clock' || props.focusedObject === 'wardrobe') && props.transition.toScene === 'habitat') target.current.add(new THREE.Vector3(...UPPER_DECK_OFFSET));
       destination.current.copy(target.current).add(offset);
       // Frame the shelf and slot together, including on portrait touchscreens.
       if (props.focusedObject === 'computer') destination.current.z = target.current.z + Math.max(pose.offset[2], 2.25 / (2 * Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2)) * (size.width / size.height)) + 0.25);
@@ -312,7 +315,7 @@ function CameraRig(props: CameraRigProps) {
       deck.settling = true;
     }
     const upperVisible = !inHabitat || (props.focusedObject
-      ? props.focusedObject === 'clock'
+      ? (props.focusedObject === 'clock' || props.focusedObject === 'wardrobe')
       : onStairs || props.cabinView !== 'lower');
     if (deck.upperVisible !== upperVisible) {
       deck.upperVisible = upperVisible;
@@ -504,6 +507,8 @@ function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpe
           <FeatureSurfaces {...world} />
           {id === props.sceneId && <>
             <OrbitalResidents {...world} outfit={readOutfit(props.sceneObjects.habitat.wardrobe?.itemId)} catMenuOpen={props.catMenuOpen} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} interaction={interaction}
+              inspectionId={focusedObject === 'wardrobe' && props.transition.phase === 'active' && props.transition.action?.kind === 'select' ? props.transition.id : undefined}
+              onInspectionEnd={props.onReturn} onOutfitMounted={props.onOutfitMounted}
               deckView={residentView} upperVisible={upperVisible}
               showNearbyHints={props.cabinView === 'overview' || props.cabinView === residentView.current.deck}
               approachEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)}

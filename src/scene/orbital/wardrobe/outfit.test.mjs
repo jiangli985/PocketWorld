@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { initialOutfit, rememberOutfit, nextOutfit } from './outfit.ts';
+import { initialOutfit, rememberOutfit, outfitChoices } from './outfit.ts';
 
 test('the wardrobe remembers the choice on both the cabin and a shared outfit preview', t => {
   const saved = new Map();
@@ -24,12 +24,11 @@ test('the wardrobe remembers the choice on both the cabin and a shared outfit pr
   assert.equal(window.location.search, '?view=cabin&outfit=snowflower&sun=0.5');
   assert.equal(saved.get('pocketworld:wardrobe:outfit'), 'snowflower');
 
-  assert.equal(nextOutfit('snowflower'), 'cloudhoodie');
+  assert.deepEqual(outfitChoices, ['everyday', 'snowflower', 'cloudhoodie']);
   rememberOutfit('cloudhoodie');
   assert.equal(window.location.search, '?view=cabin&outfit=cloudhoodie&sun=0.5');
   window.location.search = '?view=cabin';
   assert.equal(initialOutfit(), 'cloudhoodie');
-  assert.equal(nextOutfit('cloudhoodie'), 'everyday');
 
   window.location.search = '?view=cabin&outfit=cloudhoodie';
   window.history.replaceState = () => { throw new Error('restricted history'); };

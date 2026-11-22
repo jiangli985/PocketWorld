@@ -13,15 +13,18 @@ export const RESIDENT_RADIUS = 0.23;
 export const WALK_BOUNDS = { left: CABIN_LEFT + .25 + RESIDENT_RADIUS, right: 3.76, back: -2.96, front: 2.96 };
 
 export const CABIN_DIVIDER_X = -1.86;
-export const UPPER_DECK_OFFSET: [number, number, number] = [CABIN_DIVIDER_X - CABIN_LEFT, 3.82, 0];
+// Widen the bedroom on the landing side in authored coordinates, keeping each
+// deck's walking space separate and both exterior walls flush in world space.
+export const BEDROOM_LEFT = CABIN_LEFT - 1.26;
+export const UPPER_DECK_OFFSET: [number, number, number] = [CABIN_DIVIDER_X - BEDROOM_LEFT, 3.82, 0];
 // Matches the finished return-wall trim in scripts/export-open-cabin.py.
-export const BEDROOM_WALL_FRONT = 3.16;
+export const BEDROOM_WALL_FRONT = 3.19;
 export const BEDROOM_WALL_OUTSET = .135;
 export type CabinDeck = 'lower' | 'upper';
 
 export const DECK_WALK_BOUNDS = {
   lower: { ...WALK_BOUNDS, left: CABIN_DIVIDER_X + RESIDENT_RADIUS + .035 },
-  upper: { ...WALK_BOUNDS, right: CABIN_DIVIDER_X - RESIDENT_RADIUS - .035 },
+  upper: { ...WALK_BOUNDS, left: BEDROOM_LEFT + .25 + RESIDENT_RADIUS, right: CABIN_DIVIDER_X - RESIDENT_RADIUS - .035 },
 };
 
 export function deckFromAuthoredX(x: number): CabinDeck {
