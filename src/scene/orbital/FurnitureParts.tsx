@@ -6,8 +6,8 @@ import { createPillowGeometry } from '../geometry';
 import { timber, upholstery } from './Materials';
 
 export const FURNITURE = {
-  wood: '#b27c4e', edge: '#75503a', cream: '#e7d8bc', ink: '#293c42',
-  brass: '#ba9357', cloth: '#cd928f', paper: '#f2e8cc', dark: '#303333',
+  wood: '#73503c', edge: '#624231', cream: '#f3eee4', ink: '#333d46',
+  brass: '#d8b872', cloth: '#e59aa7', paper: '#f5f0e6', dark: '#2e363c',
 };
 export type FurnitureVector = [number, number, number];
 

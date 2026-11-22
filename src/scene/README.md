@@ -33,10 +33,16 @@
 
 ## 舱体模型
 
-[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，木纹贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出脚本切分拼花地板和固定陈设，将全景窗收进一层后墙，并在二层右侧生成带墙裙和木框舷窗的整面侧墙。衣柜单独导出为 `Interactable_Wardrobe`，沿这面墙安装。上下两层共用同一套楼板底座与拼花木地板网格，通过高度差堆叠，并与左侧楼梯平台衔接。衣柜门框内沿在柜门关闭时挡住柜内视线。楼梯、开放平台和栏杆由运行时几何生成。
+[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，浅橡木拼花贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出脚本切分拼花地板和固定陈设，将全景窗收进一层后墙，在一层书桌椅下方生成带编织棉纹理与流苏边的复古牛仔蓝平织地毯（并入 `Rugs` 以支持地面点击行走），并在二层右侧生成带复古灰绿墙裙和浅木框舷窗的整面侧墙。衣柜单独导出为 `Interactable_Wardrobe`，沿这面墙安装。上下两层共用同一套楼板底座与拼花木地板网格，通过高度差堆叠，并与左侧楼梯平台衔接。衣柜门框内沿在柜门关闭时挡住柜内视线。楼梯、开放平台和栏杆由运行时几何生成。
 
 ```sh
 blender --background assets/models/cabin/open-cabin.blend --python scripts/export-open-cabin.py
+```
+
+`assets/public/models/replaced/` 下的家具运行模型（长桌、书柜、床、唱机、复古电脑、舱门、台灯、盆栽与收纳盒）可通过 `scripts/recolor-replaced-furniture.py` 按 3D 空间 UV 区域与色相聚类批量重绘为多彩中古治愈配色，同时保留原始法线、粗糙度/金属度与烘焙光影：
+
+```sh
+blender --background --factory-startup --python scripts/recolor-replaced-furniture.py
 ```
 
 生活舱二层左前角的[落地沙发制作源](../../assets/models/furniture/floor-sofa.blend)独立保存了坐靠软包、滚边、搭毯和流苏。布料贴图已打包，修改后在仓库根目录重新导出即可。

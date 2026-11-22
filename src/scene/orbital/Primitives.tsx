@@ -17,7 +17,7 @@ type SoftBoxProps = Omit<ThreeElements['mesh'], 'args' | 'color'> & {
 export function SoftBox({ dims, radius = 0.025, color = '#d9cbb4', roughness = 0.65, metalness = 0, material, ...props }: SoftBoxProps) {
   const key = `${dims.join('/')}/${radius}`;
   if (!boxes.has(key)) boxes.set(key, new RoundedBoxGeometry(...dims, 2, Math.max(0.0001, Math.min(radius, ...dims.map(d => d * 0.45)))));
-  return <mesh castShadow receiveShadow {...props} geometry={boxes.get(key)} material={material ?? (color === '#b27c4e' || color === '#75503a' ? timber(color) : surface(color, roughness, metalness))} dispose={null} />;
+  return <mesh castShadow receiveShadow {...props} geometry={boxes.get(key)} material={material ?? (color === '#b27c4e' || color === '#75503a' || color === '#dfc8ac' || color === '#73503c' || color === '#624231' ? timber(color) : surface(color, roughness, metalness))} dispose={null} />;
 }
 export function Tube({ points, radius = 0.015, color = '#726452', ...props }: Omit<ThreeElements['mesh'], 'args' | 'color'> & { points: [number, number, number][]; radius?: number; color?: string }) {
   const shape = JSON.stringify(points);

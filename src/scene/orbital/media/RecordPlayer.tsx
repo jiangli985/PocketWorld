@@ -152,11 +152,11 @@ export function RecordPlayer(props: WorldSceneProps) {
   return <group name="RecordPlayer" userData={{ phase: transport.phase, discId: transport.disc.id }}>
     <group position={PLAYER}>
       <SuppliedAsset name="turntable.parts" part="body" partBounds size={[.88, .158, .50]} fit="contact" position={[0, -.079, 0]} fallback={<>
-        <SoftBox dims={[.88, .14, .5]} color="#936c49" />
-        <SoftBox dims={[.83, .018, .46]} position={[0, .079, 0]} color="#d9c7a4" />
-        {[-.32, .32].flatMap(x => [-.16, .16].map(z => <SoftBox key={`${x}/${z}`} position={[x, -.072, z]} dims={[.09, .018, .07]} color="#464e43" />))}
+        <SoftBox dims={[.88, .14, .5]} color="#8e4448" />
+        <SoftBox dims={[.83, .018, .46]} position={[0, .079, 0]} color="#efece6" />
+        {[-.32, .32].flatMap(x => [-.16, .16].map(z => <SoftBox key={`${x}/${z}`} position={[x, -.072, z]} dims={[.09, .018, .07]} color="#343b40" />))}
       </>} />
-      <SoftBox dims={[.89, .018, .51]} position={[0, .079, 0]} color="#936c49" radius={.014} />
+      <SoftBox dims={[.89, .018, .51]} position={[0, .079, 0]} color="#8e4448" radius={.014} />
       <ObjectHandle id="music-player" action="toggle" hint={transport.busy ? phaseText[transport.phase] : props.isMusicPlaying ? '轻触唱盘，暂停音乐' : '放下唱针，继续播放'} world={world} position={[-.13, .095, 0]}>
         <group ref={platter} name="RecordPlatter" rotation={[0, angle.current, 0]}>
           <mesh><cylinderGeometry args={[.205, .205, .025, 48]} /><meshStandardMaterial color="#343d3c" metalness={.4} /></mesh>
@@ -191,9 +191,9 @@ export function RecordPlayer(props: WorldSceneProps) {
       props.onImportMusic();
     }}><group rotation={[-Math.PI / 2, 0, 0]}><Disc colors={['#efe4c7', '#c8a879']} radius={.145} /></group></ObjectHandle>
     <group position={[.61, 1.4, -2.73]}>
-      <SoftBox dims={[.38, .56, .37]} color="#dcb68d" />
-      {[.13, -.1].map((y, i) => <mesh key={y} position={[0, y, .19]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[i ? .125 : .065, i ? .125 : .065, .018, 32]} /><meshStandardMaterial color="#35423f" /></mesh>)}
-      <ObjectHandle id="music-mute" action="toggle" hint={props.isMuted ? '旋动音箱旋钮，恢复声音' : '旋动音箱旋钮，静音'} world={world} position={[.12, -.21, .21]} drag="x"><mesh rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[.03, .03, .035, 16]} /><meshStandardMaterial color={props.isMuted ? '#7a7f73' : '#d7b46e'} /></mesh></ObjectHandle>
+      <SoftBox dims={[.38, .56, .37]} color="#d8a955" />
+      {[.13, -.1].map((y, i) => <mesh key={y} position={[0, y, .19]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[i ? .125 : .065, i ? .125 : .065, .018, 32]} /><meshStandardMaterial color="#2e363c" /></mesh>)}
+      <ObjectHandle id="music-mute" action="toggle" hint={props.isMuted ? '旋动音箱旋钮，恢复声音' : '旋动音箱旋钮，静音'} world={world} position={[.12, -.21, .21]} drag="x"><mesh rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[.03, .03, .035, 16]} /><meshStandardMaterial color={props.isMuted ? '#7a7f78' : '#e6ca7d'} /></mesh></ObjectHandle>
     </group>
     {moving && <group ref={flying} name="MovingRecord" position={pose.position} quaternion={rackRotation.clone().slerp(flatRotation, pose.tilt)}><group ref={flyingSpin}><Disc colors={transport.disc.discThemeColor} /></group></group>}
     {enabled && props.focusedObject === 'music-player' && <Html center position={[-.35, 1.95, -2.25]} distanceFactor={4} style={{ pointerEvents: 'none', width: 260, textAlign: 'center', color: '#f3e6c9', font: '12px monospace', textShadow: '0 1px 3px #242723' }}>

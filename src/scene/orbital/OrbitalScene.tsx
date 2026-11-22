@@ -379,18 +379,18 @@ function CameraRig(props: CameraRigProps) {
     }}
     target={initialTarget} />;
 }
-const SUN_DAY_COLOR = new THREE.Color('#ffd9b8');
-const SUN_LIMB_COLOR = new THREE.Color('#ff8b42');
-const SKY_DAY_COLOR = new THREE.Color('#f7e2c8');
-const SKY_DUSK_COLOR = new THREE.Color('#eda878');
-const SKY_SHADOW_COLOR = new THREE.Color('#8e9bc4');
-const GROUND_DAY_COLOR = new THREE.Color('#b58c73');
-const GROUND_DUSK_COLOR = new THREE.Color('#593f34');
-const GROUND_SHADOW_COLOR = new THREE.Color('#352f3d');
-const EARTHSHINE_DAY_COLOR = new THREE.Color('#b8c8e8');
-const EARTHSHINE_DUSK_COLOR = new THREE.Color('#f2a270');
-const EARTHSHINE_NIGHT_COLOR = new THREE.Color('#7c94c8');
-const SUN_INTENSITY = 1.62;
+const SUN_DAY_COLOR = new THREE.Color('#fff2e2');
+const SUN_LIMB_COLOR = new THREE.Color('#ff9d62');
+const SKY_DAY_COLOR = new THREE.Color('#f6f2eb');
+const SKY_DUSK_COLOR = new THREE.Color('#f6be96');
+const SKY_SHADOW_COLOR = new THREE.Color('#8ea8d8');
+const GROUND_DAY_COLOR = new THREE.Color('#d4c7b8');
+const GROUND_DUSK_COLOR = new THREE.Color('#685a64');
+const GROUND_SHADOW_COLOR = new THREE.Color('#393d4e');
+const EARTHSHINE_DAY_COLOR = new THREE.Color('#9ec4ee');
+const EARTHSHINE_DUSK_COLOR = new THREE.Color('#f0b48c');
+const EARTHSHINE_NIGHT_COLOR = new THREE.Color('#7ca8e2');
+const SUN_INTENSITY = 1.65;
 
 function OrbitalLighting({ objects, sceneId, sun }: Pick<WorldSceneProps, 'objects' | 'sceneId'> & { sun: SunState }) {
   const lamp = useRef<THREE.PointLight>(null);
@@ -405,33 +405,33 @@ function OrbitalLighting({ objects, sceneId, sun }: Pick<WorldSceneProps, 'objec
   useFrame((_, delta) => {
     const daylight = sun.daylight.value;
     const warmth = sun.warmth;
-    if (lamp.current) lamp.current.intensity = THREE.MathUtils.damp(lamp.current.intensity, objects.lamp?.active === false ? 0 : 5.2, 5, delta);
-    if (roomWarm.current) roomWarm.current.intensity = THREE.MathUtils.damp(roomWarm.current.intensity, 2.8 + 0.6 * (1 - daylight), 3, delta);
+    if (lamp.current) lamp.current.intensity = THREE.MathUtils.damp(lamp.current.intensity, objects.lamp?.active === false ? 0 : 4.8, 5, delta);
+    if (roomWarm.current) roomWarm.current.intensity = THREE.MathUtils.damp(roomWarm.current.intensity, 2.4 + 0.6 * (1 - daylight), 3, delta);
     if (ambient.current) {
-      ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, 0.36 + 0.40 * daylight + 0.06 * warmth, 3, delta);
-      ambient.current.color.lerpColors(SKY_SHADOW_COLOR, SKY_DAY_COLOR, daylight).lerp(SKY_DUSK_COLOR, warmth * 0.42);
-      ambient.current.groundColor.lerpColors(GROUND_SHADOW_COLOR, GROUND_DAY_COLOR, daylight).lerp(GROUND_DUSK_COLOR, warmth * 0.35);
+      ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, 0.48 + 0.44 * daylight + 0.08 * warmth, 3, delta);
+      ambient.current.color.lerpColors(SKY_SHADOW_COLOR, SKY_DAY_COLOR, daylight).lerp(SKY_DUSK_COLOR, warmth * 0.45);
+      ambient.current.groundColor.lerpColors(GROUND_SHADOW_COLOR, GROUND_DAY_COLOR, daylight).lerp(GROUND_DUSK_COLOR, warmth * 0.38);
     }
     if (key.current) {
       key.current.position.copy(sun.light).multiplyScalar(18);
       key.current.intensity = SUN_INTENSITY * daylight;
-      key.current.color.lerpColors(SUN_DAY_COLOR, SUN_LIMB_COLOR, warmth * 0.88);
+      key.current.color.lerpColors(SUN_DAY_COLOR, SUN_LIMB_COLOR, warmth * 0.85);
     }
     if (earthshine.current) {
-      earthshine.current.intensity = 0.20 + 0.20 * (1 - daylight) + 0.14 * warmth;
+      earthshine.current.intensity = 0.38 + 0.24 * (1 - daylight) + 0.14 * warmth;
       earthshine.current.color.lerpColors(EARTHSHINE_NIGHT_COLOR, EARTHSHINE_DAY_COLOR, daylight).lerp(EARTHSHINE_DUSK_COLOR, warmth * 0.55);
     }
-    scene.environmentIntensity = 0.36 + 0.44 * daylight;
+    scene.environmentIntensity = 0.44 + 0.46 * daylight;
   });
   return <>
     <primitive object={sunTarget} />
-    <hemisphereLight ref={ambient} args={['#f7e2c8', '#b58c73', 0.46]} />
-    <directionalLight ref={key} target={sunTarget} color="#ffd9b8" intensity={SUN_INTENSITY} position={sun.light.toArray().map(n => n * 18) as [number, number, number]} castShadow
+    <hemisphereLight ref={ambient} args={['#f6f2eb', '#d4c7b8', 0.58]} />
+    <directionalLight ref={key} target={sunTarget} color="#fff2e2" intensity={SUN_INTENSITY} position={sun.light.toArray().map(n => n * 18) as [number, number, number]} castShadow
       shadow-mapSize={[2048, 2048]} shadow-camera-left={-8} shadow-camera-right={8} shadow-camera-top={8} shadow-camera-bottom={-8}
       shadow-camera-near={0.1} shadow-camera-far={60} shadow-normalBias={0.012} shadow-bias={-0.0001} />
-    <directionalLight ref={earthshine} target={sunTarget} color="#b8c8e8" intensity={0.22} position={[-11, 4.5, -10]} />
-    <pointLight ref={lamp} position={[LAMP_POSITION[0] + lampX + .08, 1.74 + lampY, LAMP_POSITION[2] + .07]} color="#ffc17a" intensity={5.2} distance={10} decay={1.85} />
-    <pointLight ref={roomWarm} position={[2.1, 2.2, 0.2]} color="#ffdcb5" intensity={2.8} distance={9} decay={1.9} />
+    <directionalLight ref={earthshine} target={sunTarget} color="#9ec4ee" intensity={0.38} position={[-11, 4.5, -10]} />
+    <pointLight ref={lamp} position={[LAMP_POSITION[0] + lampX + .08, 1.74 + lampY, LAMP_POSITION[2] + .07]} color="#ffdf98" intensity={4.8} distance={9.5} decay={1.85} />
+    <pointLight ref={roomWarm} position={[2.1, 2.2, 0.2]} color="#faf3e8" intensity={2.4} distance={9.5} decay={1.85} />
   </>;
 }
 function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpen: boolean; outfitPreview: boolean }) {
@@ -466,8 +466,8 @@ function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpe
     <CameraRig {...props} flight={flight} residentView={residentView} onUpperVisibility={setUpperVisible} />
     <Cosmos reducedMotion={props.reducedMotion} sun={sun} flight={flight} />
     <Environment resolution={128} frames={1}>
-      <Lightformer form="rect" intensity={1.55} color="#ffe9cc" position={[0, 5, -2]} rotation={[Math.PI / 2, 0, 0]} scale={[10, 8, 1]} />
-      <Lightformer intensity={0.55} color="#d7c8e0" position={[5, 1, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 4, 1]} />
+      <Lightformer form="rect" intensity={1.55} color="#faf7f2" position={[0, 5, -2]} rotation={[Math.PI / 2, 0, 0]} scale={[10, 8, 1]} />
+      <Lightformer intensity={0.85} color="#c8e0f6" position={[5, 1, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 4, 1]} />
     </Environment>
     <UpperDeckVisibility.Provider value={upperVisible}>
     {(['habitat', 'observatory'] as WorldSceneId[]).map(id => {
