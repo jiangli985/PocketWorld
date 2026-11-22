@@ -38,8 +38,8 @@ test('the baked gait preserves the right and left knee curves of each MotionSmit
   for (const [ascending, travel, reference] of [
     [true, 8 + 8 / 16 - .78, [91.1, 18.9]],   // ascent frame 56
     [true, 9 + 8 / 16 - .78, [27.8, 91.7]],   // ascent frame 72
-    [false, (9 + 8 / 19 + .18) / (1 + .4 / 18), [83.7, 14.9]],  // descent frame 62
-    [false, (10 + 8 / 19 + .18) / (1 + .4 / 18), [12.8, 83.0]], // descent frame 81
+    [false, (9 + 5 / 19 + .18) / (1 + .4 / 18), [83.7, 14.9]],  // descent frame 62
+    [false, (10 + 5 / 18 + .18) / (1 + .4 / 18), [12.8, 83.0]], // descent frame 81
   ]) {
     const gait = sampleStairGait(ascending ? travel : CABIN_STAIRS.steps - travel, ascending);
     gait.legs.forEach((leg, side) => assert(Math.abs(leg.flexion * 180 / Math.PI - reference[side]) < .1));
@@ -71,6 +71,32 @@ test('both elbows and wrists articulate as the hands exchange leading sides', as
         assert.ok(samples.some(rotation => rotation.angleTo(samples[0]) > .045), 'the elbow and wrist must articulate locally');
     }
   } finally { rig.dispose(); }
+});
+
+test('the descending torso and its balance above the planted ankle match the side view of Take 1', async () => {
+  // Source frames 57, 63, 70, 76, 81 and 90. Positive sagittal angles lean downhill.
+  const poses = [
+    [9, -14.38, -8.13], [9 + 6 / 19, -11.65, -2.68], [9 + 13 / 19, -12.85, 2.43],
+    [10, -15.43, -6.80], [10 + 5 / 18, -13.41, -2.46], [10 + 14 / 18, -12.55, 5.37],
+  ];
+  const angle = (from, to) => Math.atan2(to.z - from.z, to.y - from.y) * 180 / Math.PI;
+  for (const outfit of ['walk-room', 'snowflower', 'cloudhoodie']) {
+    const { gltf } = await load(new URL(`../../../assets/public/models/resident/luna-${outfit}.glb`, import.meta.url));
+    const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'), outfit !== 'walk-room');
+    const point = name => gltf.scene.getObjectByName('mixamorig' + name).getWorldPosition(new Vector3());
+    try {
+      for (const [cycle, trunkAngle, balanceAngle] of poses) {
+        const progress = 18 - (cycle + .18) / (1 + .4 / 18);
+        const gait = sampleStairGait(progress, false);
+        rig.mesh.position.set(CABIN_STAIRS.x, progress * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
+        rig.applyPose(gait.phase, 0);
+        rig.applyStairPose(gait, CABIN_STAIRS.x, stairTreadSurface);
+        const neck = point('Neck'), ankle = point(sides[gait.feet.findIndex(foot => !foot.swing)] + 'Foot');
+        assert(Math.abs(angle(point('Hips'), neck) - trunkAngle) < 2, 'retarget the full torso rather than bending only the chest');
+        assert(Math.abs(angle(ankle, neck) - balanceAngle) < 4, 'the whole body must stay balanced over the step');
+      }
+    } finally { rig.dispose(); }
+  }
 });
 
 test('descending moves the pelvis forward and brakes each receiving foot before contact', async () => {

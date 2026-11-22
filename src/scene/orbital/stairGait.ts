@@ -13,7 +13,7 @@ export type StairGait = {
   arms: number[][];
   legs: { flexion: number; hipForward: number; hipSide: number }[];
   supportWeight: number;
-  descent: { pelvisZ: number; ankleSurface: number; settle: number } | null;
+  descent: { pelvisZ: number; headPitch: number; ankleSurface: number; settle: number } | null;
   footfall: number;
   phase: number;
 };
@@ -66,9 +66,10 @@ export function sampleStairGait(progress: number, ascending: boolean, reducedMot
   const pitch = sample(2);
   const heelRoll = ascending ? pitch : .25 * Math.tanh(pitch / .25);
   const descent = ascending ? null : {
-    pelvisZ: support.z + (.55 + sample(28)) * STAIR_TREAD_RUN,
-    ankleSurface: lerp(from.y, to.y, smoothstep(phase, .24, 1)),
-    settle: smoothstep(phase, .32, .77),
+    pelvisZ: support.z + sample(28) * STAIR_TREAD_RUN,
+    headPitch: reducedMotion ? 0 : sample(30),
+    ankleSurface: lerp(from.y, to.y, MathUtils.smootherstep(phase, .40, 1)),
+    settle: smoothstep(phase, .32, .93),
   };
   const supportWeight = .5 + .5 * (ascending
     ? smoothstep(phase, 0, .23) * smoothstep(1 - phase, 0, .23)

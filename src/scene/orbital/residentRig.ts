@@ -413,8 +413,10 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     leg: /_(?:Left|L)_/.test(target.name) ? 1 : /_(?:Right|R)_/.test(target.name) ? 0 : null,
   }));
   const stairHips = hips.position.clone();
+  const stairHead = bone('Head');
+  const headRestWorld = stairHead.getWorldQuaternion(new THREE.Quaternion());
   const stairArmChains = ['Right', 'Left'].map(side => ['Arm', 'ForeArm', 'Hand', 'HandMiddle1'].map(n => bone(side + n)));
-  const stairUpperBody = [torsoBone, bone('Head')].map(joint =>
+  const stairUpperBody = [torsoBone, stairHead].map(joint =>
     ({ joint, rotation: joint.quaternion.clone() }));
   const limb = new THREE.Vector3(), aim = new THREE.Vector3();
   const pelvisShift = new THREE.Vector3();
@@ -441,8 +443,19 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     mesh.getWorldQuaternion(meshYaw);
     meshYawInverse.copy(meshYaw).invert();
     hips.position.lerp(stairHips, weight);
-    for (const [i, { joint, rotation }] of stairUpperBody.entries())
-      blendStairPitch(joint, rotation, gait.lean * (i === 0 ? 1 : .32), weight);
+    if (descent) {
+      // Match the whole pelvis-to-neck line; rotating the upper chest alone leaves the abdomen pitched forward.
+      limb.copy(neckBone.getWorldPosition(aim)).sub(hips.getWorldPosition(soleGoal)).applyQuaternion(meshYawInverse);
+      const pitch = gait.lean - Math.atan2(limb.z, limb.y);
+      blendStairPitch(hips, hips.quaternion, pitch, weight);
+      // Let the eyes follow the steps independently of the torso.
+      strideRotation.copy(meshYaw).multiply(stridePitch.setFromAxisAngle(axisX, descent.headPitch)).multiply(headRestWorld);
+      strideRotation.premultiply(stairHead.parent!.getWorldQuaternion(parentRotation).invert());
+      stairHead.quaternion.slerp(strideRotation, weight);
+    } else {
+      for (const [i, { joint, rotation }] of stairUpperBody.entries())
+        blendStairPitch(joint, rotation, gait.lean * (i === 0 ? 1 : .32), weight);
+    }
     for (const [side, directions] of gait.arms.entries()) {
       const chain = stairArmChains[side];
       for (let i = 0; i < chain.length - 1; i++) {
@@ -529,7 +542,7 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     if (descent) {
       // Use the midline so exchanging the supporting leg cannot throw the torso backward.
       const ankleOffset = (stairLegs[0].ankleOffset.z + stairLegs[1].ankleOffset.z) / 2;
-      const hipZ = (stairLegs[0].hip.z + stairLegs[1].hip.z) / 2;
+      const hipZ = hips.getWorldPosition(aim).z;
       pelvisShift.z = THREE.MathUtils.lerp(pelvisShift.z, descent.pelvisZ + ankleOffset - hipZ, weight);
     } else if (span > .001) {
       const along = (r.r2 - l.r2 + span * span) / (2 * span);
