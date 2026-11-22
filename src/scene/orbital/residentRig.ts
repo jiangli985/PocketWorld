@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { ResidentArm, ResidentLeg, ResidentRig } from './ResidentModel';
+import type { StairGait } from './stairGait';
 
 export const HIP_HEIGHT = 0.69;
 export const RESIDENT_SCALE = 1.43;
@@ -22,7 +23,7 @@ function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE.Vector
   const hip = worldPosition(thigh), knee = worldPosition(shin), ankle = worldPosition(foot);
   const upper = knee.distanceTo(hip), lower = ankle.distanceTo(knee);
   const axis = point.clone().sub(hip);
-  const distance = Math.min(axis.length(), upper + lower - .0001);
+  const distance = THREE.MathUtils.clamp(axis.length(), Math.abs(upper - lower) + .0001, upper + lower - .0001);
   axis.normalize();
   const pole = knee.clone().sub(hip);
   pole.addScaledVector(axis, -pole.dot(axis)).normalize();
@@ -369,6 +370,109 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     }
   }
 
+  // Update the attached skin bind matrices as well as the scaled neutral bones.
+  mesh.updateMatrixWorld(true);
+  const stairLegs = ['Right', 'Left'].map(side => {
+    const joints = ['UpLeg', 'Leg', 'Foot', 'ToeBase'].map(name => bone(side + name));
+    const foot = joints[2], toe = joints[3];
+    const soleBounds = new THREE.Box3();
+    for (const surface of skinned) {
+      const indices = surface.geometry.getAttribute('skinIndex');
+      const weights = surface.geometry.getAttribute('skinWeight');
+      const footIndex = surface.skeleton.bones.indexOf(foot), toeIndex = surface.skeleton.bones.indexOf(toe);
+      if (footIndex < 0) continue;
+      for (let vertex = 0; vertex < indices.count; vertex++) {
+        let soleWeight = 0;
+        for (let channel = 0; channel < 4; channel++) {
+          const index = indices.getComponent(vertex, channel);
+          if (index === footIndex || index === toeIndex) soleWeight += weights.getComponent(vertex, channel);
+        }
+        if (soleWeight < .5) continue;
+        surface.getVertexPosition(vertex, samplePoint).applyMatrix4(surface.matrixWorld);
+        if (samplePoint.y < .026) soleBounds.expandByPoint(samplePoint);
+      }
+    }
+    const ankle = foot.getWorldPosition(new THREE.Vector3());
+    const center = soleBounds.isEmpty()
+      ? ankle.clone().add(new THREE.Vector3(0, -.045, .048))
+      : soleBounds.getCenter(new THREE.Vector3()).setY(soleBounds.min.y);
+    const heel = soleBounds.isEmpty() ? -.075 : soleBounds.min.z - center.z;
+    const forefoot = soleBounds.isEmpty() ? .075 : soleBounds.max.z - center.z;
+    return { joints, foot, toe, centerX: center.x, heel, forefoot, ankleOffset: ankle.sub(center),
+      rotation: foot.getWorldQuaternion(new THREE.Quaternion()), toeRotation: toe.quaternion.clone(), ankleY: center.y };
+  });
+  const stairDress = dress.filter(({ front, side }) => front || side).map(({ target, front }) => ({
+    joint: target, rotation: target.quaternion.clone(), front,
+    leg: /_(?:Left|L)_/.test(target.name) ? 1 : /_(?:Right|R)_/.test(target.name) ? 0 : null,
+  }));
+  const stairHips = hips.position.clone();
+  const stairUpperBody = [torsoBone, bone('Head'), bone('RightArm'), bone('LeftArm')].map(joint =>
+    ({ joint, rotation: joint.quaternion.clone() }));
+  const axisY = new THREE.Vector3(0, 1, 0);
+  const strideYaw = new THREE.Quaternion(), stridePitch = new THREE.Quaternion();
+  const meshYaw = new THREE.Quaternion(), meshYawInverse = new THREE.Quaternion();
+  const strideRotation = new THREE.Quaternion(), parentRotation = new THREE.Quaternion();
+  const ankleGoal = new THREE.Vector3(), soleGoal = new THREE.Vector3(), soleEdge = new THREE.Vector3();
+  const kneeLift = [0, 0];
+  const thighDirection = new THREE.Vector3();
+
+  function blendStairPitch(joint: THREE.Bone, rotation: THREE.Quaternion, pitch: number, weight: number) {
+    joint.parent!.getWorldQuaternion(parentRotation);
+    strideRotation.copy(parentRotation).invert().multiply(meshYaw)
+      .multiply(stridePitch.setFromAxisAngle(axisX, pitch)).multiply(meshYawInverse)
+      .multiply(parentRotation).multiply(rotation);
+    joint.quaternion.slerp(strideRotation, weight);
+  }
+
+  function applyStairPose(gait: StairGait, stairX: number, surfaceAt: (z: number, edgeBlend: number) => number) {
+    const { ascending, weight, yaw } = gait;
+    if (weight <= 0) return;
+    // Stay a little lower on the flight to leave knee room for the high treads.
+    hips.position.lerp(stairHips, weight);
+    samplePoint.set(0, ascending ? -.101 : -.042, ascending ? -.042 : 0).applyQuaternion(mesh.getWorldQuaternion(meshYaw));
+    hips.getWorldPosition(ankleGoal).addScaledVector(samplePoint, weight);
+    hips.position.copy(hips.parent!.worldToLocal(ankleGoal));
+    meshYawInverse.copy(meshYaw).invert();
+    const angles = [gait.lean, gait.lean * .32, gait.rightArm, gait.leftArm];
+    for (const [i, { joint, rotation }] of stairUpperBody.entries())
+      blendStairPitch(joint, rotation, angles[i], weight);
+    strideYaw.setFromAxisAngle(axisY, yaw);
+    for (const [side, leg] of stairLegs.entries()) {
+      const step = gait.feet[side];
+      stridePitch.setFromAxisAngle(axisX, step.pitch);
+      strideRotation.copy(strideYaw).multiply(stridePitch).multiply(leg.rotation);
+      const x = stairX + leg.centerX * Math.cos(yaw);
+      soleGoal.set(x, step.y, step.z);
+      if (step.swing) {
+        // A toe can cross a higher front edge before the ankle gets there.
+        for (const edge of [leg.heel, leg.forefoot]) {
+          soleEdge.set(0, 0, edge).applyQuaternion(stridePitch).applyQuaternion(strideYaw);
+          const edgeZ = step.z + soleEdge.z;
+          const floor = surfaceAt(edgeZ, 0);
+          const surface = step.edgeBlend
+            ? Math.max(floor, Math.min(surfaceAt(edgeZ, step.edgeBlend), step.surfaceCeiling))
+            : floor;
+          soleGoal.y = Math.max(soleGoal.y, surface - soleEdge.y + .002);
+        }
+      }
+      ankleGoal.copy(leg.ankleOffset).applyQuaternion(stridePitch).applyQuaternion(strideYaw)
+        .add(soleGoal).y += Math.max(.001, leg.ankleY);
+      leg.foot.getWorldPosition(ankle).lerp(ankleGoal, weight);
+      leg.foot.getWorldQuaternion(footRotation).slerp(strideRotation, weight);
+      leg.toe.quaternion.slerp(leg.toeRotation, weight);
+      plantResidentLeg(leg.joints, ankle, footRotation);
+      const [thigh, shin] = leg.joints;
+      thighDirection.copy(shin.getWorldPosition(soleEdge)).sub(thigh.getWorldPosition(soleGoal)).applyQuaternion(meshYawInverse);
+      kneeLift[side] = THREE.MathUtils.clamp(Math.atan2(thighDirection.z, -thighDirection.y) - .08, 0, 1.28);
+    }
+    // Let each front panel follow the corresponding knee so the deeper stair flexion keeps the skirt outside the legs.
+    for (const { joint, rotation, front, leg } of stairDress) {
+      const pitch = leg === null ? Math.max(...kneeLift) * .72
+        : kneeLift[leg] * (front ? .91 : .40) + kneeLift[1 - leg] * (front ? .12 : 0);
+      blendStairPitch(joint, rotation, -pitch, weight);
+    }
+  }
+
   function applyPose(phase: number, walkWeight: number) {
     if (walkWeight === 1) sample(phase);
     else {
@@ -436,6 +540,6 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     }
   }
 
-  return { mesh, legs, arms, torso, neck, head, skirtFront, skirtBack, applyPose, followMotion, applyArmCorrectives,
+  return { mesh, legs, arms, torso, neck, head, skirtFront, skirtBack, applyPose, applyStairPose, followMotion, applyArmCorrectives,
     dispose: () => { for (const object of skinned) object.skeleton.dispose(); } };
 }

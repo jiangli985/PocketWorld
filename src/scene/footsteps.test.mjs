@@ -6,6 +6,7 @@ import ts from 'typescript';
 import * as THREE from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { load as loadModel } from './orbital/load-for-validation.mjs';
+import * as stairGait from './orbital/stairGait.ts';
 
 const { gltf: residentModel } = await loadModel(new URL('../../assets/public/models/resident/luna-walk-room.glb', import.meta.url));
 
@@ -80,6 +81,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './residentRig': residentRig,
     './cabinLayout': cabinLayout,
     './cabinStairs': cabinStairs,
+    './stairGait': stairGait,
     './wardrobe/outfit': load('./orbital/wardrobe/outfit.ts', {}),
     './sofaMotion': load('./orbital/sofaMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './journalLayout': load('./orbital/journalLayout.ts', {}),

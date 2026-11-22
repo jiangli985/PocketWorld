@@ -292,5 +292,22 @@
       "sha256": "d00440305c32b54ff0eb52f28e1c56d099fb85f396a31e03934e7f3166560be7",
       "processing": "Adjusted embedded albedo for the warm cabin palette. Reuses the supplied geometry and attachment pivots."
     }
+  ],
+  "bundledAnimations": [
+    {
+      "file": "assets/models/resident/luna-stair-gait.json",
+      "source": "Carnegie Mellon Graphics Lab Motion Capture Database, subject 113 trials 20 (ascent) and 19 (descent), MotionBuilder BVH conversion by Bruce Hahne.",
+      "sourcePage": "https://mocap.cs.cmu.edu/search.php?subjectnumber=113",
+      "sourceSha256": {
+        "113_19.bvh": "b9905657508c47d62242e7736024e274a80ced75be680304c220c4d0b0eb7764",
+        "113_20.bvh": "27a003b2ae15f089a284b205b4dcc2aec9ad0e889f21882e8dc3b3c282acd370"
+      },
+      "license": "CMU permits inclusion in commercial products and prohibits direct resale of the motion data, even in a converted format.",
+      "licensePage": "https://mocap.cs.cmu.edu/",
+      "used": true,
+      "bytes": 3462,
+      "sha256": "64eaace8adb318636249f6ff5c22e12da991ae50296103b7ae5a61ad18628e71",
+      "processing": "scripts/bake-luna-stairs.mjs extracts four normalized step profiles. Original BVHs stay outside the repository. The bundled data drives PocketWorld-specific two-bone IK with tread contact."
+    }
   ]
 }

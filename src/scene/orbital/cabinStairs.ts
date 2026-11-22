@@ -41,19 +41,16 @@ export function atStairEntrance(deck: CabinDeck, point: Point, nextX: number) {
 }
 
 /** Distance increases on the way up. Both turns connect at floor level. */
-export function sampleCabinStairs(distance: number): { position: Position; ascent: number } {
+export function sampleCabinStairs(distance: number): { position: Position; ascent: number; tread: number | null } {
   const run = distance - lowerTurn;
-  if (run <= 0) return { position: [lowerX - Math.max(0, distance), 0, CABIN_STAIRS.lowerZ], ascent: 0 };
+  if (run <= 0) return { position: [lowerX - Math.max(0, distance), 0, CABIN_STAIRS.lowerZ], ascent: 0, tread: null };
   if (run >= STAIR_RUN) {
     const exit = Math.min(upperTurn, run - STAIR_RUN);
-    return { position: [CABIN_STAIRS.x + exit, UPPER_DECK_OFFSET[1], CABIN_STAIRS.upperZ], ascent: 1 };
+    return { position: [CABIN_STAIRS.x + exit, UPPER_DECK_OFFSET[1], CABIN_STAIRS.upperZ], ascent: 1, tread: null };
   }
-  // Raise the pelvis at each riser over the first part of the tread.
-  const step = run / STAIR_TREAD_RUN;
-  const index = Math.floor(step);
-  const t = Math.min(1, (step - index) / .38);
-  const height = (index + t * t * (3 - 2 * t)) * STAIR_RISE;
-  return { position: [CABIN_STAIRS.x, height, CABIN_STAIRS.lowerZ - run], ascent: run / STAIR_RUN };
+  // Feet handle the risers while the resident root advances along the incline.
+  const tread = run / STAIR_TREAD_RUN;
+  return { position: [CABIN_STAIRS.x, tread * STAIR_RISE, CABIN_STAIRS.lowerZ - run], ascent: run / STAIR_RUN, tread };
 }
 
 export interface CabinResidentView {
