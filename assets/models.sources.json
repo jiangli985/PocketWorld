@@ -296,18 +296,19 @@
   "bundledAnimations": [
     {
       "file": "assets/models/resident/luna-stair-gait.json",
-      "source": "Carnegie Mellon Graphics Lab Motion Capture Database, subject 113 trials 20 (ascent) and 19 (descent), MotionBuilder BVH conversion by Bruce Hahne.",
-      "sourcePage": "https://mocap.cs.cmu.edu/search.php?subjectnumber=113",
+      "source": "Cosindra MotionSmith, Walk up stairs and Walk down stairs, Take 1 on UE5 Manny, 30 fps.",
+      "sourcePage": "https://cosindra.ai/motionsmith/motions/walk-upstairs",
       "sourceSha256": {
-        "113_19.bvh": "b9905657508c47d62242e7736024e274a80ced75be680304c220c4d0b0eb7764",
-        "113_20.bvh": "27a003b2ae15f089a284b205b4dcc2aec9ad0e889f21882e8dc3b3c282acd370"
+        "MotionSmith_walk_downstairs_take1.glb": "31b81905b1dd1fa354cf9ccc8fd6f7e563f8ff2032bc21cb2878bd9d4a8484da",
+        "MotionSmith_walk_upstairs_take1.glb": "be214a8617c60c13dd33200a8ac20a0df4eee04d3cf768d3ce69113724f2f1ef"
       },
-      "license": "CMU permits inclusion in commercial products and prohibits direct resale of the motion data, even in a converted format.",
-      "licensePage": "https://mocap.cs.cmu.edu/",
+      "license": "The MotionSmith gallery permits commercial use in games and other projects without attribution.",
+      "licensePage": "https://cosindra.ai/license",
       "used": true,
-      "bytes": 5338,
-      "sha256": "43da74d05c3997ece93b3fc2af1484e4a76fa883aa48686323bdcf030fc5b526",
-      "processing": "scripts/bake-luna-stairs.mjs extracts four normalized step profiles with shoulder pitch, elbow flexion and wrist pitch on each side. Original BVHs stay outside the repository. The bundled data drives PocketWorld-specific two-bone IK with tread contact."
+      "bytes": 17879,
+      "sha256": "a8c7ae2291c20fb13bf471813b5887f7cbd38256faf04ecaca3e3f40c8a9f4c6",
+      "processing": "scripts/bake-luna-stairs.mjs samples consecutive right and left steps from the original GLBs. The shipped profiles contain ankle travel, pitch, torso lean, knee flexion, hip offsets and upper arm, forearm and hand directions. Character meshes and original clips are not bundled.",
+      "descentSourcePage": "https://cosindra.ai/motionsmith/motions/walk-downstairs"
     }
   ]
 }

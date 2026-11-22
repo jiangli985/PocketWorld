@@ -2,12 +2,12 @@
 
 ## 楼梯步态
 
-楼梯动作使用 CMU 120 fps 真人动捕的两步片段。上楼取 `113_20` 的右脚 179–262 帧、左脚 263–345 帧，下楼取 `113_19` 的右脚 505–607 帧、左脚 426–514 帧。导出脚抬升、前进、脚掌俯仰、躯干倾斜及两侧肩、肘、腕的俯仰曲线。场景按实际踏面求解穿着不同服装时的脚底位置，角色的位移和镜头仍由楼梯路径控制。每步距离随踏面尺寸对齐，脚步声按接触时机播放。
+Luna 上、下楼各取 MotionSmith Take 1 中连续的左右两步。原文件均为 UE5 Manny 骨架、30 fps。帧号从 0 开始，上楼两个步段的边界为 48、64、80，下楼为 54、73、92。导出脚踝推进与抬升、脚掌俯仰、躯干倾斜、双膝屈曲、髋踝相对位置和双侧肩、肘、腕的运动方向。运行时按腿长和踏面尺寸重定向，并在首末级与平台衔接。下楼时前脚掌靠近踏板前缘，提踵幅度受限以适应角色比例。[上楼原片](https://cosindra.ai/motionsmith/motions/walk-upstairs) · [下楼原片](https://cosindra.ai/motionsmith/motions/walk-downstairs)
 
-[动作数据](./luna-stair-gait.json)约 5.3 KB，随应用打包。原始 BVH 留在仓库外，文件与来源见[素材清单](../../models.sources.json)。在仓库根目录用两条 MotionBuilder 版 BVH 重建数据。
+[步态曲线](./luna-stair-gait.json)约 18 KB，随应用打包。原始 GLB 保存在仓库外，来源与文件校验值见[素材清单](../../models.sources.json)。从仓库根目录运行下列命令可重建曲线。
 
-```sh
-node scripts/bake-luna-stairs.mjs /path/to/113_20.bvh /path/to/113_19.bvh
+```bash
+node scripts/bake-luna-stairs.mjs /path/to/MotionSmith_walk_upstairs_take1.glb /path/to/MotionSmith_walk_downstairs_take1.glb
 ```
 
 ## 云朵连帽衫绑定

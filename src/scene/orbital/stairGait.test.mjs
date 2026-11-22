@@ -33,6 +33,19 @@ test('the two stair gaits alternate support and place a contact on all 18 treads
   assert.notEqual(sampleStairGait(5.4, true).lean, sampleStairGait(12.6, false).lean);
 });
 
+// Independent same-side knee measurements (degrees) from the two 30 Hz Manny GLBs.
+test('the baked gait preserves the right and left knee curves of each MotionSmith Take 1', () => {
+  for (const [ascending, travel, reference] of [
+    [true, 8 + 8 / 16 - .78, [91.1, 18.9]],   // ascent frame 56
+    [true, 9 + 8 / 16 - .78, [27.8, 91.7]],   // ascent frame 72
+    [false, (9 + 8 / 19 + .18) / (1 + .4 / 18), [83.7, 14.9]],  // descent frame 62
+    [false, (10 + 8 / 19 + .18) / (1 + .4 / 18), [12.8, 83.0]], // descent frame 81
+  ]) {
+    const gait = sampleStairGait(ascending ? travel : CABIN_STAIRS.steps - travel, ascending);
+    gait.legs.forEach((leg, side) => assert(Math.abs(leg.flexion * 180 / Math.PI - reference[side]) < .1));
+  }
+});
+
 test('both elbows and wrists articulate as the hands exchange leading sides', async () => {
   const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-walk-room.glb', import.meta.url));
   const asset = clone(gltf.scene);
@@ -95,6 +108,8 @@ for (const file of ['luna-walk-room.glb', 'luna-snowflower.glb', 'luna-cloudhood
       const position = new Vector3();
       for (const ascending of [true, false]) {
         rig.mesh.rotation.y = ascending ? Math.PI : 0;
+        const kneeError = [0, 0], sampleCount = [0, 0];
+        let maxSwing = 0;
         for (let i = -30; i <= 18 * 24 + 30; i++) {
           const travel = i / 24;
           const progress = ascending ? travel : CABIN_STAIRS.steps - travel;
@@ -106,6 +121,15 @@ for (const file of ['luna-walk-room.glb', 'luna-snowflower.glb', 'luna-cloudhood
           rig.mesh.updateMatrixWorld(true);
           for (const [side, vertices] of soles.entries()) {
             const foot = gait.feet[side];
+            if (travel >= 7 && travel < 9) {
+              const [hip, knee, ankle] = ['UpLeg', 'Leg', 'Foot'].map(name =>
+                asset.getObjectByName('mixamorig' + sides[side] + name).getWorldPosition(new Vector3()));
+              const angle = knee.clone().sub(hip).angleTo(ankle.sub(knee));
+              const role = foot.swing ? 1 : 0;
+              kneeError[role] += Math.abs(angle - gait.legs[side].flexion) * 180 / Math.PI;
+              sampleCount[role]++;
+              if (foot.swing) maxSwing = Math.max(maxSwing, angle * 180 / Math.PI);
+            }
             let gap = Infinity;
             for (const { mesh, vertex } of vertices) {
               mesh.getVertexPosition(vertex, position).applyMatrix4(mesh.matrixWorld);
@@ -116,6 +140,9 @@ for (const file of ['luna-walk-room.glb', 'luna-snowflower.glb', 'luna-cloudhood
             if (!foot.swing && gait.weight === 1) assert(gap >= -.002 && gap < .005, `supporting sole is ${gap} m from the tread`);
           }
         }
+        assert(kneeError[0] / sampleCount[0] < 7, 'support knee must follow the recorded bend through weight transfer');
+        assert(kneeError[1] / sampleCount[1] < 9, 'swing knee must track the reference through the step');
+        if (!ascending) assert(maxSwing < 99, 'the descending heel must not kick back into the skirt');
       }
     } finally { rig.dispose(); }
   });
