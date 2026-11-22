@@ -82,7 +82,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './cabinLayout': cabinLayout,
     './cabinStairs': cabinStairs,
     './stairGait': stairGait,
-    './wardrobe/outfit': load('./orbital/wardrobe/outfit.ts', {}),
+    './wardrobe/inspectPose': load('./orbital/wardrobe/inspectPose.ts', { three: THREE }),
     './sofaMotion': load('./orbital/sofaMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './journalLayout': load('./orbital/journalLayout.ts', {}),
     './schedule/bookLayout': load('./orbital/schedule/bookLayout.ts', {}),
@@ -97,6 +97,8 @@ function mount(kind, overrides = {}, idleLibrary) {
     './library/libraryMotion': { libraryCoverFlow: flow => flow },
     './library/bookMotion': { residentLibraryTarget: () => [0, 0, 0] },
     './library/catalog': catalog,
+    './scene/orbital/wardrobe/WardrobeSurface': { WardrobeSurface: 'WardrobeSurface' },
+    './scene/orbital/wardrobe/outfit': load('./orbital/wardrobe/outfit.ts', {}),
     './scene/orbital/useWorldController': { useWorldController: () => world },
     './scene/orbital/OrbitalDustPrompt': { DustPrompt: 'DustPrompt' },
     './scene/orbital/spacecraftFlight': { readInitialViewMode: () => 'cabin' },
@@ -523,20 +525,42 @@ test('the fixed desk chair has room to board from the front', () => {
   } finally { view.dispose(); }
 });
 
-test('clicking the wardrobe leads to its doors and E changes the outfit at the same spot', () => {
+test('clicking the wardrobe leads to its doors and E opens the wardrobe at the same spot', () => {
   const actions = [];
   const view = mount('orbital', { onAction: action => actions.push([action.objectId, action.kind]) });
   try {
     const [x, z] = cabinLayout.WARDROBE_STAND;
-    const request = { sceneId: 'habitat', objectId: 'wardrobe', kind: 'toggle' };
+    const request = { sceneId: 'habitat', objectId: 'wardrobe', kind: 'open' };
     let reached = false;
     view.props.interaction.current([cabinLayout.WARDROBE_FOOTPRINT[0], 1.45, z], request, () => { reached = true; });
     for (let i = 0; i < 1800 && !reached; i++) view.frame(1 / 60);
     assert.ok(reached);
     assert.ok(Math.hypot(view.root.position.x - x, view.root.position.z - z) < .06);
     view.key('KeyE');
-    assert.deepEqual(actions, [['wardrobe', 'toggle']]);
+    assert.deepEqual(actions, [['wardrobe', 'open']]);
   } finally { view.dispose(); }
+});
+
+test('outfit inspection finishes once, keeps Luna planted and skips motion when requested', () => {
+  for (const hz of [30, 120]) {
+    let completed = 0;
+    const view = mount('orbital', { enabled: false, focusedObject: 'wardrobe', inspectionId: 12,
+      onInspectionEnd: () => completed++ });
+    try {
+      const [x, z] = cabinLayout.WARDROBE_STAND;
+      view.root.position.set(x, 0, z);
+      for (let i = 0; i < 2 * hz; i++) view.frame(1 / hz);
+      assert.equal(completed, 0);
+      for (let i = 0; i < hz; i++) view.frame(1 / hz);
+      assert.equal(completed, 1);
+      assert.deepEqual(view.root.position.toArray(), [x, 0, z]);
+      assert.deepEqual(view.sounds, []);
+      view.props.reducedMotion = true;
+      view.props.inspectionId++;
+      view.frame(1 / hz);
+      assert.equal(completed, 2);
+    } finally { view.dispose(); }
+  }
 });
 
 test('the static bed blocks walking without offering keyboard interaction, and nightstand controls are reachable', () => {

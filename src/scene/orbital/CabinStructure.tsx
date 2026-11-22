@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Group, MathUtils } from 'three';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
-import { CABIN_LEFT, CABIN_DIVIDER_X, UPPER_DECK_OFFSET } from './cabinLayout';
+import { BEDROOM_LEFT, CABIN_DIVIDER_X, UPPER_DECK_OFFSET } from './cabinLayout';
 import { CABIN_STAIRS, STAIR_RISE, STAIR_RUN, STAIR_TREAD_RUN, STAIR_UPPER_PLATFORM_BACK, STAIR_UPPER_ENTRY_FRONT, type CabinResidentView } from './cabinStairs';
 import { timber } from './Materials';
 import { SoftBox, surface } from './Primitives';
@@ -29,7 +29,7 @@ function Guard({ from, to }: { from: [number, number]; to: [number, number] }) {
 
 /** Keep the left landing open between the two runs of bedroom railing. */
 export function BedroomGuard() {
-  const left = CABIN_LEFT + .035;
+  const left = BEDROOM_LEFT + .035;
   const right = CABIN_DIVIDER_X - .035;
   const front = 3.10;
   return <group name="Bedroom_Guardrail">
@@ -67,15 +67,17 @@ export function CabinStaircase({ onCross, residentView }: { onCross: () => void;
   const outerEdge = x - width / 2;
   const platformWidth = CABIN_DIVIDER_X - outerEdge + .08;
   const platformCenter = outerEdge + platformWidth / 2;
+  // The platform overlaps the deck in plan. Keep its top just below the parquet.
+  const threshold = .006;
   const click = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
     if (event.delta <= 5) onCross();
   };
   return <group name="Cabin_Staircase" onClick={click} onPointerDown={event => event.stopPropagation()}>
     <SoftBox name="Stair_Lower_Landing" dims={[platformWidth, .21, width]} color={WOOD} radius={.026}
-      position={[platformCenter, -.105, lowerZ]} />
+      position={[platformCenter, -.105 - threshold, lowerZ]} />
     <SoftBox name="Stair_Upper_Landing" dims={[platformWidth, .23, width]} color={WOOD} radius={.026}
-      position={[platformCenter, upperY - .115, STAIR_UPPER_PLATFORM_BACK + width / 2]} />
+      position={[platformCenter, upperY - .115 - threshold, STAIR_UPPER_PLATFORM_BACK + width / 2]} />
     <group position-y={upperY}>
       <Guard from={[guardX, upperZ]} to={[guardX, STAIR_UPPER_PLATFORM_BACK]} />
       <Guard from={[guardX, STAIR_UPPER_PLATFORM_BACK]} to={[CABIN_DIVIDER_X + .035, STAIR_UPPER_PLATFORM_BACK]} />

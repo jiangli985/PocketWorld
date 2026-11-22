@@ -42,7 +42,7 @@ const viewpoints = {
     bounds: lowerBounds,
   },
   upper: {
-    target: new THREE.Vector3(.30, upperY + 1.26, -.18),
+    target: new THREE.Vector3(.85, upperY + 1.26, -.18),
     direction: new THREE.Vector3(-.64, .43, 1).normalize(),
     bounds: upperBounds,
   },

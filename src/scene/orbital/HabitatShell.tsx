@@ -1,12 +1,11 @@
-import { CABIN_DIVIDER_X, CABIN_LEFT, CABIN_RIGHT, type CabinDeck } from './cabinLayout';
+import { BEDROOM_LEFT, CABIN_DIVIDER_X, CABIN_LEFT, CABIN_RIGHT, type CabinDeck } from './cabinLayout';
 import React, { Suspense, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
-import type { ThreeEvent } from '@react-three/fiber';
+import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { AssetBoundary } from './ReusableAsset';
 import { extractSlipperModel, isSlipperMaterial } from './slipperModel';
 import { ObjectHandle } from './ObjectHandle';
-import { outfitHint, readOutfit } from './wardrobe/outfit';
 import type { WorldModelProps } from '../../types/world';
 
 interface HabitatShellProps {
@@ -15,8 +14,8 @@ interface HabitatShellProps {
   onFloorClick?: (point: [number, number, number]) => void;
 }
 
-const LOWER_PARTS = ['Duplex_LowerShell', 'Floor_Parquet', 'Stationery', 'Shelf_Gallery', 'Rugs'];
-const UPPER_PARTS = ['Duplex_UpperShell', 'Floor_Parquet_Upper', 'Nightstand', 'Interactable_Wardrobe', 'Rugs_Upper'];
+const LOWER_PARTS = ['Duplex_LowerShell', 'Duplex_DeckBase', 'Floor_Parquet', 'Stationery', 'Shelf_Gallery', 'Rugs'];
+const UPPER_PARTS = ['Duplex_UpperShell', 'Duplex_BedroomBase', 'Floor_Parquet_Bedroom', 'Nightstand', 'Interactable_Wardrobe', 'Rugs_Upper'];
 const OBSERVATORY_PARTS = ['Shell', 'Floor_Parquet', 'Floor_Parquet_Upper'];
 
 function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) {
@@ -39,13 +38,25 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
     slippers.forEach(node => node.removeFromParent());
     const wardrobe = shell.getObjectByName('Interactable_Wardrobe');
     wardrobe?.removeFromParent();
-    return { shell, wardrobe };
+    const door = wardrobe?.getObjectByName('Wardrobe_SlidingDoor');
+    return { shell, wardrobe, door, closed: door?.position.clone() };
   }, [scene, variant, deck]);
 
+  const slide = useRef(0);
+  useFrame((_, dt) => {
+    if (!cabin.door || !cabin.closed) return;
+    const target = world.objects.wardrobe?.open ? 1 : 0;
+    if (slide.current === target) return;
+    const step = world.reducedMotion ? 1 : dt / .62;
+    slide.current += Math.sign(target - slide.current) * Math.min(Math.abs(target - slide.current), step);
+    const t = slide.current;
+    cabin.door.position.copy(cabin.closed);
+    cabin.door.position.x -= .093 * THREE.MathUtils.smootherstep(t, 0, .25);
+    cabin.door.position.z -= .66 * THREE.MathUtils.smootherstep(t, .22, 1);
+  });
   return <>
     <primitive object={cabin.shell} dispose={null} />
-    {cabin.wardrobe && <ObjectHandle id="wardrobe" action="toggle" panorama world={world}
-      hint={outfitHint(readOutfit(world.objects.wardrobe?.itemId))}
+    {cabin.wardrobe && <ObjectHandle id="wardrobe" action="open" panorama world={world} hint="打开衣柜"
       onClick={event => event.stopPropagation()}>
       <primitive object={cabin.wardrobe} dispose={null} />
     </ObjectHandle>}
@@ -55,7 +66,7 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
 export function HabitatShell({ world, deck, onFloorClick }: HabitatShellProps) {
   const root = useRef<THREE.Group>(null);
   const floorPointer = useRef<number | null>(null);
-  const left = deck === 'upper' || world.sceneId === 'observatory' ? CABIN_LEFT : CABIN_DIVIDER_X;
+  const left = deck === 'upper' ? BEDROOM_LEFT : world.sceneId === 'observatory' ? CABIN_LEFT : CABIN_DIVIDER_X;
   const right = deck === 'upper' ? CABIN_DIVIDER_X : CABIN_RIGHT;
   const fallback = <mesh name="Floor_Parquet" position={[(left + right) / 2, -.12, 0]} receiveShadow>
     <boxGeometry args={[right - left, .24, 6.38]} /><meshStandardMaterial color="#cb9c74" />
