@@ -69,9 +69,9 @@ export function cabinCameraFrame(view: CabinView, aspect: number) {
 
 /** Follow the resident from the open side of the flight while the bedroom wall is in view. */
 export function stairCameraFrames(aspect: number) {
-  const offset = new THREE.Vector3(-.44, .27, 1).normalize().multiplyScalar(Math.max(8.9, 4.1 / Math.max(.1, aspect)));
-  const lowerTarget = new THREE.Vector3(CABIN_STAIRS.x + .20, .98, CABIN_STAIRS.lowerZ - .18);
-  const upperTarget = new THREE.Vector3(CABIN_STAIRS.x + .20, upperY + .98, CABIN_STAIRS.upperZ + .18);
+  const offset = new THREE.Vector3(-1, .78, -.40).normalize().multiplyScalar(Math.max(5.9, 3.8 / Math.max(.1, aspect)));
+  const lowerTarget = new THREE.Vector3(CABIN_STAIRS.x, .79, CABIN_STAIRS.lowerZ);
+  const upperTarget = new THREE.Vector3(CABIN_STAIRS.x, upperY + .79, CABIN_STAIRS.upperZ);
   return {
     lower: { target: lowerTarget, position: lowerTarget.clone().add(offset) },
     upper: { target: upperTarget, position: upperTarget.clone().add(offset) },
