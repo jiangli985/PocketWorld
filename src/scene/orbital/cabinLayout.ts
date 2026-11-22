@@ -17,7 +17,6 @@ export const UPPER_DECK_OFFSET: [number, number, number] = [CABIN_DIVIDER_X - CA
 // Matches the finished return-wall trim in scripts/export-open-cabin.py.
 export const BEDROOM_WALL_FRONT = 3.16;
 export const BEDROOM_WALL_OUTSET = .135;
-export const BEDROOM_STAIR_DOOR = { back: -2.21, front: -1.13 };
 export type CabinDeck = 'lower' | 'upper';
 
 export const DECK_WALK_BOUNDS = {
@@ -35,9 +34,9 @@ export function authoredCabinPoint(point: [number, number, number], deck: CabinD
 
 export const BED_POSITION: [number, number, number] = [-4.05, 0, -1.897];
 
-// Bounds after turning the wardrobe toward the room from the stair-side wall.
-export const WARDROBE_FOOTPRINT: [number, number, number, number] = [-6.49, -5.62, -.53, .97];
-export const WARDROBE_STAND: [number, number] = [-5.25, .22];
+// The wardrobe doors face inward from the right wall of the bedroom.
+export const WARDROBE_FOOTPRINT: [number, number, number, number] = [-2.81, -1.94, 0, 1.50];
+export const WARDROBE_STAND: [number, number] = [-3.18, .75];
 
 // Armless floor sofa at the open corner in front of the bedside rug.
 export const FLOOR_SOFA = {

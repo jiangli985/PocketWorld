@@ -528,8 +528,8 @@ test('clicking the wardrobe leads to its doors and E changes the outfit at the s
     const [x, z] = cabinLayout.WARDROBE_STAND;
     const request = { sceneId: 'habitat', objectId: 'wardrobe', kind: 'toggle' };
     let reached = false;
-    view.props.interaction.current([cabinLayout.WARDROBE_FOOTPRINT[1], 1.45, z], request, () => { reached = true; });
-    for (let i = 0; i < 900 && !reached; i++) view.frame(1 / 60);
+    view.props.interaction.current([cabinLayout.WARDROBE_FOOTPRINT[0], 1.45, z], request, () => { reached = true; });
+    for (let i = 0; i < 1200 && !reached; i++) view.frame(1 / 60);
     assert.ok(reached);
     assert.ok(Math.hypot(view.root.position.x - x, view.root.position.z - z) < .06);
     view.key('KeyE');

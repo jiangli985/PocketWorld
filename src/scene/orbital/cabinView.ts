@@ -1,5 +1,5 @@
 import { BEDROOM_WALL_FRONT, BEDROOM_WALL_OUTSET, CABIN_DIVIDER_X, CABIN_RIGHT, HABITAT_SPAWN, UPPER_DECK_OFFSET, type CabinDeck } from './cabinLayout.ts';
-import { CABIN_STAIRS, STAIR_LANDING_WALL } from './cabinStairs.ts';
+import { CABIN_STAIRS, STAIR_UPPER_PLATFORM_BACK, STAIR_UPPER_ENTRY_FRONT } from './cabinStairs.ts';
 import * as THREE from 'three';
 
 export type CabinView = 'overview' | CabinDeck;
@@ -10,7 +10,7 @@ const upperY = UPPER_DECK_OFFSET[1];
 const upperRight = CABIN_DIVIDER_X + UPPER_DECK_OFFSET[0];
 
 export const HOME_TARGET = new THREE.Vector3(.52, 3.52, -.20);
-const HOME_DIRECTION = new THREE.Vector3(.11, .18, 1).normalize();
+const HOME_DIRECTION = new THREE.Vector3(-.28, .20, 1).normalize();
 export const OUTFIT_TARGET = new THREE.Vector3(HABITAT_SPAWN[0], .76, HABITAT_SPAWN[1]);
 const outfitDirection = new THREE.Vector3(-.75, .17, 1).normalize();
 export function outfitCameraPosition(aspect: number) {
@@ -26,12 +26,8 @@ const lowerBounds: Bounds[] = [
 const upperBounds: Bounds[] = [
   { x: [CABIN_DIVIDER_X, upperRight], y: [upperY - .23, upperY + .76], z: [-3.41, 3.19] },
   { x: [CABIN_DIVIDER_X, upperRight], y: [upperY, upperY + 3.77], z: [-3.41, -3.1] },
-  { x: [CABIN_DIVIDER_X - BEDROOM_WALL_OUTSET, CABIN_DIVIDER_X + .07], y: [upperY - .21, upperY + 3.77], z: [-3.41, BEDROOM_WALL_FRONT] },
-  {
-    x: [STAIR_LANDING_WALL.left - .011, STAIR_LANDING_WALL.right + .011],
-    y: [upperY, upperY + STAIR_LANDING_WALL.height],
-    z: [STAIR_LANDING_WALL.back - .012, STAIR_LANDING_WALL.front + .037],
-  },
+  { x: [upperRight - .07, upperRight + BEDROOM_WALL_OUTSET], y: [upperY - .21, upperY + 3.77], z: [-3.41, BEDROOM_WALL_FRONT] },
+  { x: [CABIN_STAIRS.x - CABIN_STAIRS.width / 2, CABIN_DIVIDER_X], y: [upperY - .23, upperY + .80], z: [STAIR_UPPER_PLATFORM_BACK - .04, STAIR_UPPER_ENTRY_FRONT] },
 ];
 const stairBounds: Bounds = {
   x: [CABIN_STAIRS.x - CABIN_STAIRS.width / 2, CABIN_DIVIDER_X],
@@ -47,7 +43,7 @@ const viewpoints = {
   },
   upper: {
     target: new THREE.Vector3(.30, upperY + 1.26, -.18),
-    direction: new THREE.Vector3(.64, .43, 1).normalize(),
+    direction: new THREE.Vector3(-.64, .43, 1).normalize(),
     bounds: upperBounds,
   },
 };

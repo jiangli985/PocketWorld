@@ -27,7 +27,7 @@
 
 ## 舱体模型
 
-[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，木纹贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出脚本切分拼花地板和固定陈设，将全景窗收进一层后墙，并在二层楼梯侧生成带墙裙、舷窗和门洞的墙体。衣柜单独导出为 `Interactable_Wardrobe`，沿这面墙安装。二层资源在 Three.js 中整体上移，楼梯、平台短墙、门槛和栏杆由运行时几何生成。
+[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，木纹贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出脚本切分拼花地板和固定陈设，将全景窗收进一层后墙，并在二层右侧生成带墙裙和木框舷窗的整面侧墙。衣柜单独导出为 `Interactable_Wardrobe`，沿这面墙安装。二层资源在 Three.js 中整体上移，左侧楼梯、开放平台和栏杆由运行时几何生成。
 
 ```sh
 blender --background assets/models/cabin/open-cabin.blend --python scripts/export-open-cabin.py
