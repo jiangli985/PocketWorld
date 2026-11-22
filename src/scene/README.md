@@ -7,12 +7,12 @@
 - `orbital/OrbitalScene.tsx` 组合镜头、灯光、舱室、家具、住民与交互表面。`orbital/cabinView.ts` 负责双层全景和楼层取景，`orbital/cabinStairs.ts` 与 `orbital/CabinStructure.tsx` 共用楼梯尺寸、踏步高度和层间走位。
 - `orbital/HabitatShell.tsx` 载入两面实体舱壁、拼花地板和固定陈设；`orbital/SpacecraftHull.tsx` 与 `orbital/spacecraftFlight.ts` 负责轨道飞船外壳、开场推近运镜、长按加速绕地与时间倍速，以及 `orbit ↔ cabin` 剖面切入过渡；`orbital/Cosmos.tsx` 渲染完整 360° 宇宙星空、银河、太阳、地球与轨道微粒背景。初始构图与横竖屏取景由 `orbital/cabinView.ts` 计算。
 - `orbital/useWorldController.ts` 管理世界状态、动作适配器和转场生命周期。
-- `orbital/wardrobe/` 管理住民装扮选择和模型资源。高衣柜复用生活舱网格，点击后自动走近，近距离可用交互键换装。[模型与坐姿修形](../../assets/models/resident/README.md)
+- `orbital/wardrobe/` 管理住民装扮选择和模型资源。点击高衣柜或在近处按提示键会走近并拉开柜门。选装页展示三套实装缩略图，确认后黑屏直到新骨骼挂载，接着播放原地检视。[模型与坐姿修形](../../assets/models/resident/README.md)
 - `orbital/journal/` 管理实体翻页、纸面编辑、逐页日期和天气、存档及迁移。
 - `orbital/library/` 管理书柜存档、文本导入、实体书和取还书动作。
 - `orbital/schedule/` 管理日程迁移、同步、纸页、贴纸、纸团和相关测试。
 - `orbital/clock/` 管理床头黄铜闹钟的 3D 动态表盘指针、闹钟与倒计时设定、经典版合成闹铃与特供版内置音频开头铃声、本机持久化及相关测试。
-- `orbital/media/` 管理电脑屏幕布局、游戏卡带单击插入、拖放与加载、唱片交互、实体键盘和相关测试。
+- `orbital/media/` 管理电脑屏幕布局、游戏卡带单击插入、拖放与加载、唱片交互、实体键盘和相关测试。电脑与卡带的全景入口由 `OrbitalResidents` 检查电脑椅已坐稳；坐稳后 `Q` 使用电脑、`E` 起身，进出电脑保留坐姿。
 - `orbital/` 根目录保留舱室、家具、住民、交互基础组件、材质与场景样式。
 - `orbital/chairMotion.ts` 管理固定椅的入座、离座与取消；`chairAnimation.ts` 采样坐姿与局部接触缓存。资源与复建方法见 [Luna 制作源](../../assets/models/resident/README.md)。
 - `orbital/media/RecordPlayer.tsx` 保留唱机/唱片的原有几何，`record-motion.ts` 统一管理舱室局部坐标路径、唱臂和串行播放阶段；架位在本次会话中稳定，音乐淡入淡出不影响房间音效。
@@ -25,9 +25,15 @@
 
 新增功能优先复用 `ObjectHandle`、`Primitives` 和已有世界动作。运行时模型放在根目录 `assets/public/models/`，游戏与静态素材统一放在 `assets/games/`。
 
+## 内置藏书
+
+`orbital/library/catalog.ts` 保存三本内置书的正文与元数据。`book-01`《最后一片叶子》为欧·亨利公版英文作品 *The Last Leaf* 的完整中文自译，依据 [Wikisource《The Trimmed Lamp》1907 年版，第 198–208 页](https://en.wikisource.org/wiki/The_Trimmed_Lamp_%281907%29/The_Last_Leaf) 的英文原文生成，不采用现有现代中文译本；其余两本《窗外的地球》《微光旅行札记》保持 PocketWorld 原创正文。正文直接随构建打包，阅读不请求外部网站。
+
+内置书沿用固定 ID 和中层书位。读取旧存档时以内置版本更新书名、作者和正文；仅正文变化的内置书重置字符书签，其他书的正文和书签保持不变。读取不写存储，后续正常操作在 Web Lock 内保存。专项回归运行 `node --test src/scene/orbital/library/library.test.mjs`。
+
 ## 舱体模型
 
-[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，木纹贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出脚本切分拼花地板和固定陈设，将全景窗收进一层后墙，并在二层右侧生成带墙裙和木框舷窗的整面侧墙。衣柜单独导出为 `Interactable_Wardrobe`，沿这面墙安装。二层资源在 Three.js 中整体上移，左侧楼梯、开放平台和栏杆由运行时几何生成。
+[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，木纹贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出脚本切分拼花地板和固定陈设，将全景窗收进一层后墙，并在二层右侧生成带墙裙和木框舷窗的整面侧墙。衣柜单独导出为 `Interactable_Wardrobe`，沿这面墙安装。上下两层共用同一套楼板底座与拼花木地板网格，通过高度差堆叠，并与左侧楼梯平台衔接。衣柜门框内沿在柜门关闭时挡住柜内视线。楼梯、开放平台和栏杆由运行时几何生成。
 
 ```sh
 blender --background assets/models/cabin/open-cabin.blend --python scripts/export-open-cabin.py
