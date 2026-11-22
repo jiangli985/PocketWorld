@@ -47,15 +47,17 @@ export function CabinStaircase({ onCross }: { onCross: () => void }) {
   const outerEdge = x - width / 2;
   const platformWidth = CABIN_DIVIDER_X - outerEdge + .08;
   const platformCenter = outerEdge + platformWidth / 2;
+  // The platform overlaps the deck in plan. Keep its top just below the parquet.
+  const threshold = .006;
   const click = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
     if (event.delta <= 5) onCross();
   };
   return <group name="Cabin_Staircase" onClick={click} onPointerDown={event => event.stopPropagation()}>
     <SoftBox name="Stair_Lower_Landing" dims={[platformWidth, .21, width]} color={WOOD} radius={.026}
-      position={[platformCenter, -.105, lowerZ]} />
+      position={[platformCenter, -.105 - threshold, lowerZ]} />
     <SoftBox name="Stair_Upper_Landing" dims={[platformWidth, .23, width]} color={WOOD} radius={.026}
-      position={[platformCenter, upperY - .115, STAIR_UPPER_PLATFORM_BACK + width / 2]} />
+      position={[platformCenter, upperY - .115 - threshold, STAIR_UPPER_PLATFORM_BACK + width / 2]} />
     <group position-y={upperY}>
       <Guard from={[guardX, upperZ]} to={[guardX, STAIR_UPPER_PLATFORM_BACK]} />
       <Guard from={[guardX, STAIR_UPPER_PLATFORM_BACK]} to={[CABIN_DIVIDER_X + .035, STAIR_UPPER_PLATFORM_BACK]} />

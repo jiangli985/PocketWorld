@@ -14,8 +14,8 @@ interface HabitatShellProps {
   onFloorClick?: (point: [number, number, number]) => void;
 }
 
-const LOWER_PARTS = ['Duplex_LowerShell', 'Floor_Parquet', 'Stationery', 'Shelf_Gallery', 'Rugs'];
-const UPPER_PARTS = ['Duplex_UpperShell', 'Floor_Parquet_Bedroom', 'Nightstand', 'Interactable_Wardrobe', 'Rugs_Upper'];
+const LOWER_PARTS = ['Duplex_LowerShell', 'Duplex_DeckBase', 'Floor_Parquet', 'Stationery', 'Shelf_Gallery', 'Rugs'];
+const UPPER_PARTS = ['Duplex_UpperShell', 'Duplex_BedroomBase', 'Floor_Parquet_Bedroom', 'Nightstand', 'Interactable_Wardrobe', 'Rugs_Upper'];
 const OBSERVATORY_PARTS = ['Shell', 'Floor_Parquet', 'Floor_Parquet_Upper'];
 
 function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) {

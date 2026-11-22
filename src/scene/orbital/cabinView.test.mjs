@@ -51,6 +51,34 @@ for (const [width, height] of [[1400, 950], [390, 844], [844, 390]]) {
   });
 }
 
+test('the bedroom and desk floor plates match through their complete footprint', async () => {
+  const { gltf } = await load(new URL('../../../assets/public/models/cabin/open-cabin.glb', import.meta.url));
+  const upperDeck = new THREE.Matrix4().makeTranslation(...UPPER_DECK_OFFSET);
+  gltf.scene.updateMatrixWorld(true);
+  for (const [lowerName, upperName] of [
+    ['Duplex_DeckBase', 'Duplex_BedroomBase'],
+    ['Floor_Parquet', 'Floor_Parquet_Bedroom'],
+  ]) {
+    const meshes = name => {
+      const result = [];
+      gltf.scene.getObjectByName(name).traverse(part => { if (part.isMesh) result.push(part); });
+      return result;
+    };
+    const lowerDeck = meshes(lowerName);
+    const bedroom = meshes(upperName);
+    assert.equal(bedroom.length, lowerDeck.length);
+    bedroom.forEach((part, i) => {
+      assert.equal(part.geometry, lowerDeck[i].geometry, 'each tier uses the same perimeter, including the rounded corners');
+      const raisedLower = lowerDeck[i].matrixWorld.clone();
+      raisedLower.elements[13] += upperY;
+      const bedroomWorld = upperDeck.clone().multiply(part.matrixWorld);
+      bedroomWorld.elements.forEach((value, axis) => {
+        assert.ok(Math.abs(value - raisedLower.elements[axis]) < .00001, 'the only world-space difference is height');
+      });
+    });
+  }
+});
+
 test('the exported bedroom places the window and wardrobe on the right and leaves the stairs open', async () => {
   const { gltf } = await load(new URL('../../../assets/public/models/cabin/open-cabin.glb', import.meta.url));
   gltf.scene.updateMatrixWorld(true);

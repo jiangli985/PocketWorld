@@ -15,7 +15,8 @@ CABIN_RIGHT = 4.24
 BEDROOM_FRONT_Z = 3.16
 BEDROOM_EXTENSION = 1.26  # The upper floor spans the same exterior wall plane as the lower floor.
 BEDROOM_LEFT = CABIN_LEFT - BEDROOM_EXTENSION
-UPPER_RIGHT_X = CABIN_RIGHT - (DIVIDER_X - BEDROOM_LEFT)
+UPPER_DECK_X = DIVIDER_X - BEDROOM_LEFT
+UPPER_RIGHT_X = CABIN_RIGHT - UPPER_DECK_X
 
 collections = {collection.name[:2]: list(collection.objects) for collection in bpy.context.scene.collection.children}
 depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -197,7 +198,6 @@ def bedroom_walls():
         (rear_crown_right - rear_crown_left, .064, .246), ivory, .014)
     box("Side wall crown", (trim_x, 3.73, wall_z), (trim_width, .064, depth + .04), ivory, .015)
     box("Side wall edge trim", (trim_x, 1.85, BEDROOM_FRONT_Z - .025), (trim_width, 3.71, .098), ivory, .012)
-    box("Side wall foundation trim", (trim_x, -.115, wall_z), (trim_width, .192, depth + .03), ivory, .022)
 
     # Barely raised boards cast fine, tonal shadow lines on the two interior walls.
     first_y, last_y, rows = .161, 1.115, 7
@@ -255,6 +255,7 @@ def bedroom_walls():
     return parts
 
 
+deck_base = []
 lower_shell = []
 upper_shell = []
 for source in collections["01"]:
@@ -275,9 +276,14 @@ for source in collections["01"]:
         upper = copy_mesh(source)
         upper.location.x = -BEDROOM_EXTENSION
         upper_shell.append(upper)
+    elif name.startswith("Rounded porcelain"):
+        deck_base.append(cut_x(copy_mesh(source), DIVIDER_X, False))
+    elif name.startswith("Parquet substrate"):
+        # Recess the substrate's cut face from the porcelain fascia.
+        deck_base.append(cut_x(copy_mesh(source), DIVIDER_X + .006, False))
     else:
         lower_shell.append(cut_x(copy_mesh(source), DIVIDER_X, False))
-        if name.startswith(("Aft skirting", "Parquet substrate", "Rounded porcelain")):
+        if name.startswith("Aft skirting"):
             upper = cut_x(copy_mesh(source), DIVIDER_X, True)
             remap_x(upper, CABIN_LEFT, DIVIDER_X, BEDROOM_LEFT, DIVIDER_X)
             upper_shell.append(upper)
@@ -306,15 +312,16 @@ for obj in wardrobe:
 join_as("Shell", collections["01"])
 join_as("Duplex_LowerShell", lower_shell)
 join_as("Duplex_UpperShell", upper_shell)
-join_as("Floor_Parquet", [lower_parquet])
-port_parquet = join_as("Floor_Parquet_Upper", [upper_parquet])
-bedroom_parquet = port_parquet.copy()
-bedroom_parquet.name = "Floor_Parquet_Bedroom"
-bpy.context.scene.collection.objects.link(bedroom_parquet)
-# Keep the plank inset where the stair platform meets the left edge.
-parquet_left = CABIN_LEFT + .08
-bedroom_parquet.scale.x = (DIVIDER_X - (parquet_left - BEDROOM_EXTENSION)) / (DIVIDER_X - parquet_left)
-bedroom_parquet.location.x = DIVIDER_X * (1 - bedroom_parquet.scale.x)
+join_as("Floor_Parquet_Upper", [upper_parquet])
+base = join_as("Duplex_DeckBase", deck_base)
+floor = join_as("Floor_Parquet", [lower_parquet])
+# Both decks use the same slab and floor meshes. Offset the bedroom copies
+# back into their authored coordinates before the runtime deck translation.
+for part, name in ((base, "Duplex_BedroomBase"), (floor, "Floor_Parquet_Bedroom")):
+    bedroom_part = part.copy()
+    bedroom_part.name = name
+    bpy.context.scene.collection.objects.link(bedroom_part)
+    bedroom_part.location.x -= UPPER_DECK_X
 # The front leaf rides out onto a parallel track, then slides over the rear leaf.
 moving_leaf = [obj for obj in wardrobe if obj.name in ("Sliding panel 1", "Pull inset.001", "Recessed brass pull.001")]
 frame_parts = [obj for obj in wardrobe if obj not in moving_leaf]
