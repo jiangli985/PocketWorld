@@ -13,7 +13,10 @@ export type StairGait = {
   arms: number[][];
   legs: { flexion: number; hipForward: number; hipSide: number }[];
   supportWeight: number;
-  descent: { pelvisZ: number; headPitch: number; ankleSurface: number; settle: number } | null;
+  pelvisZ: number;
+  ascentHeightLimit: number | null;
+  headPitch: number;
+  descent: { ankleSurface: number; settle: number } | null;
   footfall: number;
   phase: number;
 };
@@ -66,8 +69,6 @@ export function sampleStairGait(progress: number, ascending: boolean, reducedMot
   const pitch = sample(2);
   const heelRoll = ascending ? pitch : .25 * Math.tanh(pitch / .25);
   const descent = ascending ? null : {
-    pelvisZ: support.z + sample(28) * STAIR_TREAD_RUN,
-    headPitch: reducedMotion ? 0 : sample(30),
     ankleSurface: lerp(from.y, to.y, MathUtils.smootherstep(phase, .40, 1)),
     settle: smoothstep(phase, .32, .93),
   };
@@ -87,6 +88,12 @@ export function sampleStairGait(progress: number, ascending: boolean, reducedMot
     weight: smoothstep(Math.min(travel, steps - travel), -1.25, -.18),
     lean: reducedMotion ? 0 : sample(3),
     legs: [4, 7].map(i => ({ flexion: sample(i), hipForward: sample(i + 1), hipSide: sample(i + 2) })),
+    // Luna's legs are shorter than Manny's. Center the uphill stride slightly nearer the
+    // trailing ankle to keep the same body angle over the planted foot.
+    pelvisZ: support.z + (ascending ? .10 - sample(28) : sample(28)) * STAIR_TREAD_RUN,
+    // Allow an eighth of a riser for the difference in leg proportions near full extension.
+    ascentHeightLimit: ascending ? lerp(from.y, support.y, sample(29) + .125) : null,
+    headPitch: reducedMotion ? 0 : sample(30),
     supportWeight, descent,
     arms: reducedMotion ? [] : [10, 19].map(i => Array.from({ length: 9 }, (_, j) => sample(i + j))),
     footfall,

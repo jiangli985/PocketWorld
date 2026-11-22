@@ -13,7 +13,6 @@ async function extract(path, name, contacts) {
   if (!clip) throw new Error('Missing source clip ' + name);
   const head = gltf.scene.getObjectByName('head');
   const headRestInverse = head.getWorldQuaternion(new Quaternion()).invert();
-  const descent = name === 'walk_downstairs_take1';
   const supportOffsets = [];
   const mixer = new AnimationMixer(gltf.scene);
   const action = mixer.clipAction(clip).setLoop(LoopOnce, 1).play();
@@ -44,27 +43,21 @@ async function extract(path, name, contacts) {
       return { ankle, supportZ, headPitch, pelvis, swingLength, pitch: -Math.atan2(toes.y, toes.z), lean: Math.atan2(trunk.z, trunk.y), legs, arms };
     });
     const first = frames[0], last = frames.at(-1);
-    if (descent) {
-      const plantedZ = frames.reduce((sum, frame) => sum + frame.supportZ, 0) / frames.length;
-      supportOffsets.push((first.pelvis.z - plantedZ) / (last.pelvis.z - first.pelvis.z));
-    }
+    const plantedZ = frames.reduce((sum, frame) => sum + frame.supportZ, 0) / frames.length;
+    supportOffsets.push((first.pelvis.z - plantedZ) / (last.pelvis.z - first.pelvis.z));
     let advance = 0;
     return frames.map((f, n) => {
       advance = MathUtils.clamp((f.ankle.z - first.ankle.z) / (last.ankle.z - first.ankle.z), advance, 1);
       const clearance = f.ankle.y - MathUtils.lerp(first.ankle.y, last.ankle.y, advance);
       const row = [advance, clearance / f.swingLength, f.pitch - MathUtils.lerp(first.pitch, last.pitch, n / (end - start)), f.lean, ...f.legs, ...f.arms];
-      if (descent) {
-        for (const axis of ['z', 'y']) row.push((f.pelvis[axis] - first.pelvis[axis]) / (last.pelvis[axis] - first.pelvis[axis]));
-        row.push(f.headPitch);
-      }
+      for (const axis of ['z', 'y']) row.push((f.pelvis[axis] - first.pelvis[axis]) / (last.pelvis[axis] - first.pelvis[axis]));
+      row.push(f.headPitch);
       return row;
     });
   });
   // Both steps share a measured origin relative to the planted ankle, so swapping feet preserves continuity.
-  if (descent) {
-    const origin = (supportOffsets[0] + supportOffsets[1]) / 2;
-    for (const step of samples) for (const row of step) row[28] += origin;
-  }
+  const origin = (supportOffsets[0] + supportOffsets[1]) / 2;
+  for (const step of samples) for (const row of step) row[28] += origin;
   // Close the outer seam of the angular channels. The travel channels span a whole step.
   const [right, left] = samples;
   for (let i = 3; i < right[0].length; i++) {

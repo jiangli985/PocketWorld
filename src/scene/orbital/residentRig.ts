@@ -413,11 +413,10 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     leg: /_(?:Left|L)_/.test(target.name) ? 1 : /_(?:Right|R)_/.test(target.name) ? 0 : null,
   }));
   const stairHips = hips.position.clone();
+  const standingHipHeight = hips.getWorldPosition(new THREE.Vector3()).y;
   const stairHead = bone('Head');
   const headRestWorld = stairHead.getWorldQuaternion(new THREE.Quaternion());
   const stairArmChains = ['Right', 'Left'].map(side => ['Arm', 'ForeArm', 'Hand', 'HandMiddle1'].map(n => bone(side + n)));
-  const stairUpperBody = [torsoBone, stairHead].map(joint =>
-    ({ joint, rotation: joint.quaternion.clone() }));
   const limb = new THREE.Vector3(), aim = new THREE.Vector3();
   const pelvisShift = new THREE.Vector3();
   const kneeDirection = new THREE.Vector3();
@@ -443,19 +442,12 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     mesh.getWorldQuaternion(meshYaw);
     meshYawInverse.copy(meshYaw).invert();
     hips.position.lerp(stairHips, weight);
-    if (descent) {
-      // Match the whole pelvis-to-neck line; rotating the upper chest alone leaves the abdomen pitched forward.
-      limb.copy(neckBone.getWorldPosition(aim)).sub(hips.getWorldPosition(soleGoal)).applyQuaternion(meshYawInverse);
-      const pitch = gait.lean - Math.atan2(limb.z, limb.y);
-      blendStairPitch(hips, hips.quaternion, pitch, weight);
-      // Let the eyes follow the steps independently of the torso.
-      strideRotation.copy(meshYaw).multiply(stridePitch.setFromAxisAngle(axisX, descent.headPitch)).multiply(headRestWorld);
-      strideRotation.premultiply(stairHead.parent!.getWorldQuaternion(parentRotation).invert());
-      stairHead.quaternion.slerp(strideRotation, weight);
-    } else {
-      for (const [i, { joint, rotation }] of stairUpperBody.entries())
-        blendStairPitch(joint, rotation, gait.lean * (i === 0 ? 1 : .32), weight);
-    }
+    // Keep torso pitch and gaze independent of both legs throughout the transfer of weight.
+    limb.copy(neckBone.getWorldPosition(aim)).sub(hips.getWorldPosition(soleGoal)).applyQuaternion(meshYawInverse);
+    blendStairPitch(hips, hips.quaternion, gait.lean - Math.atan2(limb.z, limb.y), weight);
+    strideRotation.copy(meshYaw).multiply(stridePitch.setFromAxisAngle(axisX, gait.headPitch)).multiply(headRestWorld);
+    strideRotation.premultiply(stairHead.parent!.getWorldQuaternion(parentRotation).invert());
+    stairHead.quaternion.slerp(strideRotation, weight);
     for (const [side, directions] of gait.arms.entries()) {
       const chain = stairArmChains[side];
       for (let i = 0; i < chain.length - 1; i++) {
@@ -529,29 +521,15 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     // Recover pelvis height from the recorded knee angles and the two reachable ankle targets.
     // Near each foot exchange both legs contribute, avoiding a jump when support changes sides.
     pelvisShift.multiplyScalar(weight);
-    // In double support, the two source knee angles constrain the pelvis to the
-    // intersection of two circles in the sagittal plane. Keep the solution
-    // near Manny's fore/aft hip position when the two ankles pass each other.
+    // Anchor forward motion to the recorded pelvis path from one planted ankle to the next.
+    const ankleOffset = (stairLegs[0].ankleOffset.z + stairLegs[1].ankleOffset.z) / 2;
+    const { y: hipY, z: hipZ } = hips.getWorldPosition(aim);
+    pelvisShift.z = THREE.MathUtils.lerp(pelvisShift.z, gait.pelvisZ + ankleOffset * Math.cos(yaw) - hipZ, weight);
     const targets = stairLegs.map((leg, side) => {
       const reachSq = leg.upper ** 2 + leg.lower ** 2 + 2 * leg.upper * leg.lower * Math.cos(gait.legs[side].flexion);
       const dx = leg.hip.x + pelvisShift.x - leg.goal.x;
       return { z: leg.goal.z - leg.hip.z, y: leg.goal.y - leg.hip.y, r2: Math.max(0, reachSq - dx * dx), dx };
     });
-    const [r, l] = targets;
-    const dz = l.z - r.z, dy = l.y - r.y, span = Math.hypot(dz, dy);
-    if (descent) {
-      // Use the midline so exchanging the supporting leg cannot throw the torso backward.
-      const ankleOffset = (stairLegs[0].ankleOffset.z + stairLegs[1].ankleOffset.z) / 2;
-      const hipZ = hips.getWorldPosition(aim).z;
-      pelvisShift.z = THREE.MathUtils.lerp(pelvisShift.z, descent.pelvisZ + ankleOffset - hipZ, weight);
-    } else if (span > .001) {
-      const along = (r.r2 - l.r2 + span * span) / (2 * span);
-      const perpendicular = Math.sqrt(Math.max(0, r.r2 - along * along));
-      const solution = r.z + (along * dz - Math.sign(dz) * perpendicular * dy) / span;
-      const doubleSupport = 2 * (1 - gait.supportWeight);
-      const influence = doubleSupport * THREE.MathUtils.smoothstep(Math.abs(dz), .04, .16) * weight;
-      pelvisShift.z += influence * THREE.MathUtils.clamp(solution - pelvisShift.z, -.16, .16);
-    }
     const heights = targets.map((target, side) => {
       const dz = pelvisShift.z - target.z, leg = stairLegs[side];
       // A lightly bent receiving knee absorbs the load through contact on descent.
@@ -567,7 +545,10 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     // During single support the free ankle can follow its recorded knee bend.
     // At double support both soles must reach their respective treads.
     const freeLeg = stairLegs[swing];
-    let ankleShift = free * (heights[support].lift - heights[swing].lift);
+    // Limit how fast the straightening leg can raise the torso during the uphill transfer.
+    const riseLimit = gait.ascentHeightLimit === null ? Infinity : standingHipHeight + gait.ascentHeightLimit - hipY;
+    const supportLift = Math.min(heights[support].lift, riseLimit);
+    let ankleShift = free * (supportLift - heights[swing].lift);
     if (descent) {
       const landingY = descent.ankleSurface + freeLeg.ankleOffset.y + Math.max(.001, freeLeg.ankleY);
       ankleShift = THREE.MathUtils.lerp(ankleShift, landingY - freeLeg.goal.y, descent.settle * weight);
@@ -575,7 +556,8 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     ankleShift = Math.max(ankleShift, freeLeg.minimumY - freeLeg.goal.y);
     freeLeg.goal.y += ankleShift;
     const preferredLift = THREE.MathUtils.lerp(heights[swing].lift + ankleShift, heights[support].lift, gait.supportWeight);
-    pelvisShift.y = Math.min(preferredLift * weight, heights[support].max, heights[swing].max + ankleShift);
+    const lift = Math.min(preferredLift, riseLimit) * weight;
+    pelvisShift.y = Math.min(lift, heights[support].max, heights[swing].max + ankleShift);
     hips.getWorldPosition(ankleGoal).add(pelvisShift);
     hips.position.copy(hips.parent!.worldToLocal(ankleGoal));
     for (const [side, leg] of stairLegs.entries()) {

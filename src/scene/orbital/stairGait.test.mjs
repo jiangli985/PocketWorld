@@ -73,6 +73,42 @@ test('both elbows and wrists articulate as the hands exchange leading sides', as
   } finally { rig.dispose(); }
 });
 
+test('the ascending pelvis, neck and head advance through both support exchanges', async () => {
+  // Pelvis-to-neck pitch in degrees from ascent frames 48, 52, …, 76 in the original GLB.
+  const sourcePitch = [-.10, -1.81, -2.37, -.10, .77, .16, -.51, .17];
+  for (const outfit of ['walk-room', 'snowflower', 'cloudhoodie']) {
+    const { gltf } = await load(new URL(`../../../assets/public/models/resident/luna-${outfit}.glb`, import.meta.url));
+    const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'), outfit !== 'walk-room');
+    const joints = ['Hips', 'Neck', 'Head'].map(name => gltf.scene.getObjectByName('mixamorig' + name));
+    try {
+      rig.mesh.rotation.y = Math.PI;
+      const furthest = joints.map(() => -Infinity);
+      const headHeights = [];
+      // At 60 Hz each tread takes 36 frames. Sample three steps to cross both seams.
+      for (let frame = 0; frame <= 108; frame++) {
+        const progress = 8 - .78 + frame / 36;
+        const gait = sampleStairGait(progress, true);
+        rig.mesh.position.set(CABIN_STAIRS.x, progress * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
+        rig.applyPose(gait.phase, 0);
+        rig.applyStairPose(gait, CABIN_STAIRS.x, stairTreadSurface);
+        const points = joints.map(joint => joint.getWorldPosition(new Vector3()));
+        for (const [i, point] of points.entries()) {
+          const forward = -point.z;
+          furthest[i] = Math.max(furthest[i], forward);
+          assert(furthest[i] - forward < .003, `${outfit} ${joints[i].name} rocked back during ascent`);
+        }
+        headHeights.push(points[2].y);
+        if (frame >= 4) assert(points[2].y - headHeights[frame - 4] < .09, 'spread the uphill lift through weight transfer');
+        if (frame % 9 === 0) {
+          const trunk = points[1].clone().sub(points[0]);
+          const pitch = Math.atan2(-trunk.z, trunk.y) * 180 / Math.PI;
+          assert(Math.abs(pitch - sourcePitch[frame / 9 % 8]) < 1, 'keep the small recorded torso tilt through the step');
+        }
+      }
+    } finally { rig.dispose(); }
+  }
+});
+
 test('the descending torso and its balance above the planted ankle match the side view of Take 1', async () => {
   // Source frames 57, 63, 70, 76, 81 and 90. Positive sagittal angles lean downhill.
   const poses = [
