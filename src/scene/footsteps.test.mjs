@@ -655,7 +655,7 @@ test('desk interaction range keeps the next prop reachable without cross-room se
     assert.deepEqual(performed, [], 'a step outside the schedule reach selects nothing');
     view.root.position.set(1.05, 0, -1.42);
     view.key('KeyQ');
-    assert.deepEqual(performed, ['computer'], 'Q reaches the second nearest prop at the desk');
+    assert.deepEqual(performed, [], 'standing beside the desk cannot select the computer');
     performed.length = 0;
     view.key('KeyE');
     assert.deepEqual(performed, ['schedule'], 'E still takes the nearest prop');
@@ -818,13 +818,78 @@ test('E behind the fixed chair routes around it without moving it', () => {
   } finally { view.dispose(); }
 });
 
-test('E opens the computer from the desk even when the chair is nearby', () => {
-  const performed = [];
-  const view = mount('orbital', { onAction: action => performed.push(action) });
+test('standing at the desk cannot open the computer by keyboard or pointer', () => {
+  const performed = [], hints = [];
+  const view = mount('orbital', { onAction: action => performed.push(action), onHover: (_, hint) => hints.push(hint) });
   try {
     view.root.position.set(1.55, 0, -1.34);
-    view.key('KeyE');
-    assert.deepEqual(performed.map(action => [action.objectId, action.kind]), [['computer', 'inspect']]);
+    for (const key of ['KeyE', 'KeyQ', 'KeyR']) view.key(key);
+    const before = view.root.position.clone();
+    const accepted = view.props.interaction.current([1.55, 1.5, -2.6], { sceneId: 'habitat', objectId: 'computer', kind: 'inspect' }, () => performed.push('opened'));
+    assert.equal(accepted, false);
+    for (let i = 0; i < 300; i++) view.frame(1 / 60);
+    assert.deepEqual(performed, []);
+    assert.ok(view.root.position.distanceTo(before) < .001, 'no walk or automatic seating is queued');
+    assert.ok(hints.some(hint => hint?.includes('请先在电脑椅上坐稳')));
+    assert.ok(!hints.some(hint => hint?.includes('Q · 使用电脑')));
+  } finally { view.dispose(); }
+});
+
+for (const reducedMotion of [false, true]) {
+  test(`computer input requires a fully seated desk-chair pose (reduced motion: ${reducedMotion})`, () => {
+    const performed = [], hints = [];
+    const view = mount('orbital', { reducedMotion, onHover: (_, hint) => hints.push(hint) });
+    view.props.onAction = action => {
+      performed.push([action.objectId, action.kind]);
+      if (action.objectId === 'chair') view.props.objects.chair = { active: action.kind === 'sit' };
+    };
+    const computer = { sceneId: 'habitat', objectId: 'computer', kind: 'inspect' };
+    const open = () => view.props.interaction.current([1.55, 1.5, -2.6], computer, () => view.props.onAction(computer));
+    try {
+      view.root.position.set(view.chair.x, 0, view.chair.z + .78);
+      view.key('KeyE');
+      assert.equal(open(), false, 'walking to the chair is not seated');
+      for (let i = 0; i < 720 && view.root.userData.chairPhase !== 'seated'; i++) {
+        view.frame(1 / 60);
+        if (view.root.userData.chairPhase !== 'seated') {
+          assert.equal(open(), false, 'aligning and sitting cannot open the computer');
+          if (view.props.objects.chair?.active) view.key('KeyQ');
+        }
+      }
+      assert.equal(view.root.userData.chairPhase, 'seated');
+      assert.deepEqual(performed, [['chair', 'sit']]);
+      assert.ok(hints.includes('E · 起身　Q · 使用电脑'));
+      const seated = view.root.position.clone();
+      assert.equal(open(), true);
+      view.key('KeyQ');
+      assert.deepEqual(performed.slice(1), [['computer', 'inspect'], ['computer', 'inspect']]);
+      view.props.focusedObject = 'computer'; view.props.enabled = false;
+      for (let i = 0; i < 120; i++) view.frame(1 / 60);
+      assert.equal(view.root.userData.chairPhase, 'seated');
+      assert.ok(view.root.position.distanceTo(seated) < .001, 'computer focus must not move Luna out of the chair');
+      view.props.focusedObject = null; view.props.enabled = true;
+      view.frame(1 / 60);
+      view.key('KeyE');
+      assert.equal(open(), false, 'standing up blocks computer input immediately');
+      view.key('KeyQ');
+      for (let i = 0; i < 400; i++) view.frame(1 / 60);
+      assert.equal(view.root.userData.posture, 'standing');
+      assert.equal(open(), false);
+      assert.deepEqual(performed, [['chair', 'sit'], ['computer', 'inspect'], ['computer', 'inspect'], ['chair', 'stand']]);
+    } finally { view.dispose(); }
+  });
+}
+
+test('a sofa seat cannot grant access to the computer', () => {
+  const view = mount('orbital');
+  let opened = 0;
+  try {
+    view.props.objects.sofa = { active: true };
+    for (let i = 0; i < 600; i++) view.frame(1 / 60);
+    view.key('KeyQ');
+    assert.equal(view.props.interaction.current([1.55, 1.5, -2.6], { sceneId: 'habitat', objectId: 'computer', kind: 'inspect' }, () => opened++), false);
+    assert.equal(opened, 0);
+    assert.equal(view.props.objects.sofa.active, true, 'a blocked request must not stand Luna up');
   } finally { view.dispose(); }
 });
 
