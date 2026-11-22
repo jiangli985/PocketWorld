@@ -1,0 +1,88 @@
+import React from 'react';
+import type { ThreeEvent } from '@react-three/fiber';
+import { CABIN_LEFT, CABIN_DIVIDER_X, UPPER_DECK_OFFSET } from './cabinLayout';
+import { CABIN_STAIRS, STAIR_RISE, STAIR_RUN, STAIR_TREAD_RUN, STAIR_UPPER_PLATFORM_BACK, STAIR_UPPER_ENTRY_FRONT } from './cabinStairs';
+import { SoftBox } from './Primitives';
+
+const WOOD = '#b27c4e';
+const DARK_WOOD = '#75503a';
+const BRASS = '#996f47';
+const [, upperY] = UPPER_DECK_OFFSET;
+const GUARD_HEIGHT = .76;
+
+function Guard({ from, to }: { from: [number, number]; to: [number, number] }) {
+  const dx = to[0] - from[0], dz = to[1] - from[1];
+  const length = Math.hypot(dx, dz);
+  const spans = Math.ceil(length / .68);
+  return <>
+    <SoftBox dims={[.064, .055, length + .04]} position={[(from[0] + to[0]) / 2, GUARD_HEIGHT, (from[1] + to[1]) / 2]}
+      rotation-y={Math.atan2(dx, dz)} color={DARK_WOOD} radius={.018} />
+    {Array.from({ length: spans + 1 }, (_, index) => {
+      const t = index / spans;
+      return <SoftBox key={index} dims={[.035, GUARD_HEIGHT, .035]} radius={.008} metalness={.55} color={BRASS}
+        position={[from[0] + dx * t, GUARD_HEIGHT / 2, from[1] + dz * t]} />;
+    })}
+  </>;
+}
+
+/** Keep the left landing open between the two runs of bedroom railing. */
+export function BedroomGuard() {
+  const left = CABIN_LEFT + .035;
+  const right = CABIN_DIVIDER_X - .035;
+  const front = 3.10;
+  return <group name="Bedroom_Guardrail">
+    <Guard from={[left, front]} to={[right, front]} />
+    <Guard from={[left, front]} to={[left, STAIR_UPPER_ENTRY_FRONT]} />
+    <Guard from={[left, STAIR_UPPER_PLATFORM_BACK]} to={[left, -3.18]} />
+  </group>;
+}
+
+export function CabinStaircase({ onCross }: { onCross: () => void }) {
+  const { x, width, lowerZ, upperZ, steps } = CABIN_STAIRS;
+  const flightAngle = Math.atan2(upperY, STAIR_RUN);
+  const flightLength = Math.hypot(upperY, STAIR_RUN);
+  const centerZ = (lowerZ + upperZ) / 2;
+  const guardX = x - width / 2 + .045;
+  const insideX = x + width / 2 - .045;
+  const outerEdge = x - width / 2;
+  const platformWidth = CABIN_DIVIDER_X - outerEdge + .08;
+  const platformCenter = outerEdge + platformWidth / 2;
+  const click = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation();
+    if (event.delta <= 5) onCross();
+  };
+  return <group name="Cabin_Staircase" onClick={click} onPointerDown={event => event.stopPropagation()}>
+    <SoftBox name="Stair_Lower_Landing" dims={[platformWidth, .21, width]} color={WOOD} radius={.026}
+      position={[platformCenter, -.105, lowerZ]} />
+    <SoftBox name="Stair_Upper_Landing" dims={[platformWidth, .23, width]} color={WOOD} radius={.026}
+      position={[platformCenter, upperY - .115, STAIR_UPPER_PLATFORM_BACK + width / 2]} />
+    <group position-y={upperY}>
+      <Guard from={[guardX, upperZ]} to={[guardX, STAIR_UPPER_PLATFORM_BACK]} />
+      <Guard from={[guardX, STAIR_UPPER_PLATFORM_BACK]} to={[CABIN_DIVIDER_X + .035, STAIR_UPPER_PLATFORM_BACK]} />
+    </group>
+    {[guardX, insideX].map(side => <SoftBox key={side} dims={[.12, .23, flightLength]} radius={.026} color={DARK_WOOD}
+      position={[side, upperY / 2 - .15, centerZ]} rotation-x={flightAngle} />)}
+    {Array.from({ length: steps }, (_, index) => {
+      const y = (index + 1) * STAIR_RISE;
+      const z = lowerZ - (index + .5) * STAIR_TREAD_RUN;
+      return <group key={index} name={`Stair_Tread_${index + 1}`}>
+        <SoftBox dims={[width - .04, .07, STAIR_TREAD_RUN + .024]} radius={.014} color={WOOD} position={[x, y - .035, z]} />
+        <SoftBox dims={[width - .11, STAIR_RISE, .044]} radius={.01} color={DARK_WOOD}
+          position={[x, y - .07 - STAIR_RISE / 2, z + STAIR_TREAD_RUN / 2 - .035]} />
+      </group>;
+    })}
+    {[guardX, insideX].map(side => {
+      // The inside rail stops short at both platforms, leaving the turn into each room open.
+      const inset = side === insideX ? .14 : 0;
+      return <group key={side}>
+        <SoftBox dims={[.065, .052, flightLength * (1 - 2 * inset) + .06]} position={[side, upperY / 2 + GUARD_HEIGHT, centerZ]}
+          rotation-x={flightAngle} radius={.018} color={DARK_WOOD} />
+        {Array.from({ length: 7 }, (_, index) => {
+          const t = inset + index * (1 - 2 * inset) / 6;
+          return <SoftBox key={index} dims={[.035, GUARD_HEIGHT, .035]} radius={.008} metalness={.55} color={BRASS}
+            position={[side, t * upperY + GUARD_HEIGHT / 2, lowerZ - STAIR_RUN * t]} />;
+        })}
+      </group>;
+    })}
+  </group>;
+}
