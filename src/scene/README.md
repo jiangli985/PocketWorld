@@ -25,6 +25,12 @@
 
 新增功能优先复用 `ObjectHandle`、`Primitives` 和已有世界动作。运行时模型放在根目录 `assets/public/models/`，游戏与静态素材统一放在 `assets/games/`。
 
+## 内置藏书
+
+`orbital/library/catalog.ts` 保存三本内置书的正文与元数据。`book-01`《最后一片叶子》为欧·亨利公版英文作品 *The Last Leaf* 的完整中文自译，依据 [Wikisource《The Trimmed Lamp》1907 年版，第 198–208 页](https://en.wikisource.org/wiki/The_Trimmed_Lamp_%281907%29/The_Last_Leaf) 的英文原文生成，不采用现有现代中文译本；其余两本《窗外的地球》《微光旅行札记》保持 PocketWorld 原创正文。正文直接随构建打包，阅读不请求外部网站。
+
+内置书沿用固定 ID 和中层书位。读取旧存档时以内置版本更新书名、作者和正文；仅正文变化的内置书重置字符书签，其他书的正文和书签保持不变。读取不写存储，后续正常操作在 Web Lock 内保存。专项回归运行 `node --test src/scene/orbital/library/library.test.mjs`。
+
 ## 舱体模型
 
 [可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，木纹贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出按集合合并网格。可交互家具由运行时挂在各自的动作节点上。
