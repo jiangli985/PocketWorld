@@ -33,19 +33,23 @@ async function extract(path, name, contacts) {
         const chain = ['upperarm_', 'lowerarm_', 'hand_', 'middle_01_'].map(n => point(n + s));
         for (let j = 1; j < chain.length; j++) arms.push(...chain[j].clone().sub(chain[j - 1]).normalize().toArray());
       }
-      return { ankle, swingLength, pitch: -Math.atan2(toes.y, toes.z), lean: Math.atan2(trunk.z, trunk.y), legs, arms };
+      return { ankle, pelvis: point('pelvis'), swingLength, pitch: -Math.atan2(toes.y, toes.z), lean: Math.atan2(trunk.z, trunk.y), legs, arms };
     });
     const first = frames[0], last = frames.at(-1);
     let advance = 0;
     return frames.map((f, n) => {
       advance = MathUtils.clamp((f.ankle.z - first.ankle.z) / (last.ankle.z - first.ankle.z), advance, 1);
       const clearance = f.ankle.y - MathUtils.lerp(first.ankle.y, last.ankle.y, advance);
-      return [advance, clearance / f.swingLength, f.pitch - MathUtils.lerp(first.pitch, last.pitch, n / (end - start)), f.lean, ...f.legs, ...f.arms];
+      const row = [advance, clearance / f.swingLength, f.pitch - MathUtils.lerp(first.pitch, last.pitch, n / (end - start)), f.lean, ...f.legs, ...f.arms];
+      if (name === 'walk_downstairs_take1') {
+        for (const axis of ['z', 'y']) row.push((f.pelvis[axis] - first.pelvis[axis]) / (last.pelvis[axis] - first.pelvis[axis]));
+      }
+      return row;
     });
   });
-  // The middle contact is contiguous in the take. Close only the outer seam.
+  // Close only the outer seam of the leg and arm channels. Travel channels span 0 to 1 on each step.
   const [right, left] = samples;
-  for (let i = 3; i < right[0].length; i++) {
+  for (let i = 3; i < 28; i++) {
     const delta = (left.at(-1)[i] - right[0][i]) / 2;
     for (let n = 0; n < 4; n++) {
       const blend = 1 - MathUtils.smoothstep(n, 0, 4);

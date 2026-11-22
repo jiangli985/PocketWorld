@@ -612,7 +612,15 @@ test('a floor click uses the staircase before walking to the upper deck, then an
     let reached = false;
     view.props.interaction.current([x, 0, z], { sceneId: 'habitat', objectId: 'pet', kind: 'pet' }, () => { reached = true; });
     assert.equal(reached, false);
-    for (let i = 0; i < 1700 && !reached; i++) view.frame(1 / 60);
+    const descents = [];
+    for (let i = 0; i < 1700 && !reached; i++) {
+      const count = view.sounds.length;
+      view.frame(1 / 60);
+      const height = deckView.current.stairAscent;
+      if (height > 0 && height < 1) descents.push(...view.sounds.slice(count));
+    }
+    assert(descents.length >= 17 && descents.every(sound => sound.intensity < .7));
+    assert(descents.every((sound, i) => i === 0 || sound.foot !== descents[i - 1].foot));
     assert.equal(reached, true);
     assert.equal(deckView.current.deck, 'lower');
     assert.equal(deckView.current.stairAscent, null);

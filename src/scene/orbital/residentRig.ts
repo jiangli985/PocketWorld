@@ -435,8 +435,8 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     joint.quaternion.slerp(strideRotation, weight);
   }
 
-  function applyStairPose(gait: StairGait, stairX: number, surfaceAt: (z: number) => number) {
-    const { weight, yaw, treads } = gait;
+  function applyStairPose(gait: StairGait, stairX: number, surfaceAt: (z: number, heelRun?: number) => number) {
+    const { weight, yaw, treads, descent } = gait;
 
     mesh.getWorldQuaternion(meshYaw);
     meshYawInverse.copy(meshYaw).invert();
@@ -477,7 +477,7 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
           ankle.z = Math.max(ankle.z, landingEdge + .012 - soleEdge.copy(corner).applyQuaternion(strideRotation).z);
       }
       leg.minimumY = -Infinity;
-      if (step.swing) {
+      if (step.swing && !descent) {
         // Round the path around a nosing. Delay horizontal travel while the
         // toes are low, then allow forward travel as the whole sole clears it.
         let slide = 0;
@@ -498,10 +498,11 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
         }
         ankle.z += slide;
       }
+      const heelRun = descent && step.swing ? .24 * treads.run : 0;
       for (const corner of leg.soleEdges) {
         soleEdge.copy(corner).applyQuaternion(strideRotation);
         const z = ankle.z + soleEdge.z - .006 - .030 * Math.abs(Math.sin(step.pitch));
-        leg.minimumY = Math.max(leg.minimumY, surfaceAt(z) - soleEdge.y + .0015);
+        leg.minimumY = Math.max(leg.minimumY, surfaceAt(z, heelRun) - soleEdge.y + .0015);
       }
       ankle.y = Math.max(ankle.y, leg.minimumY);
       leg.goal.copy(ankle);
@@ -525,7 +526,12 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     });
     const [r, l] = targets;
     const dz = l.z - r.z, dy = l.y - r.y, span = Math.hypot(dz, dy);
-    if (span > .001) {
+    if (descent) {
+      // Use the midline so exchanging the supporting leg cannot throw the torso backward.
+      const ankleOffset = (stairLegs[0].ankleOffset.z + stairLegs[1].ankleOffset.z) / 2;
+      const hipZ = (stairLegs[0].hip.z + stairLegs[1].hip.z) / 2;
+      pelvisShift.z = THREE.MathUtils.lerp(pelvisShift.z, descent.pelvisZ + ankleOffset - hipZ, weight);
+    } else if (span > .001) {
       const along = (r.r2 - l.r2 + span * span) / (2 * span);
       const perpendicular = Math.sqrt(Math.max(0, r.r2 - along * along));
       const solution = r.z + (along * dz - Math.sign(dz) * perpendicular * dy) / span;
@@ -535,9 +541,12 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     }
     const heights = targets.map((target, side) => {
       const dz = pelvisShift.z - target.z, leg = stairLegs[side];
+      // A lightly bent receiving knee absorbs the load through contact on descent.
+      const bend = descent ? Math.min(gait.legs[side].flexion, .34) * weight : 0;
+      const maxReach = bend ? Math.sqrt(leg.upper ** 2 + leg.lower ** 2 + 2 * leg.upper * leg.lower * Math.cos(bend)) : leg.length;
       return {
         lift: target.y + Math.sqrt(Math.max(0, target.r2 - dz * dz)),
-        max: target.y + Math.sqrt(Math.max(0, (leg.length - .0002) ** 2 - target.dx ** 2 - dz * dz)),
+        max: target.y + Math.sqrt(Math.max(0, (maxReach - .0002) ** 2 - target.dx ** 2 - dz * dz)),
       };
     });
     const support = gait.feet[0].swing ? 1 : 0, swing = 1 - support;
@@ -545,7 +554,12 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     // During single support the free ankle can follow its recorded knee bend.
     // At double support both soles must reach their respective treads.
     const freeLeg = stairLegs[swing];
-    const ankleShift = Math.max(freeLeg.minimumY - freeLeg.goal.y, free * (heights[support].lift - heights[swing].lift));
+    let ankleShift = free * (heights[support].lift - heights[swing].lift);
+    if (descent) {
+      const landingY = descent.ankleSurface + freeLeg.ankleOffset.y + Math.max(.001, freeLeg.ankleY);
+      ankleShift = THREE.MathUtils.lerp(ankleShift, landingY - freeLeg.goal.y, descent.settle * weight);
+    }
+    ankleShift = Math.max(ankleShift, freeLeg.minimumY - freeLeg.goal.y);
     freeLeg.goal.y += ankleShift;
     const preferredLift = THREE.MathUtils.lerp(heights[swing].lift + ankleShift, heights[support].lift, gait.supportWeight);
     pelvisShift.y = Math.min(preferredLift * weight, heights[support].max, heights[swing].max + ankleShift);

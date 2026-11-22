@@ -13,6 +13,7 @@ export type StairGait = {
   arms: number[][];
   legs: { flexion: number; hipForward: number; hipSide: number }[];
   supportWeight: number;
+  descent: { pelvisZ: number; ankleSurface: number; settle: number } | null;
   footfall: number;
   phase: number;
 };
@@ -28,10 +29,15 @@ export function stairFootfall(progress: number, ascending: boolean) {
 }
 
 /** From the lower landing (0) to the last tread, whose surface is flush with the upper landing. */
-export function stairTreadSurface(z: number) {
+export function stairTreadSurface(z: number, heelRun = 0) {
   // The tread extends 12 mm past the nominal riser. Use its straight front edge.
   const tread = (treads.frontZ - z) / STAIR_TREAD_RUN;
-  return clamp(Math.ceil(tread), 0, steps) * STAIR_RISE;
+  const level = Math.ceil(tread);
+  const surface = clamp(level, 0, steps) * STAIR_RISE;
+  if (heelRun === 0 || level < 0 || level >= steps) return surface;
+  // The trailing heel clears the physical edge before it can lower onto the next step.
+  const pastEdge = (level - tread) * STAIR_TREAD_RUN;
+  return surface + STAIR_RISE * (1 - smoothstep(pastEdge, 0, heelRun));
 }
 
 function footAt(tread: number, ascending: boolean): StairFoot {
@@ -59,8 +65,18 @@ export function sampleStairGait(progress: number, ascending: boolean, reducedMot
   // Keep toe-off and flattening in phase with Manny while the foot crosses the higher nosing.
   const pitch = sample(2);
   const heelRoll = ascending ? pitch : .25 * Math.tanh(pitch / .25);
+  const descent = ascending ? null : {
+    pelvisZ: support.z + (.55 + sample(28)) * STAIR_TREAD_RUN,
+    ankleSurface: lerp(from.y, to.y, smoothstep(phase, .24, 1)),
+    settle: smoothstep(phase, .32, .77),
+  };
+  const supportWeight = .5 + .5 * (ascending
+    ? smoothstep(phase, 0, .23) * smoothstep(1 - phase, 0, .23)
+    : smoothstep(phase, 0, .35) * smoothstep(1 - sample(29), 0, 1));
+  // Lead with the foot as it passes the nosing. Both planted endpoints stay fixed.
+  const lead = descent ? .35 * STAIR_TREAD_RUN * 4 * advance * (1 - advance) : 0;
   const swing: StairFoot = {
-    z: lerp(from.z, to.z, advance), y: lerp(from.y, to.y, advance),
+    z: lerp(from.z, to.z, advance) + lead, y: lerp(from.y, to.y, advance),
     pitch: heelRoll, clearance: sample(1), swing: true,
   };
   return {
@@ -70,7 +86,7 @@ export function sampleStairGait(progress: number, ascending: boolean, reducedMot
     weight: smoothstep(Math.min(travel, steps - travel), -1.25, -.18),
     lean: reducedMotion ? 0 : sample(3),
     legs: [4, 7].map(i => ({ flexion: sample(i), hipForward: sample(i + 1), hipSide: sample(i + 2) })),
-    supportWeight: .5 + .5 * smoothstep(phase, 0, .23) * smoothstep(1 - phase, 0, .23),
+    supportWeight, descent,
     arms: reducedMotion ? [] : [10, 19].map(i => Array.from({ length: 9 }, (_, j) => sample(i + j))),
     footfall,
     phase: (cycle / 2 + 1) % 1,

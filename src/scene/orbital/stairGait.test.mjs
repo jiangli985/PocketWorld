@@ -73,6 +73,40 @@ test('both elbows and wrists articulate as the hands exchange leading sides', as
   } finally { rig.dispose(); }
 });
 
+test('descending moves the pelvis forward and brakes each receiving foot before contact', async () => {
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-walk-room.glb', import.meta.url));
+  const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'));
+  const pelvis = gltf.scene.getObjectByName('mixamorigHips');
+  const feet = sides.map(side => gltf.scene.getObjectByName('mixamorig' + side + 'Foot'));
+  const history = [];
+  try {
+    // 60 Hz at the production cadence of 0.6 seconds per tread, through both left and right transfers.
+    for (let frame = 0; frame <= 3 * 36; frame++) {
+      const progress = 11 - frame / 36;
+      const gait = sampleStairGait(progress, false);
+      rig.mesh.position.set(CABIN_STAIRS.x, progress * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
+      rig.applyPose(gait.phase, 0);
+      rig.applyStairPose(gait, CABIN_STAIRS.x, stairTreadSurface);
+      const hip = pelvis.getWorldPosition(new Vector3());
+      const ankles = feet.map(joint => joint.getWorldPosition(new Vector3()));
+      if (frame >= 6) {
+        const previous = history[frame - 1];
+        assert(hip.z >= previous.hip.z - .0003, 'the torso must not rock backward at a support exchange');
+        if (previous.footfall !== gait.footfall) {
+          const landing = gait.feet.findIndex(foot => !foot.swing);
+          const before = history[frame - 6];
+          assert(before.hip.y - hip.y < .08, 'do not drop the torso suddenly in the last 100 ms');
+          assert(before.ankles[landing].y - ankles[landing].y < .07, 'the landing foot must already be braking');
+          const [thigh, shin] = ['UpLeg', 'Leg'].map(name => gltf.scene.getObjectByName('mixamorig' + sides[landing] + name).getWorldPosition(new Vector3()));
+          assert(shin.clone().sub(thigh).angleTo(ankles[landing].clone().sub(shin)) > .16, 'keep a soft knee on contact');
+        }
+      }
+      history.push({ hip, ankles, footfall: gait.footfall });
+    }
+    assert(history.at(-1).footfall - history[0].footfall >= 3);
+  } finally { rig.dispose(); }
+});
+
 function soleVertices(asset) {
   const position = new Vector3();
   const vertices = [[], []];

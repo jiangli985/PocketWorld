@@ -818,7 +818,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       const halfStep = Math.floor(next * 2);
       if (stairGait ? onStairContact : halfStep !== Math.floor(s.walkTime * 2)) {
         const foot = stairGait ? Number(stairGait.feet[0].swing) : halfStep & 1;
-        roomAudio.playFootstep({ foot: foot as 0 | 1, surface: surfaceAt(root.position.x, root.position.z) });
+        roomAudio.playFootstep({ foot: foot as 0 | 1, surface: surfaceAt(root.position.x, root.position.z), intensity: stairGait?.descent ? .58 : 1 });
       }
       s.walkTime = (next + 1) % 1;
     }

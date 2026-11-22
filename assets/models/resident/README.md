@@ -2,9 +2,9 @@
 
 ## 楼梯步态
 
-Luna 上、下楼各取 MotionSmith Take 1 中连续的左右两步。原文件均为 UE5 Manny 骨架、30 fps。帧号从 0 开始，上楼两个步段的边界为 48、64、80，下楼为 54、73、92。导出脚踝推进与抬升、脚掌俯仰、躯干倾斜、双膝屈曲、髋踝相对位置和双侧肩、肘、腕的运动方向。运行时按腿长和踏面尺寸重定向，并在首末级与平台衔接。下楼时前脚掌靠近踏板前缘，提踵幅度受限以适应角色比例。[上楼原片](https://cosindra.ai/motionsmith/motions/walk-upstairs) · [下楼原片](https://cosindra.ai/motionsmith/motions/walk-downstairs)
+Luna 上、下楼各取 MotionSmith Take 1 中连续的左右两步。原文件均为 UE5 Manny 骨架、30 fps。帧号从 0 开始，上楼两个步段的边界为 48、64、80，下楼为 54、73、92。导出脚踝推进与抬升、脚掌俯仰、躯干倾斜、双膝屈曲、髋踝相对位置和双侧肩、肘、腕的运动方向。运行时按腿长和踏面尺寸重定向，并在首末级与平台衔接。下楼还提取骨盆在每步中的前移和降高曲线，以确定身体如何前进、何时把重量交给下一只脚。前脚掌靠近踏板前缘，后跟越过台阶后逐渐下降，落脚时膝盖保留原片的轻微弯曲。[上楼原片](https://cosindra.ai/motionsmith/motions/walk-upstairs) · [下楼原片](https://cosindra.ai/motionsmith/motions/walk-downstairs)
 
-[步态曲线](./luna-stair-gait.json)约 18 KB，随应用打包。原始 GLB 保存在仓库外，来源与文件校验值见[素材清单](../../models.sources.json)。从仓库根目录运行下列命令可重建曲线。
+[步态曲线](./luna-stair-gait.json)约 18.5 KB，随应用打包。原始 GLB 保存在仓库外，来源与文件校验值见[素材清单](../../models.sources.json)。从仓库根目录运行下列命令可重建曲线。
 
 ```bash
 node scripts/bake-luna-stairs.mjs /path/to/MotionSmith_walk_upstairs_take1.glb /path/to/MotionSmith_walk_downstairs_take1.glb

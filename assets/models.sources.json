@@ -305,9 +305,9 @@
       "license": "The MotionSmith gallery permits commercial use in games and other projects without attribution.",
       "licensePage": "https://cosindra.ai/license",
       "used": true,
-      "bytes": 17879,
-      "sha256": "a8c7ae2291c20fb13bf471813b5887f7cbd38256faf04ecaca3e3f40c8a9f4c6",
-      "processing": "scripts/bake-luna-stairs.mjs samples consecutive right and left steps from the original GLBs. The shipped profiles contain ankle travel, pitch, torso lean, knee flexion, hip offsets and upper arm, forearm and hand directions. Character meshes and original clips are not bundled.",
+      "bytes": 18457,
+      "sha256": "e4d59acb6759a76cbf9cfafc92c247172be95e70cb53c5b63ae683d53f50a229",
+      "processing": "scripts/bake-luna-stairs.mjs samples consecutive right and left steps from the original GLBs. The shipped profiles contain ankle travel, pitch, torso lean, knee flexion, hip offsets and upper arm, forearm and hand directions. The descent also stores normalized forward and vertical pelvis travel through each step. Character meshes and original clips are not bundled.",
       "descentSourcePage": "https://cosindra.ai/motionsmith/motions/walk-downstairs"
     }
   ]
