@@ -1,12 +1,11 @@
 import { CABIN_DIVIDER_X, CABIN_LEFT, CABIN_RIGHT, type CabinDeck } from './cabinLayout';
 import React, { Suspense, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
-import type { ThreeEvent } from '@react-three/fiber';
+import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { AssetBoundary } from './ReusableAsset';
 import { extractSlipperModel, isSlipperMaterial } from './slipperModel';
 import { ObjectHandle } from './ObjectHandle';
-import { outfitHint, readOutfit } from './wardrobe/outfit';
 import type { WorldModelProps } from '../../types/world';
 
 interface HabitatShellProps {
@@ -39,13 +38,25 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
     slippers.forEach(node => node.removeFromParent());
     const wardrobe = shell.getObjectByName('Interactable_Wardrobe');
     wardrobe?.removeFromParent();
-    return { shell, wardrobe };
+    const door = wardrobe?.getObjectByName('Wardrobe_SlidingDoor');
+    return { shell, wardrobe, door, closed: door?.position.clone() };
   }, [scene, variant, deck]);
 
+  const slide = useRef(0);
+  useFrame((_, dt) => {
+    if (!cabin.door || !cabin.closed) return;
+    const target = world.objects.wardrobe?.open ? 1 : 0;
+    if (slide.current === target) return;
+    const step = world.reducedMotion ? 1 : dt / .62;
+    slide.current += Math.sign(target - slide.current) * Math.min(Math.abs(target - slide.current), step);
+    const t = slide.current;
+    cabin.door.position.copy(cabin.closed);
+    cabin.door.position.x -= .093 * THREE.MathUtils.smootherstep(t, 0, .25);
+    cabin.door.position.z -= .66 * THREE.MathUtils.smootherstep(t, .22, 1);
+  });
   return <>
     <primitive object={cabin.shell} dispose={null} />
-    {cabin.wardrobe && <ObjectHandle id="wardrobe" action="toggle" panorama world={world}
-      hint={outfitHint(readOutfit(world.objects.wardrobe?.itemId))}
+    {cabin.wardrobe && <ObjectHandle id="wardrobe" action="open" panorama world={world} hint="打开衣柜"
       onClick={event => event.stopPropagation()}>
       <primitive object={cabin.wardrobe} dispose={null} />
     </ObjectHandle>}

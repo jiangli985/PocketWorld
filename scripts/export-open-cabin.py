@@ -73,6 +73,30 @@ def join_as(name, objects):
     if len(objects) > 1:
         bpy.ops.object.join()
     bpy.context.object.name = name
+    return bpy.context.object
+
+
+def finish_wardrobe_mesh(obj):
+    # The authored bevels collapse at a few corners. Weld before exporting the moving parts.
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=.00001)
+    bmesh.ops.dissolve_degenerate(bm, edges=list(bm.edges), dist=.00001)
+    bmesh.ops.triangulate(bm, faces=list(bm.faces))
+    bm.normal_update()
+    uv = bm.loops.layers.uv.verify()
+    for face in bm.faces:
+        # Boolean cuts and new shelf bevels need UVs. Preserve the original panel grain.
+        a, b, c = (loop[uv].uv for loop in face.loops)
+        if abs((b - a).cross(c - a)) < 1e-10:
+            normal = face.normal
+            axis = max(range(3), key=lambda i: abs(normal[i]))
+            for loop in face.loops:
+                point = loop.vert.co
+                loop[uv].uv = (point[(axis + 1) % 3], point[(axis + 2) % 3])
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
 
 
 def finish(name, hex_color, roughness=.78):
@@ -275,7 +299,42 @@ join_as("Duplex_LowerShell", lower_shell)
 join_as("Duplex_UpperShell", upper_shell)
 join_as("Floor_Parquet", [lower_parquet])
 join_as("Floor_Parquet_Upper", [upper_parquet])
-join_as("Interactable_Wardrobe", wardrobe)
+# The front leaf rides out onto a parallel track, then slides over the rear leaf.
+moving_leaf = [obj for obj in wardrobe if obj.name in ("Sliding panel 1", "Pull inset.001", "Recessed brass pull.001")]
+frame_parts = [obj for obj in wardrobe if obj not in moving_leaf]
+door = join_as("Wardrobe_SlidingDoor", moving_leaf)
+carcass = next(obj for obj in frame_parts if "carcass" in obj.name)
+shadow = next(obj for obj in frame_parts if "shadow reveal" in obj.name)
+frame_parts.remove(shadow)
+bpy.data.objects.remove(shadow, do_unlink=True)
+oak = carcass.data.materials[0]
+# Cut a real cavity into the original bent-oak case, keeping its exterior bevels.
+cutter = bedroom_box("Wardrobe cavity cutter", (-2.56, 1.53, .75), (1.04, 2.86, 1.34), oak)
+bpy.context.view_layer.objects.active = carcass
+for modifier in list(carcass.modifiers):
+    bpy.ops.object.modifier_apply(modifier=modifier.name)
+cut = carcass.modifiers.new("Cupboard interior", "BOOLEAN")
+cut.operation = "DIFFERENCE"
+cut.object = cutter
+bpy.ops.object.modifier_apply(modifier=cut.name)
+bpy.data.objects.remove(cutter, do_unlink=True)
+for height in (.50, 1.27, 2.04):
+    frame_parts.append(bedroom_box("Linen shelf", (-2.36, height, .75), (.61, .035, 1.34), oak, .008))
+linen = [finish("Linen | " + name, color, .96) for name, color in
+         (("mist", "a3b6c7"), ("cream", "e9dfce"), ("heather", "b2a4bb"))]
+for level, height in enumerate((.50, 1.27, 2.04)):
+    for layer in range(3 - level % 2):
+        frame_parts.append(bedroom_box("Folded linen", (-2.39, height + .062 + layer * .089,
+                                       1.05 + .012 * layer), (.42, .088, .48 - .018 * layer),
+                                       linen[(level + layer) % len(linen)], .034))
+frame = join_as("Wardrobe_Case", frame_parts)
+# Keep children in room axes so the travel is authored in metres.
+root = bpy.data.objects.new("Interactable_Wardrobe", None)
+bpy.context.scene.collection.objects.link(root)
+for part in (frame, door):
+    finish_wardrobe_mesh(part)
+    part.parent = root
+
 join_as("Nightstand", nightstand)
 join_as("Stationery", collections["04"])
 join_as("Shelf_Gallery", collections["05"])

@@ -7,6 +7,8 @@ import { OrbitalScene } from './scene/orbital/OrbitalScene';
 import { useLibrary } from './scene/orbital/library/useLibrary';
 import { LibrarySurface } from './scene/orbital/library/LibrarySurface';
 import { useWorldController } from './scene/orbital/useWorldController';
+import { WardrobeSurface } from './scene/orbital/wardrobe/WardrobeSurface';
+import { readOutfit } from './scene/orbital/wardrobe/outfit';
 import { DustPrompt } from './scene/orbital/OrbitalDustPrompt';
 import { readInitialViewMode, type SpacecraftViewMode } from './scene/orbital/spacecraftFlight';
 import './scene/orbital/orbital.css';
@@ -161,12 +163,16 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     <OrbitalScene {...world} viewMode={viewMode} boosting={boosting} onViewModeChange={setViewMode} onEnterCabin={enterCabin}
       books={books} adapters={adapters} onImportMusic={onImportMusic} discs={discs} activeDisc={audio.disc} isMusicPlaying={audio.isPlaying} isMuted={audio.isMuted}
       onSelectDisc={onSelectDisc} onToggleMusic={onToggleMusic} onToggleMute={onToggleMute} activeGame={activeGame} onGameChange={setActiveGame} onFeatureError={onFeatureError} />
+    {viewMode === 'cabin' && world.focusedObject === 'wardrobe' && <WardrobeSurface
+      current={readOutfit(world.objects.wardrobe?.itemId)} transition={world.transition} error={world.error}
+      onChoose={itemId => world.onAction({ sceneId: 'habitat', objectId: 'wardrobe', kind: 'select', payload: { itemId } })}
+      onCancel={world.onReturn} />}
     <LibrarySurface library={library} />
     <header className="orbital-header">
       <div className="orbital-wordmark"><span className="orbital-emblem" aria-hidden="true" /><span>pocketworld<span className="orbital-wordmark-dot">.</span></span></div>
       <p className="orbital-edition">A LITTLE SPACE TO BE YOURSELF</p>
     </header>
-    <DustPrompt text={status} reducedMotion={world.reducedMotion} />
+    {world.focusedObject !== 'wardrobe' && <DustPrompt text={status} reducedMotion={world.reducedMotion} />}
     {showFlightControls && <nav className="orbital-flight-bar" aria-label="飞船巡航控制">
       {viewMode === 'cabin' ? (
         <button type="button" className="orbital-flight-pill" onClick={leaveCabin}>出舱巡航 · F</button>

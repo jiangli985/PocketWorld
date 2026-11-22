@@ -234,7 +234,7 @@
       "used": true,
       "bytes": 4335876,
       "sha256": "1f1b0d3fe76287c155315c5f31a664d4c7112b970e42d489bbcef5ec881db2f3",
-      "processing": "Six joined collections with per-board vertex colors. The foot-of-bed rug and modeled slippers share the Rugs collection. Original wood and ivory pile textures are embedded. Export with scripts/export-open-cabin.py."
+      "processing": "Two decks with per-board vertex colors. Interactable_Wardrobe contains the case, linen shelves and a separately animated sliding door with its brass pull. The foot-of-bed rug and modeled slippers share the Rugs collection. Original wood and ivory pile textures are embedded. Export with scripts/export-open-cabin.py."
     },
     {
       "file": "cabin/spacecraft-hull.glb",

@@ -55,11 +55,21 @@ test('the exported bedroom places the window and wardrobe on the right and leave
   const { gltf } = await load(new URL('../../../assets/public/models/cabin/open-cabin.glb', import.meta.url));
   gltf.scene.updateMatrixWorld(true);
   const shell = gltf.scene.getObjectByName('Duplex_UpperShell');
-  const wardrobe = new THREE.Box3().setFromObject(gltf.scene.getObjectByName('Interactable_Wardrobe'), true);
+  const cabinet = gltf.scene.getObjectByName('Interactable_Wardrobe');
+  const wardrobe = new THREE.Box3().setFromObject(cabinet, true);
   const actual = [wardrobe.min.x, wardrobe.max.x, wardrobe.min.z, wardrobe.max.z];
   actual.forEach((edge, i) => assert.ok(Math.abs(edge - WARDROBE_FOOTPRINT[i]) < .02, 'walking bounds follow the cabinet'));
   assert.ok(wardrobe.max.x > CABIN_DIVIDER_X - .12);
   assert.ok(WARDROBE_STAND[0] + RESIDENT_RADIUS < wardrobe.min.x);
+
+  const door = cabinet.getObjectByName('Wardrobe_SlidingDoor');
+  const intoCabinet = new THREE.Raycaster(new THREE.Vector3(-3, 1.79, 1.09), new THREE.Vector3(1, 0, 0));
+  const depth = () => intoCabinet.intersectObject(cabinet, true)[0].distance;
+  const closed = depth();
+  door.position.x -= .093;
+  door.position.z -= .66;
+  cabinet.updateMatrixWorld(true);
+  assert.ok(depth() > closed + .55, 'sliding the leaf exposes the interior behind it');
 
   const wallAt = (x, z, direction) => {
     const ray = new THREE.Raycaster(new THREE.Vector3(x, 1.7, z), new THREE.Vector3(direction, 0, 0), 0, 1);
