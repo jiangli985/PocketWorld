@@ -1,0 +1,132 @@
+import { MathUtils, PropertyBinding, Quaternion, Vector3, type AnimationClip, type Object3D } from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { ResidentOutfit } from './wardrobe/outfit';
+
+export const RUG_SEAT: [number, number] = [-4.06, .32];
+export const RUG_YAW = .32;
+export const RUG_TOP = .013;
+export const PAPER_PICKUP_REACH = .44;
+export const PAPER_GRIP_TIME = 1.9;
+export const PAPER_PICKUP_PREFIX = 'schedule-paper-';
+export const CABIN_ACTIONS = ['floorSit', 'hugKnees', 'floorStand', 'pickUp', 'rubEye', 'think', 'reachHigh'] as const;
+type CabinActionName = typeof CABIN_ACTIONS[number];
+type CabinClips = Record<CabinActionName, AnimationClip>;
+export type PaperPickup = { id: string; position: Vector3 };
+
+export const isRugSeat = (id: string) => id === 'rug-cross' || id === 'rug-hug';
+export const isPaperPickup = (id: string) => id.startsWith(PAPER_PICKUP_PREFIX);
+
+const pending = new Map<ResidentOutfit, Promise<CabinClips>>();
+export function loadCabinActions(outfit: ResidentOutfit) {
+  const cached = pending.get(outfit);
+  if (cached) return cached;
+  const path = import.meta.env.BASE_URL + 'models/resident/luna-cabin-actions-' + outfit + '.glb';
+  const request = new GLTFLoader().loadAsync(path).then(({ animations }) => {
+    const clips = {} as CabinClips;
+    for (const name of CABIN_ACTIONS) {
+      const clip = animations.find(value => value.name === name);
+      if (!clip || clip.duration <= 0) throw new Error('Luna cabin action missing: ' + name);
+      clips[name] = clip;
+    }
+    return clips;
+  }).catch(error => { pending.delete(outfit); throw error; });
+  pending.set(outfit, request);
+  return request;
+}
+
+export function createCabinActionPlayer(root: Object3D, clips: CabinClips) {
+  const channels = new Map(CABIN_ACTIONS.map(name => [name, clips[name].tracks.map(track => {
+    const { nodeName, propertyName } = PropertyBinding.parseTrackName(track.name);
+    const joint = root.getObjectByName(nodeName);
+    if (!joint || (propertyName !== 'position' && propertyName !== 'quaternion'))
+      throw new Error('Unexpected Luna cabin action track: ' + track.name);
+    return { joint, propertyName, sample: track.createInterpolant() };
+  })]));
+  const position = new Vector3(), rotation = new Quaternion();
+  return (name: CabinActionName, time: number, blend = 1) => {
+    const t = MathUtils.clamp(time, 0, clips[name].duration);
+    for (const { joint, propertyName, sample } of channels.get(name)!) {
+      const value = sample.evaluate(t);
+      if (propertyName === 'position') joint.position.lerp(position.fromArray(value), blend);
+      else joint.quaternion.slerp(rotation.fromArray(value), blend);
+    }
+  };
+}
+
+type FloorPerformance = {
+  kind: 'floor'; phase: 'sit' | 'seated' | 'hug' | 'unhug' | 'rise' | 'undo-sit';
+  time: number; wantsHug: boolean; leaving: boolean;
+};
+type PickupPerformance = {
+  kind: 'paper'; time: number; leaving: boolean; id: string; point: Vector3;
+  offset: Vector3 | null; complete: () => void;
+};
+export type CabinPerformance = FloorPerformance | PickupPerformance;
+export const newRugPerformance = (wantsHug: boolean): FloorPerformance => ({
+  kind: 'floor', phase: 'sit', time: 0, wantsHug, leaving: false,
+});
+export function leaveCabinPerformance(performance: CabinPerformance) {
+  performance.leaving = true;
+  if (performance.kind === 'paper') return;
+  if (performance.phase === 'sit') performance.phase = 'undo-sit';
+  if (performance.phase === 'hug') performance.phase = 'unhug';
+  if (performance.phase === 'seated') { performance.phase = 'rise'; performance.time = 0; }
+}
+export function setRugPose(performance: FloorPerformance, wantsHug: boolean) {
+  if (performance.leaving) return;
+  performance.wantsHug = wantsHug;
+  if (performance.phase === 'seated' && wantsHug) { performance.phase = 'hug'; performance.time = 0; }
+  if (performance.phase === 'hug' && !wantsHug) performance.phase = 'unhug';
+  if (performance.phase === 'unhug' && wantsHug) performance.phase = 'hug';
+}
+
+export function advanceCabinPerformance(performance: CabinPerformance, dt: number, clips: CabinClips) {
+  const { time } = performance;
+  if (performance.kind === 'paper') {
+    performance.time = MathUtils.clamp(time + (performance.leaving ? -dt : dt), 0, clips.pickUp.duration);
+    return performance.leaving ? performance.time === 0 : performance.time === clips.pickUp.duration;
+  }
+  switch (performance.phase) {
+    case 'sit':
+      performance.time = Math.min(clips.floorSit.duration, time + dt);
+      if (performance.time === clips.floorSit.duration) {
+        performance.phase = performance.wantsHug ? 'hug' : 'seated';
+        performance.time = 0;
+      }
+      break;
+    case 'undo-sit':
+      performance.time = Math.max(0, time - dt);
+      return performance.time === 0;
+    case 'hug':
+      performance.time = Math.min(clips.hugKnees.duration, time + dt);
+      break;
+    case 'unhug':
+      performance.time = Math.max(0, time - dt * 2.5);
+      if (performance.time === 0) performance.phase = performance.leaving ? 'rise' : 'seated';
+      break;
+    case 'rise':
+      performance.time = Math.min(clips.floorStand.duration, time + dt);
+      return performance.time === clips.floorStand.duration;
+  }
+  return false;
+}
+
+export function applyCabinPerformance(
+  performance: CabinPerformance, clips: CabinClips, apply: ReturnType<typeof createCabinActionPlayer>,
+) {
+  const { time } = performance;
+  if (performance.kind === 'paper') {
+    apply('pickUp', time, MathUtils.smoothstep(time, 0, .45) * MathUtils.smoothstep(clips.pickUp.duration - time, 0, .36));
+    return;
+  }
+  if (performance.phase === 'sit' || performance.phase === 'undo-sit') {
+    apply('floorSit', time, MathUtils.smoothstep(time, 0, .45));
+  } else if (performance.phase === 'rise') {
+    const entry = MathUtils.smoothstep(time, 0, .50);
+    if (entry < 1) apply('floorSit', clips.floorSit.duration);
+    apply('floorStand', time, entry * MathUtils.smoothstep(clips.floorStand.duration - time, 0, .50));
+  } else {
+    apply('floorSit', clips.floorSit.duration);
+    if (performance.phase !== 'seated') apply('hugKnees', time, MathUtils.smoothstep(time, 0, .82));
+  }
+}

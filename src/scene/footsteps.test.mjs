@@ -6,6 +6,7 @@ import ts from 'typescript';
 import * as THREE from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { load as loadModel } from './orbital/load-for-validation.mjs';
+import * as cabinActions from './orbital/cabinActions.ts';
 import * as stairGait from './orbital/stairGait.ts';
 
 const { gltf: residentModel } = await loadModel(new URL('../../assets/public/models/resident/luna-walk-room.glb', import.meta.url));
@@ -82,6 +83,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './cabinLayout': cabinLayout,
     './cabinStairs': cabinStairs,
     './stairGait': stairGait,
+    './cabinActions': { ...cabinActions, loadCabinActions: async () => undefined },
     './wardrobe/inspectPose': load('./orbital/wardrobe/inspectPose.ts', { three: THREE }),
     './sofaMotion': load('./orbital/sofaMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './journalLayout': load('./orbital/journalLayout.ts', {}),
@@ -112,7 +114,7 @@ function mount(kind, overrides = {}, idleLibrary) {
   const names = { orbital: 'OrbitalResidents', app: 'App' };
   const props = {
     sceneId: 'habitat', objects: {}, enabled: true, reducedMotion: false, walkTarget: null,
-    sofaTime: { current: null }, interaction: { current: null }, approachEnabled: true,
+    sofaTime: { current: null }, paperPickup: { current: null }, interaction: { current: null }, approachEnabled: true,
     onGesture() {}, onHover() {}, onArrive() {}, onAction() {},
     ...overrides,
   };

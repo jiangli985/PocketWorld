@@ -39,7 +39,9 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
     const wardrobe = shell.getObjectByName('Interactable_Wardrobe');
     wardrobe?.removeFromParent();
     const door = wardrobe?.getObjectByName('Wardrobe_SlidingDoor');
-    return { shell, wardrobe, door, closed: door?.position.clone() };
+    const rug = shell.getObjectByName('Rugs_Upper');
+    rug?.removeFromParent();
+    return { shell, wardrobe, rug, door, closed: door?.position.clone() };
   }, [scene, variant, deck]);
 
   const slide = useRef(0);
@@ -56,6 +58,10 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
   });
   return <>
     <primitive object={cabin.shell} dispose={null} />
+    {cabin.rug && <ObjectHandle id="rug-cross" action="sit" panorama world={world} hint="坐在地毯上"
+      onClick={event => event.stopPropagation()}>
+      <primitive object={cabin.rug} dispose={null} />
+    </ObjectHandle>}
     {cabin.wardrobe && <ObjectHandle id="wardrobe" action="open" panorama world={world} hint="打开衣柜"
       onClick={event => event.stopPropagation()}>
       <primitive object={cabin.wardrobe} dispose={null} />

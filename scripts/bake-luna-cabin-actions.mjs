@@ -1,0 +1,288 @@
+import { writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
+import { load } from '../src/scene/orbital/load-for-validation.mjs';
+import { createResidentRig } from '../src/scene/orbital/residentRig.ts';
+
+const directory = process.argv[2];
+if (!directory) throw new Error('Pass the directory containing the seven MotionSmith GLBs.');
+
+const takes = {
+  floorSit: 'sit_floor_take2',
+  hugKnees: 'sit_hug_knees_take1',
+  floorStand: 'stand_up_floor_take1',
+  pickUp: 'pick_up_take1',
+  rubEye: 'rub_eye_take1',
+  think: 'thinking_take1',
+  reachHigh: 'reach_high_take1',
+};
+const body = new Map([
+  ['Hips', 'pelvis'], ['Spine', 'spine_01'], ['Spine1', 'spine_03'], ['Spine2', 'spine_05'],
+  ['Neck', 'neck_01'], ['Head', 'head'],
+]);
+const next = new Map([['Hips', 'Spine'], ['Spine', 'Spine1'], ['Spine1', 'Spine2'], ['Spine2', 'Neck'], ['Neck', 'Head']]);
+for (const [side, suffix] of [['Left', 'l'], ['Right', 'r']]) {
+  for (const [[target, source], following] of [
+    [['Shoulder', 'clavicle'], 'Arm'], [['Arm', 'upperarm'], 'ForeArm'], [['ForeArm', 'lowerarm'], 'Hand'],
+    [['Hand', 'hand'], 'HandMiddle1'], [['UpLeg', 'thigh'], 'Leg'], [['Leg', 'calf'], 'Foot'],
+    [['Foot', 'foot'], 'ToeBase'], [['ToeBase', 'ball'], null],
+  ]) {
+    body.set(side + target, source + '_' + suffix);
+    if (following) next.set(side + target, side + following);
+  }
+  for (const [a, b] of [['Thumb', 'thumb'], ['Index', 'index'], ['Middle', 'middle'], ['Ring', 'ring'], ['Pinky', 'pinky']]) {
+    for (let segment = 1; segment <= 3; segment++) {
+      body.set(side + 'Hand' + a + segment, b + '_0' + segment + '_' + suffix);
+      if (segment < 3) next.set(side + 'Hand' + a + segment, side + 'Hand' + a + (segment + 1));
+    }
+  }
+}
+const upper = /^(?:Spine|Neck|Head)|Shoulder|Arm|Hand/;
+const point = bone => bone.getWorldPosition(new Vector3());
+const rotation = bone => bone.getWorldQuaternion(new Quaternion());
+const direction = (from, to) => point(to).sub(point(from)).normalize();
+
+function basis(axis, across) {
+  const x = axis.clone().normalize();
+  const y = across.clone().addScaledVector(x, -across.dot(x)).normalize();
+  return new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(x, y, x.clone().cross(y)));
+}
+
+function alignment(name, from, bind, source) {
+  const child = next.get(name);
+  if (!child) return new Quaternion();
+  const targetAxis = bind.get(child).point.clone().sub(bind.get(name).point).normalize();
+  const sourceAxis = direction(from, source.get(child));
+  if (/^(Left|Right)Hand$/.test(name)) {
+    const sourceSpan = point(source.get(name + 'Index1')).sub(point(source.get(name + 'Pinky1')));
+    const targetSpan = bind.get(name + 'Index1').point.clone().sub(bind.get(name + 'Pinky1').point);
+    return basis(sourceAxis, sourceSpan).multiply(basis(targetAxis, targetSpan).invert());
+  }
+  if (/^(Left|Right)Foot$/.test(name)) {
+    const up = new Vector3(0, 1, 0);
+    return basis(sourceAxis, up).multiply(basis(targetAxis, up).invert());
+  }
+  return new Quaternion().setFromUnitVectors(targetAxis, sourceAxis);
+}
+
+function worldQuaternion(joint, q) {
+  joint.quaternion.copy(rotation(joint.parent).invert()).multiply(q).normalize();
+}
+function aim(joint, from, to, desired) {
+  const actual = point(to).sub(point(from)).normalize();
+  worldQuaternion(joint, new Quaternion().setFromUnitVectors(actual, desired.normalize()).multiply(rotation(joint)));
+}
+
+function moveEnd(shoulder, elbow, wrist, target) {
+  const goal = target.clone().sub(point(shoulder));
+  const upper = point(shoulder).distanceTo(point(elbow)), lower = point(elbow).distanceTo(point(wrist));
+  const reach = MathUtils.clamp(goal.length(), Math.abs(upper - lower) + .001, upper + lower - .001);
+  const axis = goal.normalize(), start = point(shoulder);
+  const pole = point(elbow).sub(start);
+  pole.addScaledVector(axis, -pole.dot(axis)).normalize();
+  const along = (upper ** 2 + reach ** 2 - lower ** 2) / (2 * reach);
+  const bent = start.clone().addScaledVector(axis, along).addScaledVector(pole, Math.sqrt(Math.max(0, upper ** 2 - along ** 2)));
+  const wristRotation = rotation(wrist);
+  aim(shoulder, shoulder, elbow, bent.sub(start));
+  aim(elbow, elbow, wrist, start.addScaledVector(axis, reach).sub(point(elbow)));
+  worldQuaternion(wrist, wristRotation);
+}
+
+function skinContactVertices(rig, matches) {
+  const contact = [];
+  const v = new Vector3();
+  rig.mesh.traverse(surface => {
+    if (!surface.isSkinnedMesh) return;
+    const indices = surface.geometry.getAttribute('skinIndex'), weights = surface.geometry.getAttribute('skinWeight');
+    const vertices = [];
+    for (let i = 0; i < indices.count; i++) {
+      if (i % 4 !== 0) continue;
+      const bone = surface.skeleton.bones[indices.getX(i)];
+      if (weights.getX(i) <= .22 || !matches(bone.name, surface)) continue;
+      vertices.push(i);
+    }
+    contact.push({ surface, vertices });
+  });
+  return () => {
+    rig.mesh.updateMatrixWorld(true);
+    let floor = Infinity;
+    for (const { surface, vertices } of contact) {
+      surface.skeleton.update();
+      for (const i of vertices) {
+        surface.getVertexPosition(i, v).applyMatrix4(surface.matrixWorld);
+        floor = Math.min(floor, v.y);
+      }
+    }
+    return floor;
+  };
+}
+
+const loadSourceClips = () => Promise.all(Object.entries(takes).map(async ([name, take]) => {
+  const data = await load(resolve(directory, 'MotionSmith_' + take + '.glb'));
+  if (data.gltf.animations[0]?.name !== take) throw new Error('Unexpected MotionSmith take ' + take);
+  return [name, data];
+}));
+
+async function bake(outfit, file) {
+  const { gltf } = await load(new URL('../assets/public/models/resident/' + file, import.meta.url));
+  const target = new Map([...body.keys()].map(name => [name, gltf.scene.getObjectByName('mixamorig' + name)]));
+  const bind = new Map([...target].map(([name, joint]) => [name, { rotation: rotation(joint), point: point(joint) }]));
+  const rig = createResidentRig(gltf.scene, gltf.animations.find(a => a.name === 'Walk_Grounded_Loop'), outfit !== 'everyday');
+  rig.applyPose(0, 0);
+  rig.mesh.updateMatrixWorld(true);
+  const hips = target.get('Hips'), neutralHips = point(hips);
+  const floorAtPose = skinContactVertices(rig, name => /Foot|Toe|UpLeg|Hand/.test(name)
+    || outfit === 'cloudhoodie' && /Hips/.test(name));
+  const soles = ['Left', 'Right'].map(side => skinContactVertices(rig,
+    name => name.startsWith('mixamorig' + side) && /Foot|Toe/.test(name)));
+  const hipContact = skinContactVertices(rig, name => name === 'mixamorigHips');
+  const neutralFloor = floorAtPose();
+  const hipParent = hips.parent;
+  const dress = [];
+  rig.mesh.traverse(joint => {
+    if (!joint.isBone || !/^Dress_.+_0[123]$/.test(joint.name)) return;
+    const child = joint.children.find(value => value.isBone && value.name.startsWith('Dress_'));
+    const forward = child ? direction(joint, child) : direction(joint.parent, joint);
+    const axis = forward.applyQuaternion(rotation(joint).invert());
+    dress.push({ joint, child, axis });
+  });
+  const legLength = (a, b, c) => a.distanceTo(b) + b.distanceTo(c);
+  const fittedLength = legLength(point(target.get('RightUpLeg')), point(target.get('RightLeg')), point(target.get('RightFoot')));
+  const clips = [];
+  for (const [name, data] of await loadSourceClips()) {
+    const source = new Map([...body].map(([joint, b]) => [joint, data.gltf.scene.getObjectByName(b)]));
+    const delta = new Map();
+    for (const [key, joint] of source) {
+      if (!joint || !target.get(key)) throw new Error('Unmapped ' + key + ' for ' + name + '/' + outfit);
+      // Match both bones in the common Y-up, +Z-forward frame. The alignment is
+      // folded into the constant so each sample can retain source limb twist.
+      const saved = bind.get(key);
+      const a = alignment(key, joint, bind, source);
+      delta.set(key, rotation(joint).invert().multiply(a).multiply(saved.rotation));
+    }
+    const ratio = fittedLength / legLength(point(source.get('RightUpLeg')), point(source.get('RightLeg')), point(source.get('RightFoot')));
+    const duration = data.gltf.animations[0].duration;
+    const frameCount = Math.round(duration * 30) + 1;
+    const upperOnly = ['rubEye', 'think', 'reachHigh'].includes(name);
+    const seated = ['floorSit', 'hugKnees', 'floorStand'].includes(name);
+    data.sample(name === 'floorStand' || name === 'hugKnees' ? duration : 0);
+    const sourceAnchor = point(source.get('Hips'));
+    if (name === 'hugKnees') sourceAnchor.y = point(source.get('Hips')).y + .81;
+    const sampleBones = [...target].filter(([key]) => !upperOnly || upper.test(key));
+    const tracks = sampleBones.map(([, joint]) => ({ joint, path: 'rotation', values: [] }));
+    if (!upperOnly) tracks.push({ joint: hips, path: 'translation', values: [] });
+    if (seated || name === 'pickUp') for (const { joint } of dress) tracks.push({ joint, path: 'rotation', values: [] });
+    const anchors = [];
+    for (let frame = 0; frame < frameCount; frame++) {
+      const t = frame / 30;
+      rig.applyPose(0, 0);
+      data.sample(t);
+      for (const [key, joint] of sampleBones) worldQuaternion(joint, rotation(source.get(key)).multiply(delta.get(key)));
+      if (!upperOnly) {
+        const sourceHips = point(source.get('Hips'));
+        const offset = sourceHips.clone().sub(sourceAnchor).multiplyScalar(ratio);
+        // The room owns movement. Keep crouches centered and preserve the
+        // preparatory shift while leaving both standing endpoints at the spot.
+        if (name === 'floorStand') {
+          const settle = MathUtils.smoothstep(t, duration * .55, duration);
+          offset.z += (1 - settle) * .16;
+        }
+        const lift = MathUtils.smoothstep(-offset.y, .12, .54);
+        hips.position.copy(hipParent.worldToLocal(neutralHips.clone().add(offset)));
+        const soleFloor = floorAtPose();
+        const floor = Math.min(soleFloor, Math.max(soleFloor - .033, hipContact()));
+        const ground = Math.max(neutralFloor, .002);
+        hips.position.copy(hipParent.worldToLocal(neutralHips.clone().add(offset).add(new Vector3(0, ground - floor, 0))));
+        const settle = name === 'floorSit' ? MathUtils.smoothstep(t, 3.10, 3.7)
+          : name === 'hugKnees' ? 1 : name === 'floorStand' ? 1 - MathUtils.smoothstep(t, .4, 1.2) : 0;
+        if (settle > 0) for (const [index, side] of ['Left', 'Right'].entries()) {
+          const foot = target.get(side + 'Foot');
+          const clearance = name === 'hugKnees' ? .004 : index === 0 ? .026 : .008;
+          const correction = MathUtils.clamp(ground + clearance - soles[index](), -.13, .08) * settle;
+          moveEnd(target.get(side + 'UpLeg'), target.get(side + 'Leg'), foot, point(foot).add(new Vector3(0, correction, 0)));
+        }
+        if (lift > 0 && dress.length) {
+          const leftKnee = point(target.get('LeftLeg')), rightKnee = point(target.get('RightLeg'));
+          for (const { joint, child, axis } of dress) {
+            const start = point(joint), length = start.distanceTo(point(child ?? joint.parent));
+            const side = /_(?:L|Left)_/.test(joint.name) ? 1 : /_(?:R|Right)_/.test(joint.name) ? -1 : 0;
+            const front = joint.name.includes('Front'), back = joint.name.includes('Back');
+            const knee = side > 0 ? leftKnee.clone() : side < 0 ? rightKnee.clone() : leftKnee.clone().lerp(rightKnee, .5);
+            // Front cloth follows the thighs, while the side and rear hem spread out over the rug.
+            const destination = front ? knee.add(new Vector3(side * .02, .067, .12))
+              : start.clone().add(new Vector3(side * (back ? .035 : .13), -.038, back ? -.15 : .075));
+            const clearance = !child && back ? .10 : .064;
+            destination.y = Math.max(destination.y, clearance);
+            const world = rotation(joint);
+            const natural = child ? direction(joint, child) : axis.clone().applyQuaternion(world);
+            const desired = destination.sub(start).normalize();
+            const groundSlope = Math.min(.35, (clearance - start.y) / length);
+            desired.y = Math.max(desired.y, groundSlope);
+            const mixed = natural.clone().lerp(desired.normalize(), lift).normalize();
+            worldQuaternion(joint, new Quaternion().setFromUnitVectors(natural, mixed).multiply(world));
+          }
+        }
+      }
+      if (name === 'rubEye' || name === 'think') {
+        const side = name === 'rubEye' ? 'Left' : 'Right';
+        const hand = target.get(side + 'Hand'), head = target.get('Head');
+        const sourceHand = point(source.get(side + 'Hand')).sub(point(source.get('Head')));
+        const close = 1 - MathUtils.smoothstep(sourceHand.length(), .22, .47);
+        // Keep the wrist in front of the real face after the change in head/arm proportions.
+        const goal = point(head).add(new Vector3(name === 'rubEye' ? .072 : -.038, name === 'rubEye' ? .028 : -.075, .135));
+        if (close > 0) moveEnd(target.get(side + 'Arm'), target.get(side + 'ForeArm'), hand, point(hand).lerp(goal, close));
+      }
+      if (name === 'pickUp') anchors.push(point(target.get('RightHand')).toArray());
+      for (const track of tracks) {
+        const value = track.path === 'rotation' ? track.joint.quaternion : track.joint.position;
+        track.values.push(...value.toArray());
+      }
+    }
+    if (anchors.length) {
+      const grip = anchors.reduce((best, row, i) => row[1] < anchors[best][1] ? i : best, 0);
+      console.log(outfit, 'pickUp lowest wrist', (grip / 30).toFixed(2), anchors[grip].map(x => x.toFixed(3)));
+    }
+    clips.push({ name, times: Array.from({ length: frameCount }, (_, i) => i / 30), tracks });
+  }
+  rig.dispose();
+  return clips;
+}
+
+function pack(clips) {
+  const nodes = [], nodeIds = new Map(), buffers = [], bufferViews = [], accessors = [];
+  let bytes = 0;
+  function add(data, type, width) {
+    const binary = Buffer.from(Float32Array.from(data).buffer);
+    bufferViews.push({ buffer: 0, byteOffset: bytes, byteLength: binary.length });
+    buffers.push(binary);
+    bytes += binary.length;
+    accessors.push({ bufferView: bufferViews.length - 1, componentType: 5126, count: data.length / width, type,
+      ...(width === 1 ? { min: [data[0]], max: [data.at(-1)] } : {}) });
+    return accessors.length - 1;
+  }
+  const animations = clips.map(({ name, times, tracks }) => {
+    const input = add(times, 'SCALAR', 1), samplers = [], channels = [];
+    for (const { joint, path, values } of tracks) {
+      if (!nodeIds.has(joint.name)) { nodeIds.set(joint.name, nodes.length); nodes.push({ name: joint.name }); }
+      const output = path === 'rotation' ? add(values, 'VEC4', 4) : add(values, 'VEC3', 3);
+      samplers.push({ input, output, interpolation: 'LINEAR' });
+      channels.push({ sampler: samplers.length - 1, target: { node: nodeIds.get(joint.name), path } });
+    }
+    return { name, channels, samplers };
+  });
+  const doc = { asset: { version: '2.0', generator: 'PocketWorld MotionSmith retarget' },
+    scene: 0, scenes: [{ nodes: nodes.map((_, i) => i) }], nodes, animations, bufferViews, accessors, buffers: [{ byteLength: bytes }] };
+  const json = Buffer.from(JSON.stringify(doc));
+  const padded = Buffer.alloc(Math.ceil(json.length / 4) * 4, 32);
+  json.copy(padded);
+  const header = Buffer.alloc(20), binHeader = Buffer.alloc(8);
+  [0x46546c67, 2, 28 + padded.length + bytes, padded.length, 0x4e4f534a].forEach((n, i) => header.writeUInt32LE(n, i * 4));
+  binHeader.writeUInt32LE(bytes); binHeader.writeUInt32LE(0x004e4942, 4);
+  return Buffer.concat([header, padded, binHeader, ...buffers]);
+}
+
+for (const [outfit, file] of [['everyday', 'luna-walk-room.glb'], ['snowflower', 'luna-snowflower.glb'], ['cloudhoodie', 'luna-cloudhoodie.glb']]) {
+  const output = new URL('../assets/public/models/resident/luna-cabin-actions-' + outfit + '.glb', import.meta.url);
+  const clips = await bake(outfit, file);
+  await writeFile(output, pack(clips));
+}
