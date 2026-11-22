@@ -368,7 +368,7 @@ function CameraRig(props: CameraRigProps) {
   const locked = inTransition || props.gestureActive || !!props.focusedObject || !['idle', 'active', 'error'].includes(props.transition.phase);
   const inCabin = props.viewMode === 'cabin';
   return <OrbitControls ref={controls} enabled={!locked} enablePan={false} enableDamping dampingFactor={0.08}
-    minDistance={inCabin ? 5 : 14} maxDistance={inCabin ? cabinFrames.overview.distance * 1.5 : orbitDistance * 2.4}
+    minDistance={inCabin ? 5 : 16} maxDistance={inCabin ? cabinFrames.overview.distance * 1.5 : orbitDistance * 2.4}
     minPolarAngle={0} maxPolarAngle={Math.PI}
     onStart={() => {
       if (props.flight.mode === 'approach') {
