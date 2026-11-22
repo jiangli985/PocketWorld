@@ -9,6 +9,7 @@ import { createChairAnimation } from './chairAnimation';
 import { createSleeveContact } from './wardrobe/sleeveContact';
 import { loadResidentAssets, type ResidentAssets } from './wardrobe/residentAssets';
 import type { ResidentOutfit } from './wardrobe/outfit';
+import type { StairGait } from './stairGait';
 
 export { HIP_HEIGHT } from './residentRig';
 export interface ResidentLeg {
@@ -28,6 +29,7 @@ export interface ResidentRig {
   legs: ResidentLeg[]; arms: ResidentArm[]; torso: THREE.Bone; neck: THREE.Bone; head?: THREE.Bone;
   skirtFront: THREE.Bone; skirtBack: THREE.Bone; mesh: THREE.Group;
   applyPose: (phase: number, walkWeight: number) => void;
+  applyStairPose: (gait: StairGait, stairX: number, surfaceAt: (z: number, heelRun?: number) => number) => void;
   followMotion: (dt: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => void;
   fitted?: ResidentAssets['fitted'];
   updateSleeveContact?: () => void;
