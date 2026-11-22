@@ -254,6 +254,11 @@ export function OrbitalResidents(props: ResidentsProps) {
       p.interaction.current?.([x, 0, z], action, () => current.current.onAction(action));
     } else p.onAction(action);
   };
+  const canUseComputer = () => {
+    const p = current.current, s = state.current;
+    return p.sceneId === 'habitat' && p.objects.chair?.active && !p.objects.sofa?.active
+      && s.posture === 'chair' && !s.exiting && !s.dismissedChair && chairMotion.current.phase === 'seated';
+  };
   const nearbyActions = (): NearbyAction[] => {
     const p = current.current, root = resident.current, s = state.current;
     if (!root || !p.enabled || s.exiting || p.focusedObject) return [];
@@ -261,8 +266,6 @@ export function OrbitalResidents(props: ResidentsProps) {
     const [cabinetX, , cabinetZ] = shelfPoint(p.sceneId, .55, 0, .65);
     const [bookX, , bookZ] = readingStand(p.sceneId);
     const targets: NearbyAction[] = [
-      // The desk chair occupies the nearest ring, so reach the free floor beside it.
-      { id: 'computer', kind: 'inspect', hint: '使用电脑', point: COMPUTER_STAND, reach: 0.88 },
       { id: 'schedule', kind: 'plan', hint: '打开日程', point: [SCHEDULE_BOOK_POSITION[0] + 0.02, -1.42], reach: 0.42 },
       { id: 'journal', kind: 'write', hint: '打开日记', point: [JOURNAL_POSITION[0], -1.42], reach: 0.40 },
       { id: 'music-player', kind: 'inspect', hint: '使用唱机', point: [-0.30, -1.42], reach: 0.40 },
@@ -341,6 +344,14 @@ export function OrbitalResidents(props: ResidentsProps) {
       const root = resident.current, p = current.current, s = state.current;
       if (!root || action.sceneId !== p.sceneId) return false;
       if (action.kind === 'stand') { cancelApproach(); perform(); return true; }
+      if (action.objectId === 'computer') {
+        if (!canUseComputer()) { p.onHover('computer', '请先在电脑椅上坐稳，再使用电脑'); return false; }
+        if (!p.approachEnabled) return false;
+        cancelApproach();
+        keys.current.clear();
+        perform();
+        return true;
+      }
       const pose = CHAIR_POSES[p.sceneId];
       const target: Point = action.objectId === 'chair' ? [pose.x, pose.z] : action.objectId === 'pet' ? [...catLocation.current] : action.objectId === 'wardrobe' ? WARDROBE_STAND : [point[0], point[2]];
       if (s.posture === 'standing' && !s.exiting
@@ -385,6 +396,10 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (interactIndex >= 0) {
         if (state.current.posture !== 'standing' || p.objects.chair?.active || p.objects.sofa?.active) {
           if (event.code === 'KeyE') stand();
+          else if (event.code === 'KeyQ' && canUseComputer()) {
+            const action: WorldAction = { sceneId: p.sceneId, objectId: 'computer', kind: 'inspect' };
+            p.interaction.current?.([COMPUTER_STAND[0], 0, COMPUTER_STAND[1]], action, () => current.current.onAction(action));
+          }
         } else {
           const target = nearbyActions()[interactIndex];
           if (target) { cancelApproach(); act(target.id, target.kind); }
@@ -762,7 +777,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     const nearbyList = nearbyActions();
     const nearby = nearbyList[0] ?? null;
     const hint = p.enabled && (s.posture !== 'standing' || wanted !== 'standing')
-      ? 'E · 起身'
+      ? canUseComputer() ? 'E · 起身　Q · 使用电脑' : 'E · 起身'
       : nearbyList.map((target, index) => `${INTERACT_LABELS[index]} · ${target.hint}`).join('　');
     if (nearby?.id !== s.nearby?.id || hint !== s.nearbyHint) {
       s.nearby = nearby;
