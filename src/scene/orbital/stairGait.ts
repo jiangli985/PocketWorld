@@ -8,10 +8,10 @@ export type StairGait = {
   feet: [StairFoot, StairFoot]; // Right, left
   ascending: boolean;
   yaw: number;
+  lowerEdgeZ: number;
   weight: number;
   lean: number;
-  rightArm: number;
-  leftArm: number;
+  arms: { shoulder: number; elbow: number; wrist: number }[];
   footfall: number;
   phase: number;
 };
@@ -35,11 +35,11 @@ export function stairTreadSurface(z: number, edgeBlend = 0) {
 }
 
 function footAt(tread: number): StairFoot {
-  return { z: lowerZ - (tread - .5) * STAIR_TREAD_RUN, y: tread * STAIR_RISE, pitch: 0, swing: false, edgeBlend: 0, surfaceCeiling: Infinity };
+  return { z: lowerZ - (tread - .5) * STAIR_TREAD_RUN, y: clamp(tread, 0, steps) * STAIR_RISE, pitch: 0, swing: false, edgeBlend: 0, surfaceCeiling: Infinity };
 }
 
 /** Distance determines cadence and support positions, so changing speed cannot move a planted foot. */
-export function sampleStairGait(progress: number, ascending: boolean): StairGait {
+export function sampleStairGait(progress: number, ascending: boolean, reducedMotion = false): StairGait {
   const travel = ascending ? progress : steps - progress;
   const cycle = stepCycle(travel, ascending);
   const footfall = Math.floor(cycle);
@@ -49,7 +49,7 @@ export function sampleStairGait(progress: number, ascending: boolean): StairGait
   const frame = phase * (clip.length - 1);
   const sample = (channel: number, index = frame) =>
     lerp(clip[Math.floor(index)][channel], clip[Math.ceil(index)][channel], index % 1);
-  const treadAt = (step: number) => clamp(ascending ? step : steps - step, 0, steps);
+  const treadAt = (step: number) => ascending ? step : steps - step;
   const support = footAt(treadAt(footfall));
   const from = footAt(treadAt(footfall - 1)), to = footAt(treadAt(footfall + 1));
   const horizontalPhase = ascending ? clamp((phase - .17) / .83, 0, 1) : Math.min(phase / .88, 1);
@@ -72,11 +72,20 @@ export function sampleStairGait(progress: number, ascending: boolean): StairGait
   return {
     feet: swingRight ? [swing, support] : [support, swing],
     ascending,
+    lowerEdgeZ: lowerZ + .012,
     yaw: ascending ? Math.PI : 0,
-    weight: smoothstep(Math.min(travel, steps - travel), 0, 1.45),
-    lean: sample(3) * (ascending ? .76 : .48),
-    rightArm: -.66 * (sample(4) + .09),
-    leftArm: -.66 * (sample(5) + .17),
+    weight: smoothstep(Math.min(travel, steps - travel), -1.25, -.18),
+    lean: reducedMotion ? 0 : sample(3) * (ascending ? .76 : .48),
+    arms: [4, 7].map((channel, side) => {
+      // Counterbalance the opposite leg, with the forearm and hand trailing the shoulder.
+      if (reducedMotion) return { shoulder: 0, elbow: 0, wrist: 0 };
+      const stride = Math.PI * (cycle + side + (ascending ? 0 : 1));
+      return {
+        shoulder: -.9 * sample(channel) - .35 * Math.cos(stride),
+        elbow: -.72 * sample(channel + 1) - .12 + .10 * Math.cos(stride - .48),
+        wrist: -.55 * sample(channel + 2) + .13 * Math.sin(stride - .40),
+      };
+    }),
     footfall,
     phase: (cycle / 2 + 1) % 1,
   };

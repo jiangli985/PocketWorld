@@ -17,7 +17,7 @@ function restore(bone: THREE.Bone, pose: BonePose) {
 }
 const tilt = (from: THREE.Vector3, to: THREE.Vector3) => Math.atan2(to.z - from.z, from.y - to.y);
 
-function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE.Vector3, sole: THREE.Quaternion) {
+function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE.Vector3, sole: THREE.Quaternion, kneeDirection?: THREE.Vector3) {
   const worldPosition = (joint: THREE.Bone) => joint.getWorldPosition(new THREE.Vector3());
   const worldRotation = (joint: THREE.Object3D) => joint.getWorldQuaternion(new THREE.Quaternion());
   const hip = worldPosition(thigh), knee = worldPosition(shin), ankle = worldPosition(foot);
@@ -25,7 +25,7 @@ function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE.Vector
   const axis = point.clone().sub(hip);
   const distance = THREE.MathUtils.clamp(axis.length(), Math.abs(upper - lower) + .0001, upper + lower - .0001);
   axis.normalize();
-  const pole = knee.clone().sub(hip);
+  const pole = kneeDirection ?? knee.clone().sub(hip);
   pole.addScaledVector(axis, -pole.dot(axis)).normalize();
   const along = (upper * upper - lower * lower + distance * distance) / (2 * distance);
   const bentKnee = hip.clone().addScaledVector(axis, along)
@@ -398,7 +398,10 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
       : soleBounds.getCenter(new THREE.Vector3()).setY(soleBounds.min.y);
     const heel = soleBounds.isEmpty() ? -.075 : soleBounds.min.z - center.z;
     const forefoot = soleBounds.isEmpty() ? .075 : soleBounds.max.z - center.z;
-    return { joints, foot, toe, centerX: center.x, heel, forefoot, ankleOffset: ankle.sub(center),
+    const soleCorners = [-1, 1].flatMap(sign => [heel, forefoot].map(z =>
+      new THREE.Vector3(sign * (soleBounds.isEmpty() ? .042 : (soleBounds.max.x - soleBounds.min.x) / 2), 0, z)
+        .add(center).sub(ankle)));
+    return { joints, foot, toe, soleCorners, inverseRotation: foot.getWorldQuaternion(new THREE.Quaternion()).invert(), centerX: center.x, heel, forefoot, ankleOffset: ankle.sub(center),
       rotation: foot.getWorldQuaternion(new THREE.Quaternion()), toeRotation: toe.quaternion.clone(), ankleY: center.y };
   });
   const stairDress = dress.filter(({ front, side }) => front || side).map(({ target, front }) => ({
@@ -406,8 +409,10 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     leg: /_(?:Left|L)_/.test(target.name) ? 1 : /_(?:Right|R)_/.test(target.name) ? 0 : null,
   }));
   const stairHips = hips.position.clone();
-  const stairUpperBody = [torsoBone, bone('Head'), bone('RightArm'), bone('LeftArm')].map(joint =>
+  const stairUpperBody = [torsoBone, bone('Head'), ...['Right', 'Left'].flatMap(side => ['Arm', 'ForeArm', 'Hand'].map(name => bone(side + name)))].map(joint =>
     ({ joint, rotation: joint.quaternion.clone() }));
+  const rollAxis = new THREE.Vector3(0, 0, 1), armRoll = new THREE.Quaternion();
+  const kneeDirection = new THREE.Vector3();
   const axisY = new THREE.Vector3(0, 1, 0);
   const strideYaw = new THREE.Quaternion(), stridePitch = new THREE.Quaternion();
   const meshYaw = new THREE.Quaternion(), meshYawInverse = new THREE.Quaternion();
@@ -416,26 +421,26 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
   const kneeLift = [0, 0];
   const thighDirection = new THREE.Vector3();
 
-  function blendStairPitch(joint: THREE.Bone, rotation: THREE.Quaternion, pitch: number, weight: number) {
+  function blendStairPitch(joint: THREE.Bone, rotation: THREE.Quaternion, pitch: number, weight: number, roll = 0) {
     joint.parent!.getWorldQuaternion(parentRotation);
     strideRotation.copy(parentRotation).invert().multiply(meshYaw)
-      .multiply(stridePitch.setFromAxisAngle(axisX, pitch)).multiply(meshYawInverse)
+      .multiply(armRoll.setFromAxisAngle(rollAxis, roll)).multiply(stridePitch.setFromAxisAngle(axisX, pitch)).multiply(meshYawInverse)
       .multiply(parentRotation).multiply(rotation);
     joint.quaternion.slerp(strideRotation, weight);
   }
 
   function applyStairPose(gait: StairGait, stairX: number, surfaceAt: (z: number, edgeBlend: number) => number) {
     const { ascending, weight, yaw } = gait;
-    if (weight <= 0) return;
+
     // Stay a little lower on the flight to leave knee room for the high treads.
     hips.position.lerp(stairHips, weight);
     samplePoint.set(0, ascending ? -.101 : -.042, ascending ? -.042 : 0).applyQuaternion(mesh.getWorldQuaternion(meshYaw));
     hips.getWorldPosition(ankleGoal).addScaledVector(samplePoint, weight);
     hips.position.copy(hips.parent!.worldToLocal(ankleGoal));
     meshYawInverse.copy(meshYaw).invert();
-    const angles = [gait.lean, gait.lean * .32, gait.rightArm, gait.leftArm];
+    const angles = [gait.lean, gait.lean * .32, ...gait.arms.flatMap(arm => [arm.shoulder, arm.elbow, arm.wrist])];
     for (const [i, { joint, rotation }] of stairUpperBody.entries())
-      blendStairPitch(joint, rotation, angles[i], weight);
+      blendStairPitch(joint, rotation, angles[i], weight, i === 2 ? -.13 : i === 5 ? .13 : 0);
     strideYaw.setFromAxisAngle(axisY, yaw);
     for (const [side, leg] of stairLegs.entries()) {
       const step = gait.feet[side];
@@ -460,7 +465,21 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
       leg.foot.getWorldPosition(ankle).lerp(ankleGoal, weight);
       leg.foot.getWorldQuaternion(footRotation).slerp(strideRotation, weight);
       leg.toe.quaternion.slerp(leg.toeRotation, weight);
-      plantResidentLeg(leg.joints, ankle, footRotation);
+      // The flat-walk blend can dip at a landing. Check the actual blended footprint, including its width during turns.
+      strideRotation.copy(footRotation).multiply(leg.inverseRotation);
+      if (weight < 1 && step.y === 0) {
+        // At the lower turn the original flat stride can still place its trailing heel inside the first riser.
+        const landingEdge = gait.lowerEdgeZ;
+        for (const corner of leg.soleCorners)
+          ankle.z = Math.max(ankle.z, landingEdge + .012 - soleEdge.copy(corner).applyQuaternion(strideRotation).z);
+      }
+      for (const corner of leg.soleCorners) {
+        soleEdge.copy(corner).applyQuaternion(strideRotation);
+        const z = ankle.z + soleEdge.z - .006;
+        ankle.y = Math.max(ankle.y, surfaceAt(z, 0) - soleEdge.y + .0015);
+      }
+      kneeDirection.set(side === 0 ? -.11 : .11, 0, 1).applyQuaternion(meshYaw);
+      plantResidentLeg(leg.joints, ankle, footRotation, kneeDirection);
       const [thigh, shin] = leg.joints;
       thighDirection.copy(shin.getWorldPosition(soleEdge)).sub(thigh.getWorldPosition(soleGoal)).applyQuaternion(meshYawInverse);
       kneeLift[side] = THREE.MathUtils.clamp(Math.atan2(thighDirection.z, -thighDirection.y) - .08, 0, 1.28);

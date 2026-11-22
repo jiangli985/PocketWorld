@@ -29,7 +29,12 @@ function extract(path, heading, swings) {
         height: ankle.y,
         solePitch: pitch(point(side + 'ToeBase').sub(ankle), 1) - Math.PI / 2,
         lean: pitch(point('Neck').sub(point('Hips')), 1),
-        arms: sides.map(arm => pitch(point(arm + 'ForeArm').sub(point(arm + 'Arm')), -1)),
+        arms: sides.flatMap(side => {
+          const upper = pitch(point(side + 'ForeArm').sub(point(side + 'Arm')), -1);
+          const lower = pitch(point(side + 'Hand').sub(point(side + 'ForeArm')), -1);
+          const palm = pitch(point(side + 'HandIndex1').sub(point(side + 'Hand')), -1);
+          return [upper, lower - upper, palm - lower];
+        }),
       };
     });
     const from = frames[0], to = frames.at(-1);

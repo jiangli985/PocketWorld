@@ -1,6 +1,6 @@
 import { SOFA_ENTRY, SOFA_STEPS, loadSofaClip, sofaPlayer } from './sofaMotion';
 import { CABIN_DIVIDER_X, DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, PLUSH_FLOOR_BOUNDS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
-import { CABIN_STAIRS, STAIR_DISTANCE, atStairEntrance, otherDeck, sampleCabinStairs, stairDestination, stairLanding, type CabinResidentView } from './cabinStairs';
+import { CABIN_STAIRS, STAIR_DISTANCE, STAIR_TREAD_RUN, atStairEntrance, otherDeck, sampleCabinStairs, stairDestination, stairLanding, type CabinResidentView } from './cabinStairs';
 import type { CabinDeck } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
@@ -39,6 +39,8 @@ type ResidentsProps = WorldModelProps & {
   enabled: boolean;
   approachEnabled: boolean;
   catMenuOpen: boolean;
+  quickAscent?: React.MutableRefObject<(() => boolean) | null>;
+  onQuickAscentAvailable?: (available: boolean) => void;
   deckView?: React.MutableRefObject<CabinResidentView>;
   upperVisible?: boolean;
   showNearbyHints?: boolean;
@@ -47,7 +49,7 @@ type ResidentsProps = WorldModelProps & {
 };
 type Approach = { point: Point; action: WorldAction; perform: () => void; elapsed: number };
 const RADIUS = RESIDENT_RADIUS;
-const STAIR_SPEED = WALK_SPEED * 1.32;
+const STAIR_SPEED = STAIR_TREAD_RUN / .60;
 const CHAIR_CONTACT = 0.52;
 const CHAIR_REACH = 0.95;
 const PET_REACH = 0.70;
@@ -338,6 +340,33 @@ export function OrbitalResidents(props: ResidentsProps) {
     state.current.external = false;
     current.current.onArrive();
   };
+  const canQuickAscend = () => {
+    const p = current.current, s = state.current, root = resident.current;
+    return !!root && p.sceneId === 'habitat' && p.enabled && !p.focusedObject
+      && s.posture === 'standing' && s.wanted === 'standing' && !s.exiting
+      && !p.objects.chair?.active && !p.objects.sofa?.active
+      && deckFromAuthoredX(root.position.x) === 'lower';
+  };
+  const quickAvailable = useRef(false);
+  useEffect(() => {
+    const handle = props.quickAscent;
+    if (!handle) return;
+    handle.current = () => {
+      if (!canQuickAscend()) return false;
+      const root = resident.current!, s = state.current;
+      const [x, , z] = stairDestination('lower');
+      cancelApproach();
+      s.stairs = null;
+      s.walkTime = 0;
+      walkWeight.current = 0;
+      keys.current.clear();
+      idleInput.current = true;
+      root.position.set(x, 0, z);
+      root.rotation.y = Math.PI / 2;
+      return true;
+    };
+    return () => { handle.current = null; };
+  }, [props.quickAscent]);
   const nextWalkStart = (root: THREE.Group): Point => {
     const stairs = state.current.stairs;
     return stairs ? stairLanding(otherDeck(stairs.from)) : [root.position.x, root.position.z];
@@ -619,12 +648,12 @@ export function OrbitalResidents(props: ResidentsProps) {
         const stairs = s.stairs;
         const ascending = stairs.from === 'lower';
         const before = sampleCabinStairs(stairs.distance);
-        stairs.distance = clamp(stairs.distance + dt * STAIR_SPEED * (ascending ? 1 : -1), 0, STAIR_DISTANCE);
+        stairs.distance = clamp(stairs.distance + dt * (before.tread === null ? WALK_SPEED : STAIR_SPEED) * (ascending ? 1 : -1), 0, STAIR_DISTANCE);
         stairSample = sampleCabinStairs(stairs.distance);
         const [x, , z] = stairSample.position;
         stairStep = [x - before.position[0], z - before.position[2]];
-        if (stairSample.tread !== null && !p.reducedMotion) {
-          stairGait = sampleStairGait(stairSample.tread, ascending);
+        if (stairSample.tread !== null) {
+          stairGait = sampleStairGait(stairSample.tread, ascending, p.reducedMotion);
           onStairContact = before.tread !== null && stairGait.footfall !== stairFootfall(before.tread, ascending);
         }
         walking = Math.hypot(...stairStep) > .00001;
@@ -755,6 +784,11 @@ export function OrbitalResidents(props: ResidentsProps) {
       p.deckView.current.deck = deck;
       p.deckView.current.stairAscent = s.stairs ? stairSample?.ascent ?? null : null;
     }
+    const available = canQuickAscend();
+    if (available !== quickAvailable.current) {
+      quickAvailable.current = available;
+      p.onQuickAscentAvailable?.(available);
+    }
     const [frameDx, frameDz] = stairStep ?? [root.position.x - frameX, root.position.z - frameZ];
     const distance = Math.hypot(frameDx, frameDz);
     if (pending && distance > .0004) pending.elapsed = 0;
@@ -829,7 +863,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
     if (rig.current) {
       const playingChair = p.sceneId === 'habitat' && s.posture === 'chair';
-      rig.current.applyPose(s.walkTime, ease(walkWeight.current));
+      rig.current.applyPose(stairGait?.phase ?? s.walkTime, ease(walkWeight.current) * (1 - (stairGait?.weight ?? 0)));
       if (stairGait) rig.current.applyStairPose(stairGait, CABIN_STAIRS.x, stairTreadSurface);
       if (!playingChair && flow?.book && librarySample) libraryPlayer.current!.apply(flow.book, librarySample);
       if (!interactionPose && !libraryActive) im.player?.(idle.current, !p.reducedMotion);

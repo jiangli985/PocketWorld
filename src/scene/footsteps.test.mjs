@@ -531,7 +531,7 @@ test('clicking the wardrobe leads to its doors and E changes the outfit at the s
     const request = { sceneId: 'habitat', objectId: 'wardrobe', kind: 'toggle' };
     let reached = false;
     view.props.interaction.current([cabinLayout.WARDROBE_FOOTPRINT[0], 1.45, z], request, () => { reached = true; });
-    for (let i = 0; i < 1200 && !reached; i++) view.frame(1 / 60);
+    for (let i = 0; i < 1800 && !reached; i++) view.frame(1 / 60);
     assert.ok(reached);
     assert.ok(Math.hypot(view.root.position.x - x, view.root.position.z - z) < .06);
     view.key('KeyE');
@@ -595,6 +595,26 @@ test('a floor click uses the staircase before walking to the upper deck, then an
   } finally { view.dispose(); }
 });
 
+test('quick ascent cancels an in-flight approach and leaves the resident standing on the upper deck', () => {
+  const quickAscent = { current: null }, deckView = { current: { deck: 'lower', stairAscent: null } };
+  const view = mount('orbital', { quickAscent, deckView });
+  let acted = false;
+  try {
+    view.props.interaction.current(cabinLayout.CLOCK_POSITION, { sceneId: 'habitat', objectId: 'clock', kind: 'inspect' }, () => { acted = true; });
+    for (let i = 0; i < 1000 && (deckView.current.stairAscent ?? 0) < .25; i++) view.frame(1 / 60);
+    assert.ok(deckView.current.stairAscent >= .25);
+    assert.equal(quickAscent.current(), true);
+    for (let i = 0; i < 120; i++) view.frame(1 / 60);
+    assert.equal(deckView.current.deck, 'upper');
+    assert.equal(deckView.current.stairAscent, null);
+    assert.equal(view.root.userData.posture, 'standing');
+    assert.ok(view.root.position.distanceTo(new THREE.Vector3(...cabinStairs.stairDestination('lower'))) < .01);
+    assert.equal(acted, false);
+    assert.equal(quickAscent.current(), false);
+  } finally { view.dispose(); }
+  assert.equal(quickAscent.current, null);
+});
+
 test('the port edge only starts a stair crossing at the landing', () => {
   const deckView = { current: { deck: 'lower', stairAscent: null } };
   const view = mount('orbital', { deckView });
@@ -608,7 +628,7 @@ test('the port edge only starts a stair crossing at the landing', () => {
     view.key('KeyA', 'keyup');
     view.root.position.set(x, 0, z);
     view.key('KeyA');
-    for (let i = 0; i < 700 && deckView.current.deck !== 'upper'; i++) view.frame(1 / 60);
+    for (let i = 0; i < 1100 && deckView.current.deck !== 'upper'; i++) view.frame(1 / 60);
     assert.equal(deckView.current.deck, 'upper');
   } finally { view.dispose(); }
 });
@@ -648,7 +668,7 @@ test('Space leaves a pending walk-to-object interaction in place', () => {
   try {
     view.props.interaction.current(cabinLayout.CLOCK_POSITION, { sceneId: 'habitat', objectId: 'clock', kind: 'inspect' }, () => performed++);
     assert.equal(view.key('Space').defaultPrevented, false);
-    for (let i = 0; i < 1500 && !performed; i++) view.frame(1 / 60);
+    for (let i = 0; i < 2100 && !performed; i++) view.frame(1 / 60);
     assert.equal(performed, 1);
   } finally { view.dispose(); }
 });

@@ -25,12 +25,39 @@ test('the two stair gaits alternate support and place a contact on all 18 treads
       const tread = Math.round(pose.feet[support].y / STAIR_RISE);
       contacts.add(tread);
       supportSides.add(support);
-      if (i === 0 || i === 18 * 24) assert.equal(pose.weight, 0);
+      if (i === 0 || i === 18 * 24) assert.equal(pose.weight, 1);
     }
     assert.deepEqual([...contacts].sort((a, b) => a - b), Array.from({ length: 19 }, (_, i) => i));
     assert.equal(supportSides.size, 2);
   }
   assert.notEqual(sampleStairGait(5.4, true).lean, sampleStairGait(12.6, false).lean);
+});
+
+test('both elbows and wrists articulate as the hands exchange leading sides', async () => {
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-walk-room.glb', import.meta.url));
+  const asset = clone(gltf.scene);
+  const rig = createResidentRig(asset, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'));
+  try {
+    for (const ascending of [true, false]) {
+      rig.mesh.rotation.y = ascending ? Math.PI : 0;
+      const angles = sides.map(() => [[], []]), leads = [];
+      for (let i = 0; i <= 48; i++) {
+        const progress = 6 + i / 24, gait = sampleStairGait(progress, ascending);
+        rig.mesh.position.set(CABIN_STAIRS.x, progress * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
+        rig.applyPose(gait.phase, 0);
+        rig.applyStairPose(gait, CABIN_STAIRS.x, stairTreadSurface);
+        const hands = sides.map((side, index) => {
+          const [elbow, wrist] = ['ForeArm', 'Hand'].map(name => asset.getObjectByName('mixamorig' + side + name));
+          for (const [jointIndex, joint] of [elbow, wrist].entries()) angles[index][jointIndex].push(joint.quaternion.clone());
+          return wrist.getWorldPosition(new Vector3()).z;
+        });
+        leads.push(hands[0] - hands[1]);
+      }
+      assert.ok(Math.min(...leads) < -.10 && Math.max(...leads) > .10);
+      for (const arm of angles) for (const samples of arm)
+        assert.ok(samples.some(rotation => rotation.angleTo(samples[0]) > .045), 'the elbow and wrist must articulate locally');
+    }
+  } finally { rig.dispose(); }
 });
 
 function soleVertices(asset) {
@@ -68,13 +95,13 @@ for (const file of ['luna-walk-room.glb', 'luna-snowflower.glb', 'luna-cloudhood
       const position = new Vector3();
       for (const ascending of [true, false]) {
         rig.mesh.rotation.y = ascending ? Math.PI : 0;
-        for (let i = 0; i <= 18 * 24; i++) {
+        for (let i = -30; i <= 18 * 24 + 30; i++) {
           const travel = i / 24;
           const progress = ascending ? travel : CABIN_STAIRS.steps - travel;
           const gait = sampleStairGait(progress, ascending);
-          if (gait.weight < 1) continue;
-          rig.mesh.position.set(CABIN_STAIRS.x, progress * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
-          rig.applyPose((i * .013) % 1, 1);
+
+          rig.mesh.position.set(CABIN_STAIRS.x, Math.max(0, Math.min(progress, 18)) * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
+          rig.applyPose(gait.phase, 1 - gait.weight);
           rig.applyStairPose(gait, CABIN_STAIRS.x, stairTreadSurface);
           rig.mesh.updateMatrixWorld(true);
           for (const [side, vertices] of soles.entries()) {
@@ -86,7 +113,7 @@ for (const file of ['luna-walk-room.glb', 'luna-snowflower.glb', 'luna-cloudhood
               assert(position.y >= stairTreadSurface(position.z) - .003,
                 `${sides[side]} sole intersected a riser at ${progress.toFixed(3)} while walking ${ascending ? 'up' : 'down'}`);
             }
-            if (!foot.swing) assert(gap >= -.002 && gap < .005, `supporting sole is ${gap} m from the tread`);
+            if (!foot.swing && gait.weight === 1) assert(gap >= -.002 && gap < .005, `supporting sole is ${gap} m from the tread`);
           }
         }
       }

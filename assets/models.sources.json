@@ -305,9 +305,9 @@
       "license": "CMU permits inclusion in commercial products and prohibits direct resale of the motion data, even in a converted format.",
       "licensePage": "https://mocap.cs.cmu.edu/",
       "used": true,
-      "bytes": 3462,
-      "sha256": "64eaace8adb318636249f6ff5c22e12da991ae50296103b7ae5a61ad18628e71",
-      "processing": "scripts/bake-luna-stairs.mjs extracts four normalized step profiles. Original BVHs stay outside the repository. The bundled data drives PocketWorld-specific two-bone IK with tread contact."
+      "bytes": 5338,
+      "sha256": "43da74d05c3997ece93b3fc2af1484e4a76fa883aa48686323bdcf030fc5b526",
+      "processing": "scripts/bake-luna-stairs.mjs extracts four normalized step profiles with shoulder pitch, elbow flexion and wrist pitch on each side. Original BVHs stay outside the repository. The bundled data drives PocketWorld-specific two-bone IK with tread contact."
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { previewOutfit, readOutfit } from './wardrobe/outfit';
 import { CLOCK_POSITION, LAMP_POSITION, UPPER_DECK_OFFSET } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Canvas, events, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import type { OrbitControls as Controls } from 'three-stdlib';
@@ -67,6 +68,9 @@ interface OrbitalSceneProps extends WorldSceneProps {
 interface CabinCameraProps {
   cabinView: CabinView;
   viewRevision: number;
+  cutToDeck: boolean;
+  quickAscent: React.MutableRefObject<(() => boolean) | null>;
+  onQuickAscentAvailable: (available: boolean) => void;
   onCabinViewChange: (view: CabinView) => void;
 }
 type CameraRigProps = OrbitalSceneProps & CabinCameraProps & {
@@ -302,7 +306,8 @@ function CameraRig(props: CameraRigProps) {
     const inHabitat = flight.mode === 'cabin' && props.sceneId === 'habitat';
     const ascent = inHabitat ? resident.stairAscent : null;
     const onStairs = ascent !== null;
-    if (deck.onStairs && !onStairs && inHabitat) {
+    const cut = props.cutToDeck && deck.viewRevision !== props.viewRevision;
+    if (deck.onStairs && !onStairs && inHabitat && !cut) {
       props.onCabinViewChange(resident.deck);
       deck.settling = true;
     }
@@ -325,7 +330,7 @@ function CameraRig(props: CameraRigProps) {
       const end = cabinFrames[props.cabinView];
       const eye = onStairs ? stairEye.current.lerpVectors(stairFrames.lower.position, stairFrames.upper.position, ascent) : end.position;
       const pivot = onStairs ? stairTarget.current.lerpVectors(stairFrames.lower.target, stairFrames.upper.target, ascent) : end.target;
-      const blend = props.reducedMotion ? 1 : 1 - Math.exp(-Math.min(delta, .1) * (onStairs ? 6 : 10));
+      const blend = cut || props.reducedMotion ? 1 : 1 - Math.exp(-Math.min(delta, .1) * (onStairs ? 6 : 10));
       camera.position.lerp(eye, blend);
       controls.current.target.lerp(pivot, blend);
       if (camera instanceof THREE.PerspectiveCamera && Math.abs(camera.zoom - HOME_ZOOM) > .001) {
@@ -492,7 +497,7 @@ function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpe
           <HabitatShell world={world} deck="lower" onFloorClick={onFloorClick} />
           {id === 'habitat' && <ScheduleSurfaces {...world} visible={inCabin && props.sceneId === 'habitat'} />}
           {id === 'habitat' && <>
-            <CabinStaircase onCross={() => walkTo(id, stairDestination(residentView.current.deck))} />
+            <CabinStaircase residentView={residentView} onCross={() => walkTo(id, stairDestination(residentView.current.deck))} />
             <CabinUpperDeck>
               <HabitatShell world={world} deck="upper" onFloorClick={onFloorClick} />
               <BedroomGuard />
@@ -504,7 +509,7 @@ function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpe
           <FeatureSurfaces {...world} />
           {id === props.sceneId && <>
             <OrbitalResidents {...world} outfit={readOutfit(props.sceneObjects.habitat.wardrobe?.itemId)} catMenuOpen={props.catMenuOpen} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} interaction={interaction}
-              deckView={residentView} upperVisible={upperVisible}
+              deckView={residentView} upperVisible={upperVisible} quickAscent={props.quickAscent} onQuickAscentAvailable={props.onQuickAscentAvailable}
               showNearbyHints={props.cabinView === 'overview' || props.cabinView === residentView.current.deck}
               approachEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)}
               walkTarget={walkTarget} onArrive={() => setWalkTarget(null)}
@@ -532,8 +537,23 @@ export function OrbitalScene(props: OrbitalSceneProps) {
   const container = useRef<HTMLDivElement>(null);
   const [catMenu, setCatMenu] = useState<WorldAction | null>(null);
   const outfitPreview = useMemo(() => props.viewMode === 'cabin' && !!previewOutfit(window.location.search), []);
-  const [view, setView] = useState<{ mode: CabinView; revision: number }>({ mode: outfitPreview ? 'lower' : 'overview', revision: 0 });
-  const selectView = (mode: CabinView) => setView(current => ({ mode, revision: current.revision + 1 }));
+  const quickAscent = useRef<(() => boolean) | null>(null);
+  const [canAscend, setCanAscend] = useState(false);
+  const [blackout, setBlackout] = useState<'black' | 'reveal' | null>(null);
+  const [view, setView] = useState<{ mode: CabinView; revision: number; cut: boolean }>({ cut: false, mode: outfitPreview ? 'lower' : 'overview', revision: 0 });
+  const selectView = (mode: CabinView, cut = false) => setView(current => ({ mode, cut, revision: current.revision + 1 }));
+  useEffect(() => {
+    if (blackout !== 'black') return;
+    // Leave a fully black frame on screen before moving the resident and selecting the upper camera.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        if (quickAscent.current?.()) selectView('upper', true);
+        // Give the scene a render at the new deck before revealing it.
+        frame = requestAnimationFrame(() => setBlackout('reveal'));
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [blackout]);
   useEffect(() => {
     if (props.viewMode === 'cabin') return () => roomAudio.stopCatMeow();
   }, [props.viewMode]);
@@ -584,7 +604,7 @@ export function OrbitalScene(props: OrbitalSceneProps) {
     <Canvas events={visibleSceneEvents} shadows dpr={[1, 1.6]} gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.0 }}
       onCreated={({ gl }) => { gl.outputColorSpace = THREE.SRGBColorSpace; gl.shadowMap.type = THREE.PCFSoftShadowMap; }}>
       <WorldContent {...props} catMenuOpen={!!catMenu} outfitPreview={outfitPreview}
-        cabinView={view.mode} viewRevision={view.revision} onCabinViewChange={selectView} onAction={action => {
+        quickAscent={quickAscent} onQuickAscentAvailable={setCanAscend} cutToDeck={view.cut} cabinView={view.mode} viewRevision={view.revision} onCabinViewChange={selectView} onAction={action => {
         if (action.kind === 'pet' && action.objectId === 'pet') setCatMenu(action);
         else props.onAction(action);
       }} />
@@ -594,8 +614,12 @@ export function OrbitalScene(props: OrbitalSceneProps) {
       <nav className="orbital-floor-views" aria-label="生活舱视角">
         {CABIN_VIEWS.map(([mode, label]) => <button key={mode} type="button" className="orbital-flight-pill"
           aria-pressed={view.mode === mode} onClick={() => selectView(mode)}>{label}</button>)}
+        {canAscend && <button type="button" className="orbital-flight-pill is-primary"
+          disabled={!!blackout} onClick={() => setBlackout('black')}>快速上楼</button>}
       </nav>
     )}
+    {blackout && createPortal(<div aria-hidden="true" className={`orbital-stair-blackout ${blackout}`}
+      onAnimationEnd={() => setBlackout(null)} />, document.body)}
     {catMenu && <CatInteraction onChoose={choice => {
       setCatMenu(null);
       if (choice) {
