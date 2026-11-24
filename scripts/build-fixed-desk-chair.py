@@ -125,10 +125,10 @@ def seat_cushion(mat, welt):
 
 def build():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    frame = material("Walnut frame", "6C4936", .42)
-    walnut = material("Walnut edge", "80583E", .40)
-    oatmeal = material("Oatmeal upholstery", "CBBBA1", .88)
-    welt = material("Oatmeal welt", "AC9A7F", .86)
+    frame = material("Walnut frame", "5E3E2E", .42)
+    walnut = material("Walnut edge", "78513C", .40)
+    oatmeal = material("Oatmeal upholstery", "7B9479", .90)
+    welt = material("Oatmeal welt", "B8C7B2", .86)
 
     box("Front apron", (0, -.247, .389), (.563, .071, .074), .020, frame)
     box("Rear apron", (0, .167, .389), (.547, .074, .074), .020, frame)

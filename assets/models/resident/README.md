@@ -1,5 +1,15 @@
 # Luna 动画制作源
 
+## 楼梯步态
+
+Luna 上、下楼各取 MotionSmith Take 1 中连续的左右两步。原文件均为 UE5 Manny 骨架、30 fps。帧号从 0 开始，上楼两个步段的边界为 48、64、80，下楼为 57、76、94，分别取脚趾开始离开踏面的帧。导出脚踝推进与抬升、脚掌俯仰、躯干倾斜、双膝屈曲、髋踝相对位置和双侧肩、肘、腕的运动方向。运行时按腿长和踏面尺寸重定向，并在首末级与平台衔接。两个方向都用支撑踝定位骨盆，按原片的前移曲线跨过左右脚换重的瞬间。骨盆至颈部的倾角驱动躯干，头部俯仰单独采样。上楼时，骨盆的抬升曲线限制承重腿伸直时身体的上升速度。下楼时，骨盆的降高曲线控制左右脚换重。前脚掌靠近踏板前缘，后跟越过台阶后逐渐下降，落脚时膝盖保留原片的轻微弯曲。[上楼原片](https://cosindra.ai/motionsmith/motions/walk-upstairs) · [下楼原片](https://cosindra.ai/motionsmith/motions/walk-downstairs)
+
+[步态曲线](./luna-stair-gait.json)约 18.5 KB，随应用打包。原始 GLB 保存在仓库外，来源与文件校验值见[素材清单](../../models.sources.json)。从仓库根目录运行下列命令可重建曲线。
+
+```bash
+node scripts/bake-luna-stairs.mjs /path/to/MotionSmith_walk_upstairs_take1.glb /path/to/MotionSmith_walk_downstairs_take1.glb
+```
+
 ## 云朵连帽衫绑定
 
 [Blender 制作源](./Luna-CloudHoodie.blend)采用用户提供的 Tripo 模型 `1115d436-5d3e-444c-be63-a6141e1f346c.glb`。蓝发、云朵发饰、五官、连帽衫和短裤沿用这份模型。底色图在原 UV 上调整了唇线与眼部高光。袖子与衣身粘连的部分沿腋下拆开，补入两侧布面，以便抬臂取书。下颌尖端已收短并拓圆，主要随头骨运动。贴臂站姿下，衣侧在前臂压到的位置内收，袖子前后两侧的衣料保留蓬度，长袖在肘部上下保留椭圆截面，袖口权重从前臂渐变至手腕，使手腕弯曲时袖口保持开口。制作源包含 115 根骨骼、10 个角色动作和 4 张打包贴图。

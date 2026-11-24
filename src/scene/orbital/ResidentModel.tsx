@@ -10,6 +10,7 @@ import { createSeatedIdlePlayer } from './seatedIdle';
 import { createSleeveContact } from './wardrobe/sleeveContact';
 import { loadResidentAssets, type ResidentAssets } from './wardrobe/residentAssets';
 import type { ResidentOutfit } from './wardrobe/outfit';
+import type { StairGait } from './stairGait';
 
 export { HIP_HEIGHT } from './residentRig';
 export interface ResidentLeg {
@@ -29,6 +30,7 @@ export interface ResidentRig {
   legs: ResidentLeg[]; arms: ResidentArm[]; torso: THREE.Bone; neck: THREE.Bone; head?: THREE.Bone;
   skirtFront: THREE.Bone; skirtBack: THREE.Bone; mesh: THREE.Group;
   applyPose: (phase: number, walkWeight: number) => void;
+  applyStairPose: (gait: StairGait, stairX: number, surfaceAt: (z: number, heelRun?: number) => number) => void;
   followMotion: (dt: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => void;
   fitted?: ResidentAssets['fitted'];
   updateSleeveContact?: () => void;
@@ -38,7 +40,9 @@ export interface ResidentRig {
   dispose: () => void;
 }
 
-function LoadedResident({ assets, rig }: { assets: ResidentAssets; rig: MutableRefObject<ResidentRig | null> }) {
+type OutfitMounted = (outfit: ResidentOutfit, ready: boolean) => void;
+
+function LoadedResident({ assets, rig, onMounted }: { assets: ResidentAssets; rig: MutableRefObject<ResidentRig | null>; onMounted?: OutfitMounted }) {
   const container = useRef<THREE.Group>(null);
   useLayoutEffect(() => {
     const group = container.current!;
@@ -53,6 +57,7 @@ function LoadedResident({ assets, rig }: { assets: ResidentAssets; rig: MutableR
     const restoreSkin = assets.outfit === 'everyday' ? applyResidentSkin(resident.mesh) : undefined;
     group.add(resident.mesh);
     rig.current = resident;
+    onMounted?.(assets.outfit, true);
     return () => {
       if (rig.current === resident) rig.current = null;
       group.remove(resident.mesh);
@@ -60,7 +65,7 @@ function LoadedResident({ assets, rig }: { assets: ResidentAssets; rig: MutableR
       chair.dispose();
       resident.dispose();
     };
-  }, [assets, rig]);
+  }, [assets, rig, onMounted]);
   return <group ref={container} />;
 }
 
@@ -83,8 +88,8 @@ class ResidentBoundary extends React.Component<{ children: React.ReactNode; onFa
   }
 }
 
-export function ResidentModel({ rig, outfit = 'everyday', onFailure, ...props }: ThreeElements['group'] & {
-  rig: MutableRefObject<ResidentRig | null>; outfit?: ResidentOutfit; onFailure?: () => void;
+export function ResidentModel({ rig, outfit = 'everyday', onFailure, onMounted, ...props }: ThreeElements['group'] & {
+  rig: MutableRefObject<ResidentRig | null>; outfit?: ResidentOutfit; onFailure?: () => void; onMounted?: OutfitMounted;
 }) {
   const [assets, setAssets] = useState<ResidentAssets | null>(null);
   const [failed, setFailed] = useState(false);
@@ -97,12 +102,12 @@ export function ResidentModel({ rig, outfit = 'everyday', onFailure, ...props }:
     void loadResidentAssets(outfit).then(value => {
       if (active) setAssets(value);
     }).catch(() => {
-      if (active) { setFailed(true); failureCallback.current?.(); }
+      if (active) { setFailed(true); onMounted?.(outfit, false); failureCallback.current?.(); }
     });
     return () => { active = false; };
-  }, [outfit, attempt]);
+  }, [outfit, attempt, onMounted]);
   return <group {...props}>
-    {assets && <ResidentBoundary key={assets.outfit} onFailure={onFailure}><LoadedResident assets={assets} rig={rig} /></ResidentBoundary>}
+    {assets && <ResidentBoundary key={assets.outfit} onFailure={() => { onMounted?.(assets.outfit, false); onFailure?.(); }}><LoadedResident assets={assets} rig={rig} onMounted={onMounted} /></ResidentBoundary>}
     {failed ? <group onPointerDown={event => { event.stopPropagation(); setAttempt(value => value + 1); }}><ModelStatus failed /></group>
       : !assets && <ModelStatus />}
   </group>;

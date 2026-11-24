@@ -1,32 +1,32 @@
 import { MusicDisc } from '../types/interactable';
+import swedenUrl from '../../assets/audio/records/sweden.mp3';
+import ariaMathUrl from '../../assets/audio/records/aria-math.mp3';
+import subwooferLullabyUrl from '../../assets/audio/records/subwoofer-lullaby.mp3';
 
 export const PRESET_MUSIC_DISCS: MusicDisc[] = [
   {
-    id: 'disc-lofi-sunset',
-    title: '午后暖阳 (Sunset Window)',
-    artist: 'Pocket Studio · Lo-Fi Vinyl',
-    audioUrl: 'synth:lofi-sunset',
+    id: 'disc-sweden',
+    title: 'Sweden',
+    artist: 'C418',
+    audioUrl: swedenUrl,
     discThemeColor: ['#f59e0b', '#fb7185'],
-    synthPreset: 'lofi-sunset',
-    duration: 168,
+    duration: 215.5,
   },
   {
-    id: 'disc-midnight-rain',
-    title: '静谧星夜 (Midnight Study)',
-    artist: 'Pocket Studio · Ambient',
-    audioUrl: 'synth:midnight-rain',
+    id: 'disc-aria-math',
+    title: 'Aria Math',
+    artist: 'C418',
+    audioUrl: ariaMathUrl,
     discThemeColor: ['#38bdf8', '#818cf8'],
-    synthPreset: 'midnight-rain',
-    duration: 194,
+    duration: 310,
   },
   {
-    id: 'disc-warm-vinyl',
-    title: '木质留声 (Warm Oak & Coffee)',
-    artist: 'Pocket Studio · Acoustic',
-    audioUrl: 'synth:warm-vinyl',
+    id: 'disc-subwoofer-lullaby',
+    title: 'Subwoofer Lullaby',
+    artist: 'C418',
+    audioUrl: subwooferLullabyUrl,
     discThemeColor: ['#34d399', '#059669'],
-    synthPreset: 'warm-vinyl',
-    duration: 152,
+    duration: 208.56,
   },
   {
     id: 'disc-starlight-dream',

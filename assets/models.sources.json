@@ -234,7 +234,7 @@
       "used": true,
       "bytes": 4335876,
       "sha256": "1f1b0d3fe76287c155315c5f31a664d4c7112b970e42d489bbcef5ec881db2f3",
-      "processing": "Six joined collections with per-board vertex colors. The foot-of-bed rug and modeled slippers share the Rugs collection. Original wood and ivory pile textures are embedded. Export with scripts/export-open-cabin.py."
+      "processing": "Two decks with per-board vertex colors. Interactable_Wardrobe contains the case, linen shelves and a separately animated sliding door with its brass pull. The foot-of-bed rug and modeled slippers share the Rugs collection. Original wood and ivory pile textures are embedded. Export with scripts/export-open-cabin.py."
     },
     {
       "file": "cabin/spacecraft-hull.glb",
@@ -291,6 +291,24 @@
       "bytes": 2223904,
       "sha256": "d00440305c32b54ff0eb52f28e1c56d099fb85f396a31e03934e7f3166560be7",
       "processing": "Adjusted embedded albedo for the warm cabin palette. Reuses the supplied geometry and attachment pivots."
+    }
+  ],
+  "bundledAnimations": [
+    {
+      "file": "assets/models/resident/luna-stair-gait.json",
+      "source": "Cosindra MotionSmith, Walk up stairs and Walk down stairs, Take 1 on UE5 Manny, 30 fps.",
+      "sourcePage": "https://cosindra.ai/motionsmith/motions/walk-upstairs",
+      "sourceSha256": {
+        "MotionSmith_walk_downstairs_take1.glb": "31b81905b1dd1fa354cf9ccc8fd6f7e563f8ff2032bc21cb2878bd9d4a8484da",
+        "MotionSmith_walk_upstairs_take1.glb": "be214a8617c60c13dd33200a8ac20a0df4eee04d3cf768d3ce69113724f2f1ef"
+      },
+      "license": "The MotionSmith gallery permits commercial use in games and other projects without attribution.",
+      "licensePage": "https://cosindra.ai/license",
+      "used": true,
+      "bytes": 19324,
+      "sha256": "519fcea80093b9ea1d397fcee19bef3fdf67273381142f9aa60f44f59c9f1f46",
+      "processing": "scripts/bake-luna-stairs.mjs samples consecutive right and left steps from the original GLBs. The shipped profiles contain ankle travel, pitch, torso lean, knee flexion, hip offsets and upper arm, forearm and hand directions. Both directions store pelvis travel relative to the planted ankle, vertical travel and head pitch through each toe-off. Character meshes and original clips are not bundled.",
+      "descentSourcePage": "https://cosindra.ai/motionsmith/motions/walk-downstairs"
     }
   ]
 }

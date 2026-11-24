@@ -23,12 +23,12 @@ export function FurnitureBookcase({ world }: { world: WorldModelProps }) {
 </>} />
     </ObjectHandle>
     {/* Retain the original functional cavity: the supplied closed shell has no interior. */}
-    <SoftBox dims={[1.08, .45, .025]} position={[0, .38, -.255]} color="#8a654b" />
-    <SoftBox dims={[1.08, .04, .52]} position={[0, .14, 0]} color={C.wood} />
-    {[-.535,.535].map(x => <SoftBox key={x} dims={[.03,.45,.50]} position={[x,.38,0]} color={C.wood} />)}
+    <SoftBox dims={[1.08, .45, .025]} position={[0, .38, -.255]} color="#efe9dd" />
+    <SoftBox dims={[1.08, .04, .52]} position={[0, .14, 0]} color="#6c8a7d" />
+    {[-.535,.535].map(x => <SoftBox key={x} dims={[.03,.45,.50]} position={[x,.38,0]} color="#6c8a7d" />)}
     <ObjectHandle id="cabinet" action={cabinet.open ? 'close' : 'open'} hint={cabinet.open ? '关上柜门' : '拉开柜门'} world={world} drag="x">
       <FurnitureMotion target={cabinet.open ? -1.75 : 0} reducedMotion={world.reducedMotion} position={[-0.52, 0.38, 0.286]}>
-        <SoftBox dims={[1.04, .45, .025]} position={[.52, 0, -.025]} color={C.wood} />
+        <SoftBox dims={[1.04, .45, .025]} position={[.52, 0, -.025]} color="#6c8a7d" />
         <SuppliedAsset name="cabinet.parts" part="door" size={[1.18, 1.59, .54]} fit="contact" position={[.52, -.38, -.286]} fallback={<>        <SoftBox dims={[1.04, 0.45, 0.045]} position={[0.52, 0, 0]} color={C.wood} />
         <Tube points={[[0.9, -0.06, 0.03], [0.9, -0.06, 0.07], [0.9, 0.06, 0.07], [0.9, 0.06, 0.03]]} radius={0.012} color={C.brass} />
 </>} />
