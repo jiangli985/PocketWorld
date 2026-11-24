@@ -5,11 +5,10 @@ import { load } from '../src/scene/orbital/load-for-validation.mjs';
 import { createResidentRig } from '../src/scene/orbital/residentRig.ts';
 
 const directory = process.argv[2];
-if (!directory) throw new Error('Pass the directory containing the seven MotionSmith GLBs.');
+if (!directory) throw new Error('Pass the directory containing the six MotionSmith GLBs.');
 
 const takes = {
   floorSit: 'sit_floor_take2',
-  hugKnees: 'sit_hug_knees_take1',
   floorStand: 'stand_up_floor_take1',
   pickUp: 'pick_up_take1',
   rubEye: 'rub_eye_take1',
@@ -205,10 +204,9 @@ async function bake(outfit, file) {
     const duration = data.gltf.animations[0].duration;
     const frameCount = Math.round(duration * 30) + 1;
     const upperOnly = ['rubEye', 'think', 'reachHigh'].includes(name);
-    const seated = ['floorSit', 'hugKnees', 'floorStand'].includes(name);
-    data.sample(name === 'floorStand' || name === 'hugKnees' ? duration : 0);
+    const seated = name === 'floorSit' || name === 'floorStand';
+    data.sample(name === 'floorStand' ? duration : 0);
     const sourceAnchor = point(source.get('Hips'));
-    if (name === 'hugKnees') sourceAnchor.y = point(source.get('Hips')).y + .81;
     const sampleBones = [...target].filter(([key]) => !upperOnly || upper.test(key));
     const tracks = sampleBones.map(([, joint]) => ({ joint, path: 'rotation', values: [] }));
     if (!upperOnly) tracks.push({ joint: hips, path: 'translation', values: [] });
@@ -239,10 +237,10 @@ async function bake(outfit, file) {
         const ground = Math.max(neutralFloor, .002);
         hips.position.copy(hipParent.worldToLocal(neutralHips.clone().add(offset).add(new Vector3(0, ground - floor, 0))));
         const settle = name === 'floorSit' ? MathUtils.smoothstep(t, 3.10, 3.7)
-          : name === 'hugKnees' ? 1 : name === 'floorStand' ? 1 - MathUtils.smoothstep(t, .4, 1.2) : 0;
+          : name === 'floorStand' ? 1 - MathUtils.smoothstep(t, .4, 1.2) : 0;
         if (settle > 0) for (const [index, side] of ['Left', 'Right'].entries()) {
           const foot = target.get(side + 'Foot');
-          const clearance = name === 'hugKnees' ? .004 : index === 0 ? .026 : .008;
+          const clearance = index === 0 ? .026 : .008;
           const correction = MathUtils.clamp(ground + clearance - soles[index](), -.13, .08) * settle;
           moveEnd(target.get(side + 'UpLeg'), target.get(side + 'Leg'), foot, point(foot).add(new Vector3(0, correction, 0)));
         }

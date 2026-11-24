@@ -1,4 +1,4 @@
-import { RUG_SEAT, RUG_TOP, RUG_YAW, PAPER_GRIP_TIME, PAPER_PICKUP_REACH, PAPER_PICKUP_PREFIX, advanceCabinPerformance, applyCabinPerformance, createCabinActionPlayer, isPaperPickup, isRugSeat, leaveCabinPerformance, loadCabinActions, newRugPerformance, setRugPose, type CabinPerformance, type PaperPickup } from './cabinActions';
+import { RUG_SEAT, RUG_TOP, RUG_YAW, PAPER_GRIP_TIME, PAPER_PICKUP_REACH, PAPER_PICKUP_PREFIX, advanceCabinPerformance, applyCabinPerformance, createCabinActionPlayer, isPaperPickup, isRugSeat, leaveCabinPerformance, loadCabinActions, newRugPerformance, type CabinPerformance, type PaperPickup } from './cabinActions';
 import { SOFA_ENTRY, SOFA_STEPS, loadSofaClip, sofaPlayer } from './sofaMotion';
 import { BEDROOM_LEFT, CABIN_DIVIDER_X, DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, PLUSH_FLOOR_BOUNDS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
 import { CABIN_STAIRS, STAIR_DISTANCE, STAIR_TREAD_RUN, atStairEntrance, otherDeck, sampleCabinStairs, stairDestination, stairLanding, type CabinResidentView } from './cabinStairs';
@@ -487,7 +487,6 @@ export function OrbitalResidents(props: ResidentsProps) {
         const performance = cabinPerformance.current;
         if (performance) {
           if (event.code === 'KeyE') stand();
-          else if (performance.kind === 'floor') setRugPose(performance, event.code === 'KeyR');
           return;
         }
         if (state.current.posture !== 'standing' || p.objects.chair?.active || p.objects.sofa?.active) {
@@ -1022,7 +1021,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     const nearbyList = p.showNearbyHints === false ? [] : nearbyActions();
     const nearby = nearbyList[0] ?? null;
     const rugHint = cabinPerformance.current?.kind === 'floor' && !cabinPerformance.current.leaving
-      && p.enabled && p.showNearbyHints !== false ? 'E · 起身　Q · 盘腿坐　R · 抱膝坐' : '';
+      && p.enabled && p.showNearbyHints !== false ? 'E · 起身' : '';
     const hint = rugHint || (p.enabled && p.showNearbyHints !== false && (s.posture !== 'standing' || wanted !== 'standing')
       ? canUseComputer() ? 'E · 起身　Q · 使用电脑' : 'E · 起身'
       : nearbyList.map((target, index) => `${INTERACT_LABELS[index]} · ${target.hint}`).join('　'));

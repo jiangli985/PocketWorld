@@ -8,7 +8,7 @@ export const RUG_TOP = .013;
 export const PAPER_PICKUP_REACH = .44;
 export const PAPER_GRIP_TIME = 1.9;
 export const PAPER_PICKUP_PREFIX = 'schedule-paper-';
-export const CABIN_ACTIONS = ['floorSit', 'hugKnees', 'floorStand', 'pickUp', 'rubEye', 'think', 'reachHigh'] as const;
+export const CABIN_ACTIONS = ['floorSit', 'floorStand', 'pickUp', 'rubEye', 'think', 'reachHigh'] as const;
 type CabinActionName = typeof CABIN_ACTIONS[number];
 type CabinClips = Record<CabinActionName, AnimationClip>;
 export type PaperPickup = { id: string; position: Vector3 };
@@ -54,32 +54,23 @@ export function createCabinActionPlayer(root: Object3D, clips: CabinClips) {
 }
 
 type FloorPerformance = {
-  kind: 'floor'; phase: 'sit' | 'seated' | 'hug' | 'unhug' | 'rise' | 'undo-sit';
-  time: number; wantsHug: boolean; leaving: boolean;
+  kind: 'floor'; phase: 'sit' | 'seated' | 'rise' | 'undo-sit';
+  time: number; leaving: boolean;
 };
 type PickupPerformance = {
   kind: 'paper'; time: number; leaving: boolean; id: string; point: Vector3;
   offset: Vector3 | null; complete: () => void;
 };
 export type CabinPerformance = FloorPerformance | PickupPerformance;
-export const newRugPerformance = (random = Math.random): FloorPerformance => ({
-  kind: 'floor', phase: 'sit', time: 0, wantsHug: random() < .5, leaving: false,
+export const newRugPerformance = (): FloorPerformance => ({
+  kind: 'floor', phase: 'sit', time: 0, leaving: false,
 });
 export function leaveCabinPerformance(performance: CabinPerformance) {
   performance.leaving = true;
   if (performance.kind === 'paper') return;
   if (performance.phase === 'sit') performance.phase = 'undo-sit';
-  if (performance.phase === 'hug') performance.phase = 'unhug';
   if (performance.phase === 'seated') { performance.phase = 'rise'; performance.time = 0; }
 }
-export function setRugPose(performance: FloorPerformance, wantsHug: boolean) {
-  if (performance.leaving) return;
-  performance.wantsHug = wantsHug;
-  if (performance.phase === 'seated' && wantsHug) { performance.phase = 'hug'; performance.time = 0; }
-  if (performance.phase === 'hug' && !wantsHug) performance.phase = 'unhug';
-  if (performance.phase === 'unhug' && wantsHug) performance.phase = 'hug';
-}
-
 export function advanceCabinPerformance(performance: CabinPerformance, dt: number, clips: CabinClips) {
   const { time } = performance;
   if (performance.kind === 'paper') {
@@ -90,20 +81,13 @@ export function advanceCabinPerformance(performance: CabinPerformance, dt: numbe
     case 'sit':
       performance.time = Math.min(clips.floorSit.duration, time + dt);
       if (performance.time === clips.floorSit.duration) {
-        performance.phase = performance.wantsHug ? 'hug' : 'seated';
+        performance.phase = 'seated';
         performance.time = 0;
       }
       break;
     case 'undo-sit':
       performance.time = Math.max(0, time - dt);
       return performance.time === 0;
-    case 'hug':
-      performance.time = Math.min(clips.hugKnees.duration, time + dt);
-      break;
-    case 'unhug':
-      performance.time = Math.max(0, time - dt * 2.5);
-      if (performance.time === 0) performance.phase = performance.leaving ? 'rise' : 'seated';
-      break;
     case 'rise':
       performance.time = Math.min(clips.floorStand.duration, time + dt);
       return performance.time === clips.floorStand.duration;
@@ -127,6 +111,5 @@ export function applyCabinPerformance(
     apply('floorStand', time, entry * MathUtils.smoothstep(clips.floorStand.duration - time, 0, .50));
   } else {
     apply('floorSit', clips.floorSit.duration);
-    if (performance.phase !== 'seated') apply('hugKnees', time, MathUtils.smoothstep(time, 0, .82));
   }
 }

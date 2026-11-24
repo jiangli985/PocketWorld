@@ -5,7 +5,7 @@ import { Raycaster, SkinnedMesh, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   CABIN_ACTIONS, advanceCabinPerformance, applyCabinPerformance, createCabinActionPlayer,
-  leaveCabinPerformance, newRugPerformance, setRugPose,
+  leaveCabinPerformance, newRugPerformance,
 } from './cabinActions.ts';
 import { createIdleState, stepIdle } from './standingIdle.ts';
 import { createResidentRig } from './residentRig.ts';
@@ -13,21 +13,17 @@ import { load } from './load-for-validation.mjs';
 
 const model = name => new URL('../../../assets/public/models/resident/luna-' + name + '.glb', import.meta.url);
 
-test('rug exit undoes a partial sit and uses the authored rise after either held pose', () => {
-  const clips = { floorSit: { duration: 5 }, hugKnees: { duration: 6 }, floorStand: { duration: 5 } };
-  const partial = newRugPerformance(() => .5);
+test('rug exit undoes a partial sit and uses the authored rise after sitting cross-legged', () => {
+  const clips = { floorSit: { duration: 5 }, floorStand: { duration: 5 } };
+  const partial = newRugPerformance();
   advanceCabinPerformance(partial, .9, clips);
   leaveCabinPerformance(partial);
   assert.equal(partial.phase, 'undo-sit');
   assert.equal(advanceCabinPerformance(partial, .9, clips), true);
-  const rest = newRugPerformance(() => 0);
+  const rest = newRugPerformance();
   advanceCabinPerformance(rest, 5, clips);
-  assert.equal(rest.phase, 'hug');
-  advanceCabinPerformance(rest, 5.8, clips);
+  assert.equal(rest.phase, 'seated');
   leaveCabinPerformance(rest);
-  assert.equal(rest.phase, 'unhug');
-  setRugPose(rest, true);
-  advanceCabinPerformance(rest, 3, clips);
   assert.equal(rest.phase, 'rise');
   const applied = [];
   applyCabinPerformance(rest, clips, (...args) => applied.push(args));
@@ -35,18 +31,15 @@ test('rug exit undoes a partial sit and uses the authored rise after either held
   assert.equal(advanceCabinPerformance(rest, 5, clips), true);
 });
 
-test('rug entry draws either resting pose once and respects a later manual selection', () => {
+test('the rug holds the last cross-legged frame until the resident leaves', () => {
   const clips = { floorSit: { duration: 5 } };
-  for (const [draw, phase] of [[0, 'hug'], [.4999, 'hug'], [.5, 'seated'], [.9999, 'seated']]) {
-    let draws = 0;
-    const seat = newRugPerformance(() => { draws++; return draw; });
-    advanceCabinPerformance(seat, 2, clips);
-    advanceCabinPerformance(seat, 3, clips);
-    assert.equal(seat.phase, phase);
-    setRugPose(seat, phase === 'seated');
-    assert.equal(seat.phase, phase === 'seated' ? 'hug' : 'unhug');
-    assert.equal(draws, 1);
-  }
+  const seat = newRugPerformance();
+  advanceCabinPerformance(seat, 5, clips);
+  assert.equal(advanceCabinPerformance(seat, 60, clips), false);
+  assert.equal(seat.phase, 'seated');
+  const applied = [];
+  applyCabinPerformance(seat, clips, (...args) => applied.push(args));
+  assert.deepEqual(applied, [['floorSit', 5]]);
 });
 
 test('interrupted pickup returns to the start without visiting the completion pose', () => {
@@ -110,7 +103,7 @@ function checkLapCoverage(root) {
 }
 
 for (const [outfit, name] of [['everyday', 'walk-room'], ['snowflower', 'snowflower'], ['cloudhoodie', 'cloudhoodie']]) {
-  test(`seven MotionSmith takes bind and keep ${outfit} close to the rug during floor holds`, async () => {
+  test(`six MotionSmith takes bind and keep ${outfit} close to the rug during floor holds`, async () => {
     const data = await readFile(model('cabin-actions-' + outfit));
     const { animations } = await new GLTFLoader().parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '');
     assert.deepEqual(animations.map(clip => clip.name), CABIN_ACTIONS);
@@ -128,13 +121,11 @@ for (const [outfit, name] of [['everyday', 'walk-room'], ['snowflower', 'snowflo
         apply(clip.name, clip.duration * .5);
         assert.ok(Number.isFinite(boneY('Hips')));
       }
-      for (const action of ['floorSit', 'hugKnees']) {
-        rig.applyPose(0, 0);
-        apply(action, clips[action].duration);
-        assert.ok(boneY('Hips') < .23, 'seated pelvis stays close to the rug');
-        assert.ok(Math.min(boneY('LeftFoot'), boneY('RightFoot')) < .16);
-        if (action === 'floorSit' && outfit !== 'cloudhoodie') checkLapCoverage(rig.mesh);
-      }
+      rig.applyPose(0, 0);
+      apply('floorSit', clips.floorSit.duration);
+      assert.ok(boneY('Hips') < .23, 'seated pelvis stays close to the rug');
+      assert.ok(Math.min(boneY('LeftFoot'), boneY('RightFoot')) < .16);
+      if (outfit !== 'cloudhoodie') checkLapCoverage(rig.mesh);
       rig.applyPose(0, 0);
       apply('floorStand', clips.floorStand.duration);
       assert.ok(boneY('Hips') > .65);
