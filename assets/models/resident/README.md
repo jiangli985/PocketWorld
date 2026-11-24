@@ -76,6 +76,18 @@ python scripts/pack-luna-chair.py --output <外部目录>
 
 制作脚本检查原生 98 帧的接触面；运行时单测检查时间原点、绑定、独立实例、恢复、骨长与有限坐标。网页动作和导出后网格还需单独验收，不能用原生检查替代浏览器检查。验证结果及截图放在任务 PR，临时模型、报告和录屏不提交。
 
+## 坐姿待机
+
+懒人沙发托腮采用 CMU `13_04` 的左肘弯曲和头部转向（120 Hz，第 1573–2149 帧）。桌前固定椅晃腿采用 CMU `01_06` 坐在高处时的左右膝屈伸（120 Hz，第 985–1357 帧）。两段均从原始记录取坐稳后的片段，并导出为 10 Hz 曲线，托腮的放手段略放慢。网页在既有落座姿势上求解手掌接触和小腿摆角。懒人沙发保留原有骨盆、贴地双脚和坐垫承重。固定椅保留臀部与膝位。三个服装使用各自的下颌接触点，连帽衫的空闲手放在腿上以给袖口留空间。
+
+下载 [13_04.amc](https://mocap.cs.cmu.edu/subjects/13/13_04.amc) 和 [01_06.amc](https://mocap.cs.cmu.edu/subjects/01/01_06.amc) 到仓库外的同一目录，从仓库根目录运行以下命令生成 `src/scene/orbital/seatedIdleFrames.ts`。
+
+```sh
+python3 scripts/extract-luna-seated-idles.py <AMC目录>
+```
+
+动捕由 CMU Graphics Lab 在 NSF EIA-0196217 资助下制作，允许在商业作品中使用及改编。原始或转换后的数据适用数据库条款。 [CMU Motion Capture Database](https://mocap.cs.cmu.edu/)
+
 ## 日常裙装的站姿修形
 
 [`Luna-ArmContact.blend`](Luna-ArmContact.blend) 打开时显示放松后的站姿，可在 `Luna_Surface` 的 Shape Keys 中分别调节 `LeftArmContact` 和 `RightArmContact`。两侧修形对应裙侧的受压和腋下过渡。运行时按同侧上臂、前臂朝下的程度和前伸幅度调节权重，抬手时释放。固定椅、沙发和取阅书籍使用已有接触姿势。
