@@ -51,15 +51,27 @@ test('interrupted pickup returns to the start without visiting the completion po
   assert.equal(pickup.time, 0);
 });
 
-test('rub eye and think participate in the short idle schedule without overlapping bigger motions', () => {
+test('pickup and placement play opposite directions and cancellation returns to the original endpoint', () => {
+  const clips = { pickUp: { duration: 4 } };
+  for (const placing of [false, true]) {
+    const performance = { kind: 'plush', placing, time: placing ? 4 : 0, leaving: false };
+    assert.equal(advanceCabinPerformance(performance, 1.5, clips), false);
+    assert.equal(performance.time, placing ? 2.5 : 1.5);
+    leaveCabinPerformance(performance);
+    assert.equal(advanceCabinPerformance(performance, 2, clips), true);
+    assert.equal(performance.time, placing ? 4 : 0);
+  }
+});
+
+test('rub eye remains a standing idle while thinking is reserved for choosing a book', () => {
   const idle = createIdleState(() => 0);
   const seen = new Set();
   for (let i = 0; i < 3600; i++) {
-    stepIdle(idle, .05, true, 8, () => 0, 6, true, { rubEye: 3, think: 5 });
+    stepIdle(idle, .05, true, 8, () => 0, 6, true, { rubEye: 3 });
     assert.ok([idle.yawnTime, idle.lookTime, idle.shortTime].filter(time => time >= 0).length <= 1);
     if (idle.shortTime >= 0) seen.add(idle.shortKind);
   }
-  assert.deepEqual([...seen], ['listen', 'clasp', 'rubEye', 'think']);
+  assert.deepEqual([...seen], ['listen', 'clasp', 'rubEye']);
   stepIdle(idle, .05, false, 8, () => 0, 6);
   assert.equal(idle.elapsed, 0);
 });

@@ -12,11 +12,11 @@ export const STANDING_IDLE = {
 const smooth = (value: number) => { const t = THREE.MathUtils.clamp(value, 0, 1); return t * t * (3 - 2 * t); };
 const interval = (range: readonly number[], random: () => number) => range[0] + random() * (range[1] - range[0]);
 
-type ShortGesture = keyof typeof STANDING_IDLE.shortDuration | 'rubEye' | 'think';
-type ExtraGestures<T> = Partial<Record<'rubEye' | 'think', T>>;
-const shortOrder: readonly ShortGesture[] = ['listen', 'clasp', 'rubEye', 'think'];
+type ShortGesture = keyof typeof STANDING_IDLE.shortDuration | 'rubEye';
+type ExtraGestures<T> = Partial<Record<'rubEye', T>>;
+const shortOrder: readonly ShortGesture[] = ['listen', 'clasp', 'rubEye'];
 const shortDuration = (kind: ShortGesture, extra: ExtraGestures<number>) =>
-  kind === 'rubEye' || kind === 'think' ? extra[kind] ?? 0 : STANDING_IDLE.shortDuration[kind];
+  kind === 'rubEye' ? extra[kind] ?? 0 : STANDING_IDLE.shortDuration[kind];
 
 export function createIdleState(random = Math.random) {
   return { elapsed: 0, phase: 0, weight: 0, restWeight: 0, yawnTime: -1, yawnWeight: 0,
@@ -146,7 +146,7 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
     return { joint, curve: track.createInterpolant() };
   }) ?? [];
   const yawnChannels = bind(clip), lookChannels = bind(lookClip);
-  const rubEye = bind(extra.rubEye), think = bind(extra.think);
+  const rubEye = bind(extra.rubEye);
   const fittedSleeves = root.userData.outfit === 'cloudhoodie';
   const spine = bone('Spine2'), neck = bone('Neck'), head = bone('Head');
   const arms = (['Right', 'Left'] as const).map(side => {
@@ -221,11 +221,11 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
       }
     }
     if (!animate) return;
-    const short = state.shortTime >= 0 && (state.shortKind === 'rubEye' || state.shortKind === 'think');
+    const short = state.shortTime >= 0 && state.shortKind === 'rubEye';
     const time = short ? state.shortTime : state.lookTime >= 0 ? state.lookTime : state.yawnTime;
     const gestureWeight = short ? shortWeight : state.lookTime >= 0 ? state.lookWeight : state.yawnWeight;
     if (time < 0 || !gestureWeight) return;
-    const channels = short ? state.shortKind === 'rubEye' ? rubEye : think : state.lookTime >= 0 ? lookChannels : yawnChannels;
+    const channels = short ? rubEye : state.lookTime >= 0 ? lookChannels : yawnChannels;
     for (const { joint, curve } of channels) {
       rotation.fromArray(curve.evaluate(time));
       joint.quaternion.slerp(rotation, gestureWeight);

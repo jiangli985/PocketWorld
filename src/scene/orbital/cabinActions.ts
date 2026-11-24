@@ -6,7 +6,7 @@ export const RUG_SEAT: [number, number] = [-4.06, .32];
 export const RUG_YAW = .32;
 export const RUG_TOP = .013;
 export const PAPER_PICKUP_REACH = .44;
-export const PAPER_GRIP_TIME = 1.9;
+export const PICKUP_GRIP_TIME = 1.9;
 export const PAPER_PICKUP_PREFIX = 'schedule-paper-';
 export const CABIN_ACTIONS = ['floorSit', 'floorStand', 'pickUp', 'rubEye', 'think', 'reachHigh'] as const;
 type CabinActionName = typeof CABIN_ACTIONS[number];
@@ -61,21 +61,23 @@ type PickupPerformance = {
   kind: 'paper'; time: number; leaving: boolean; id: string; point: Vector3;
   offset: Vector3 | null; complete: () => void;
 };
-export type CabinPerformance = FloorPerformance | PickupPerformance;
+type PlushPerformance = { kind: 'plush'; placing: boolean; time: number; leaving: boolean };
+export type CabinPerformance = FloorPerformance | PickupPerformance | PlushPerformance;
 export const newRugPerformance = (): FloorPerformance => ({
   kind: 'floor', phase: 'sit', time: 0, leaving: false,
 });
 export function leaveCabinPerformance(performance: CabinPerformance) {
   performance.leaving = true;
-  if (performance.kind === 'paper') return;
+  if (performance.kind !== 'floor') return;
   if (performance.phase === 'sit') performance.phase = 'undo-sit';
   if (performance.phase === 'seated') { performance.phase = 'rise'; performance.time = 0; }
 }
 export function advanceCabinPerformance(performance: CabinPerformance, dt: number, clips: CabinClips) {
   const { time } = performance;
-  if (performance.kind === 'paper') {
-    performance.time = MathUtils.clamp(time + (performance.leaving ? -dt : dt), 0, clips.pickUp.duration);
-    return performance.leaving ? performance.time === 0 : performance.time === clips.pickUp.duration;
+  if (performance.kind !== 'floor') {
+    const reverse = performance.leaving !== (performance.kind === 'plush' && performance.placing);
+    performance.time = MathUtils.clamp(time + (reverse ? -dt : dt), 0, clips.pickUp.duration);
+    return reverse ? performance.time === 0 : performance.time === clips.pickUp.duration;
   }
   switch (performance.phase) {
     case 'sit':
@@ -99,7 +101,7 @@ export function applyCabinPerformance(
   performance: CabinPerformance, clips: CabinClips, apply: ReturnType<typeof createCabinActionPlayer>,
 ) {
   const { time } = performance;
-  if (performance.kind === 'paper') {
+  if (performance.kind !== 'floor') {
     apply('pickUp', time, MathUtils.smoothstep(time, 0, .45) * MathUtils.smoothstep(clips.pickUp.duration - time, 0, .36));
     return;
   }

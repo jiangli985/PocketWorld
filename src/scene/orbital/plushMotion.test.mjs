@@ -1,3 +1,4 @@
+import { dropSpot } from './plushCarry.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -133,4 +134,12 @@ test('support height, rug floor elevation and live obstacle boxes stay physicall
   const bodies = createPlushBodies([makeDoll('plush-bunny', 1.2, 0.5, 0.20)]);
   const [box] = plushObstacleBoxes(bodies, 0.11);
   assert.ok(Math.abs(box[0] - (1.2 - 0.31)) < 1e-6 && Math.abs(box[1] - (1.2 + 0.31)) < 1e-6);
+});
+
+test('placement chooses clear ground beside the carrier on the current deck', () => {
+  const [toy, other] = createPlushBodies([makeDoll('plush-penguin', 1, 1), makeDoll('plush-bunny', -4, .5)]);
+  const spot = dropSpot(toy, -4, 0, 0, [], [toy, other]);
+  assert.ok(spot && spot.x < -2);
+  assert.ok(Math.hypot(spot.x - other.x, spot.z - other.z) >= toy.radius + other.radius);
+  assert.equal(dropSpot(toy, -4, 0, 0, [[-5, -3, -1, 1]], [toy]), null);
 });

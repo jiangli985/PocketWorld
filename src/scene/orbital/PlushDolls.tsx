@@ -1,22 +1,29 @@
-import React, { Suspense, useEffect, useMemo, useRef } from 'react';
+import React, { Suspense, useContext, useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { PLUSH_DOLLS, deckFromAuthoredX, type PlushDollPlacement } from './cabinLayout';
-import { CabinUpperDeck } from './CabinUpperDeck';
+import { PLUSH_DOLLS, UPPER_DECK_OFFSET, deckFromAuthoredX, type PlushDollPlacement } from './cabinLayout';
+import { UpperDeckVisibility } from './CabinUpperDeck';
 import { AssetBoundary } from './ReusableAsset';
 import { isValidPlushBody, plushFloorY, plushSupportHeight, type PlushBody } from './plushMotion';
+import { ObjectHandle } from './ObjectHandle';
+import type { WorldModelProps } from '../../types/world';
+import { plushLabels, type PlushGrip } from './plushCarry';
 
 interface PlushDollItemProps {
+  grip: React.RefObject<PlushGrip | null>;
+  world: WorldModelProps;
   doll: PlushDollPlacement;
   index: number;
   bodies: React.MutableRefObject<PlushBody[]>;
 }
 
-function LoadedPlushDoll({ doll, index, bodies }: PlushDollItemProps) {
+function LoadedPlushDoll({ doll, index, bodies, grip, world }: PlushDollItemProps) {
   const gltf = useGLTF(`${import.meta.env.BASE_URL}models/${doll.path}`);
   const group = useRef<THREE.Group>(null);
 
+  const upperVisible = useContext(UpperDeckVisibility);
+  const hand = useMemo(() => new THREE.Vector3(), []);
   const prepared = useMemo(() => {
     const clone = gltf.scene.clone(true);
     clone.traverse(object => {
@@ -59,31 +66,32 @@ function LoadedPlushDoll({ doll, index, bodies }: PlushDollItemProps) {
     const root = group.current;
     const body = bodies.current[index];
     if (!root || !isValidPlushBody(body)) return;
-    const floor = plushFloorY(body.x, body.z);
+    const held = grip.current?.body === body ? grip.current : null;
+    const x = held?.floorX ?? body.x, z = held?.floorZ ?? body.z;
+    const upper = deckFromAuthoredX(x) === 'upper';
+    const weight = held?.handWeight ?? 0;
     const support = plushSupportHeight(body.roll, body.pitch, prepared.halfWidth, prepared.halfHeight, prepared.halfDepth);
-    root.position.set(body.x, floor + support + body.y, body.z);
-    root.rotation.order = 'YXZ';
-    root.rotation.set(body.pitch, body.yaw, body.roll);
+    root.position.set(x + (upper ? UPPER_DECK_OFFSET[0] : 0),
+      plushFloorY(x, z) + support + body.y + (upper ? UPPER_DECK_OFFSET[1] : 0), z);
+    if (held && weight) root.position.lerp(root.parent!.worldToLocal(hand.copy(held.center)), weight);
+    root.visible = held ? held.visible : !upper || upperVisible;
+    const turn = held ? Math.atan2(Math.sin(held.yaw - body.yaw), Math.cos(held.yaw - body.yaw)) : 0;
+    root.rotation.set(body.pitch * (1 - weight), body.yaw + turn * weight, body.roll * (1 - weight), 'YXZ');
+
   });
 
   return <group ref={group} name={doll.name}
     position={[doll.position[0], plushFloorY(doll.position[0], doll.position[2]) + prepared.halfHeight, doll.position[2]]}
     rotation={[0, doll.yaw, 0]} dispose={null}>
-    <primitive object={prepared.model} />
+    <ObjectHandle id={doll.id} action="inspect" hint={`拿起或放下${plushLabels[doll.id]}`} panorama world={world}
+      acceptsHit={() => !!group.current?.visible} onClick={event => event.stopPropagation()}>
+      <primitive object={prepared.model} />
+    </ObjectHandle>
   </group>;
 }
 
-export function PlushDolls({ bodies }: { bodies: React.MutableRefObject<PlushBody[]> }) {
-  return <>
-    {PLUSH_DOLLS.map((doll, index) => {
-      const item = <AssetBoundary>
-        <Suspense fallback={null}>
-          <LoadedPlushDoll doll={doll} index={index} bodies={bodies} />
-        </Suspense>
-      </AssetBoundary>;
-      return deckFromAuthoredX(doll.position[0]) === 'upper'
-        ? <CabinUpperDeck key={doll.id}>{item}</CabinUpperDeck>
-        : <React.Fragment key={doll.id}>{item}</React.Fragment>;
-    })}
-  </>;
+export function PlushDolls(props: Omit<PlushDollItemProps, 'doll' | 'index'>) {
+  return <>{PLUSH_DOLLS.map((doll, index) => <AssetBoundary key={doll.id}>
+    <Suspense fallback={null}><LoadedPlushDoll {...props} doll={doll} index={index} /></Suspense>
+  </AssetBoundary>)}</>;
 }

@@ -1,6 +1,7 @@
-import { RUG_SEAT, RUG_TOP, RUG_YAW, PAPER_GRIP_TIME, PAPER_PICKUP_REACH, PAPER_PICKUP_PREFIX, advanceCabinPerformance, applyCabinPerformance, createCabinActionPlayer, isPaperPickup, isRugSeat, leaveCabinPerformance, loadCabinActions, newRugPerformance, type CabinPerformance, type PaperPickup } from './cabinActions';
+import { createPlushPose, dropSpot, gripPlush, plushBounds, plushLabels, type PlushGrip } from './plushCarry';
+import { RUG_SEAT, RUG_TOP, RUG_YAW, PICKUP_GRIP_TIME, PAPER_PICKUP_REACH, PAPER_PICKUP_PREFIX, advanceCabinPerformance, applyCabinPerformance, createCabinActionPlayer, isPaperPickup, isRugSeat, leaveCabinPerformance, loadCabinActions, newRugPerformance, type CabinPerformance, type PaperPickup } from './cabinActions';
 import { SOFA_ENTRY, SOFA_STEPS, loadSofaClip, sofaPlayer } from './sofaMotion';
-import { BEDROOM_LEFT, CABIN_DIVIDER_X, DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, PLUSH_FLOOR_BOUNDS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
+import { DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
 import { CABIN_STAIRS, STAIR_DISTANCE, STAIR_TREAD_RUN, atStairEntrance, otherDeck, sampleCabinStairs, stairDestination, stairLanding, type CabinResidentView } from './cabinStairs';
 import type { CabinDeck } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef } from 'react';
@@ -173,11 +174,11 @@ function route(start: Point, end: Point, boxes: Box[], circle?: Circle, bounds =
   }
   return [];
 }
-function approachRoute(start: Point, point: Point, boxes: Box[], bounds: typeof WALK_BOUNDS, fixed?: Point, reach = 1.15): Point[] | null {
+function approachRoute(start: Point, point: Point, boxes: Box[], bounds: typeof WALK_BOUNDS, fixed?: Point, reach = 1.15, minReach = reach === PAPER_PICKUP_REACH ? .29 : 0): Point[] | null {
   const distance = Math.hypot(start[0] - point[0], start[1] - point[1]);
-  if (!fixed && distance <= reach && (reach !== PAPER_PICKUP_REACH || distance >= .29)) return [];
+  if (!fixed && distance <= reach && distance >= minReach) return [];
   const targets: Point[] = fixed ? [fixed] : [];
-  if (!fixed) for (const radius of [0.36, 0.58, 0.85].filter(radius => radius < reach)) for (let i = 0; i < 24; i++) {
+  if (!fixed) for (const radius of [Math.max(.36, minReach + .02), .58, .85].filter(radius => radius < reach && radius >= minReach)) for (let i = 0; i < 24; i++) {
     const yaw = i * Math.PI / 12;
     targets.push([point[0] + Math.sin(yaw) * radius, point[1] + Math.cos(yaw) * radius]);
   }
@@ -231,9 +232,14 @@ export function OrbitalResidents(props: ResidentsProps) {
   const deckFrame = useRef<THREE.Group>(null);
   const rig = useRef<ResidentRig | null>(null);
   const plushBodies = useRef<PlushBody[]>(props.sceneId === 'habitat' ? createPlushBodies(PLUSH_DOLLS) : []);
+  const plushGrip = useRef<PlushGrip | null>(null);
+  const plushPose = useRef<{ mesh: THREE.Object3D; apply: ReturnType<typeof createPlushPose> }>();
+  const catalogThink = useRef({ time: 0, weight: 0 });
+  const findDoll = (id: string) => plushBodies.current.find(body => body.id === id);
   const slipperRoom = useRef<{ boxes: Box[] }>({ boxes: room.boxes });
   useEffect(() => {
     plushBodies.current = props.sceneId === 'habitat' ? createPlushBodies(PLUSH_DOLLS) : [];
+    plushGrip.current = null;
     slipperRoom.current.boxes = room.boxes;
   }, [props.sceneId, room]);
   const idle = useRef(createIdleState());
@@ -289,7 +295,10 @@ export function OrbitalResidents(props: ResidentsProps) {
   const act = (objectId: string, kind: WorldActionKind) => {
     const p = current.current;
     const action: WorldAction = { sceneId: p.sceneId, objectId, kind };
-    if (kind === 'sit' || objectId === 'wardrobe') {
+    const doll = findDoll(objectId);
+    if (doll) {
+      p.interaction.current?.([doll.x, 0, doll.z], action, () => {});
+    } else if (kind === 'sit' || objectId === 'wardrobe') {
       const pose = CHAIR_POSES[p.sceneId];
       const [x, z] = objectId === 'wardrobe' ? WARDROBE_STAND : objectId === 'sofa' ? SOFA_ENTRY : isRugSeat(objectId) ? RUG_SEAT : [pose.x, pose.z];
       p.interaction.current?.([x, 0, z], action, () => current.current.onAction(action));
@@ -302,7 +311,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   };
   const nearbyActions = (): NearbyAction[] => {
     const p = current.current, root = resident.current, s = state.current;
-    if (!root || !p.enabled || s.exiting || s.stairs || p.focusedObject || cabinPerformance.current) return [];
+    if (!root || !p.enabled || s.exiting || s.stairs || p.focusedObject || cabinPerformance.current || plushGrip.current) return [];
     const pose = CHAIR_POSES[p.sceneId];
     const [cabinetX, , cabinetZ] = shelfPoint(p.sceneId, .55, 0, .65);
     const [bookX, , bookZ] = readingStand(p.sceneId);
@@ -318,6 +327,9 @@ export function OrbitalResidents(props: ResidentsProps) {
       { id: 'chair', kind: 'sit', hint: '坐下', point: [pose.x, pose.z], reach: CHAIR_REACH },
     ];
     if (p.sceneId === 'habitat') {
+      for (const body of plushBodies.current) {
+        targets.push({ id: body.id, kind: 'inspect', hint: '捡起' + plushLabels[body.id], point: [body.x, body.z], reach: .78 });
+      }
       targets.push({ id: 'wardrobe', kind: 'open', hint: '打开衣柜', point: WARDROBE_STAND, reach: .75 });
       targets.push({ id: 'sofa', kind: 'sit', hint: '坐进懒人沙发', point: SOFA_ENTRY, reach: .85 });
       targets.push({ id: 'rug-seat', kind: 'sit', hint: '坐在地毯上', point: RUG_SEAT, reach: .72 });
@@ -415,19 +427,39 @@ export function OrbitalResidents(props: ResidentsProps) {
     const from = deckFromAuthoredX(start[0]), to = deckFromAuthoredX((fixed ?? task.point)[0]);
     const crossing = !room.observatory && from !== to;
     const landing = crossing ? stairLanding(to) : start;
+    const doll = findDoll(task.action.objectId);
     const local = approachRoute(landing, task.point, boxes, walkBounds(room, landing[0]), fixed,
-      task.action.objectId === 'pet' ? PET_REACH : isPaperPickup(task.action.objectId) ? PAPER_PICKUP_REACH : undefined);
+      task.action.objectId === 'pet' ? PET_REACH : isPaperPickup(task.action.objectId) ? PAPER_PICKUP_REACH : doll ? .59 : undefined,
+      doll ? RADIUS + doll.radius + .012 : undefined);
     const first = crossing ? route(start, stairLanding(from), boxes, undefined, DECK_WALK_BOUNDS[from]) : [];
     if (local && (!crossing || first.length)) {
       state.current.path = crossing ? [...first, landing, ...local] : local;
     } else { cancelApproach(); p.onHover(task.action.objectId, '前方空间不足，请先移开挡路的物品'); }
+  };
+  const putDown = () => {
+    const grip = plushGrip.current, root = resident.current, s = state.current;
+    const clips = cabinMotion.current.clips;
+    if (!grip || !root || !clips || !current.current.enabled || s.stairs || cabinPerformance.current) return;
+    const spot = dropSpot(grip.body, root.position.x, root.position.z, root.rotation.y, room.plushBoxes, plushBodies.current);
+    if (!spot) { current.current.onHover(grip.body.id, '这里放不下娃娃，走到空地再试'); return; }
+    cancelApproach();
+    keys.current.clear();
+    grip.floorX = spot.x; grip.floorZ = spot.z;
+    Object.assign(grip.body, { y: 0, pitch: 0, roll: 0, yaw: spot.yaw });
+    cabinPerformance.current = { kind: 'plush', placing: true, leaving: false, time: clips.pickUp.duration };
   };
   useEffect(() => {
     const request: NonNullable<WorldModelProps['onApproach']> = (point, action, perform) => {
       const root = resident.current, p = current.current, s = state.current;
       if (!root || action.sceneId !== p.sceneId) return false;
       const rug = isRugSeat(action.objectId), paper = isPaperPickup(action.objectId);
-      if ((rug || paper) && (!p.approachEnabled || cabinMotion.current.failed)) return false;
+      const doll = findDoll(action.objectId);
+      if (plushGrip.current) {
+        if (doll === plushGrip.current.body) putDown();
+        else p.onHover(plushGrip.current.body.id, '先放下手里的娃娃');
+        return true;
+      }
+      if ((rug || paper || doll) && (!p.approachEnabled || cabinMotion.current.failed)) return false;
       if (rug && cabinPerformance.current?.kind === 'floor') {
         stand();
         return true;
@@ -442,8 +474,8 @@ export function OrbitalResidents(props: ResidentsProps) {
         return true;
       }
       const pose = CHAIR_POSES[p.sceneId];
-      const target: Point = action.objectId === 'chair' ? [pose.x, pose.z] : action.objectId === 'pet' ? [...catLocation.current] : action.objectId === 'wardrobe' ? WARDROBE_STAND : [point[0], point[2]];
-      if (s.posture === 'standing' && !s.exiting && !s.stairs && !cabinPerformance.current && !rug && !paper
+      const target: Point = doll ? [doll.x, doll.z] : action.objectId === 'chair' ? [pose.x, pose.z] : action.objectId === 'pet' ? [...catLocation.current] : action.objectId === 'wardrobe' ? WARDROBE_STAND : [point[0], point[2]];
+      if (s.posture === 'standing' && !s.exiting && !s.stairs && !cabinPerformance.current && !rug && !paper && !doll
         && (room.observatory || deckFromAuthoredX(root.position.x) === deckFromAuthoredX(target[0]))
         && action.objectId !== 'chair' && action.objectId !== 'sofa'
         && Math.hypot(root.position.x - target[0], root.position.z - target[1]) <= (action.objectId === 'pet' ? PET_REACH : action.objectId === 'wardrobe' ? .06 : 1.15)) {
@@ -487,6 +519,10 @@ export function OrbitalResidents(props: ResidentsProps) {
         const performance = cabinPerformance.current;
         if (performance) {
           if (event.code === 'KeyE') stand();
+          return;
+        }
+        if (plushGrip.current) {
+          if (event.code === 'KeyE') putDown();
           return;
         }
         if (state.current.posture !== 'standing' || p.objects.chair?.active || p.objects.sofa?.active) {
@@ -598,6 +634,10 @@ export function OrbitalResidents(props: ResidentsProps) {
     const pose = CHAIR_POSES[p.sceneId];
     const pending = approach.current;
     if (pending && !cabinPerformance.current) {
+      const doll = findDoll(pending.action.objectId);
+      if (doll && Math.hypot(doll.x - pending.point[0], doll.z - pending.point[1]) > .065) {
+        pending.point = [doll.x, doll.z]; planApproach();
+      }
       pending.elapsed += dt;
       if (pending.elapsed > 8 || p.focusedObject) cancelApproach();
     }
@@ -626,14 +666,26 @@ export function OrbitalResidents(props: ResidentsProps) {
       sofa.rig = rig.current;
     }
     if (!p.approachEnabled && cabinPerformance.current) {
+      if (cabinPerformance.current.kind === 'plush' && !cabinPerformance.current.placing) plushGrip.current = null;
       cabinPerformance.current = null;
       p.paperPickup.current = null;
     }
     if (cabinPerformance.current && cabin.apply && cabin.clips) {
       const performance = cabinPerformance.current;
+      if (performance.kind === 'plush' && performance.placing && plushGrip.current) {
+        const grip = plushGrip.current;
+        const yaw = Math.atan2(grip.floorX - root.position.x, grip.floorZ - root.position.z);
+        root.rotation.y = angle(root.rotation.y, yaw, 1 - Math.exp(-dt * 10));
+      }
       if (advanceCabinPerformance(performance, document.hidden ? 0 : dt * (p.reducedMotion ? 4 : 1), cabin.clips)) {
         cabinPerformance.current = null;
         p.paperPickup.current = null;
+        if (performance.kind === 'plush' && plushGrip.current && performance.placing !== performance.leaving) {
+          const { body, floorX, floorZ } = plushGrip.current;
+          if (performance.placing) Object.assign(body, { x: floorX, z: floorZ, yaw: root.rotation.y,
+            y: 0, roll: 0, pitch: 0, vx: 0, vz: 0, vy: 0, rollVel: 0, pitchVel: 0, spin: 0, toppled: false });
+          plushGrip.current = null;
+        }
         if (performance.kind === 'paper' && !performance.leaving) performance.complete();
         if (approach.current) planApproach();
         else if (s.external && p.walkTarget) {
@@ -770,12 +822,12 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (!s.stairs && !s.path.length && s.external && p.enabled && !s.exiting) {
         const request = approach.current;
         const id = request?.action.objectId ?? '';
-        const rug = isRugSeat(id), paper = isPaperPickup(id);
+        const rug = isRugSeat(id), paper = isPaperPickup(id), doll = findDoll(id);
         const fixed = id === 'chair' || id === 'sofa' || rug;
         const target = id === 'sofa' ? SOFA_ENTRY : id === 'chair' ? seatEntry : rug ? RUG_SEAT : request?.point;
         const distance = target ? Math.hypot(root.position.x - target[0], root.position.z - target[1]) : 0;
-        const radius = fixed ? .06 : id === 'pet' ? PET_REACH : paper ? PAPER_PICKUP_REACH : 1.15;
-        if (request && (rug || paper) && distance <= radius && !cabin.failed) {
+        const radius = fixed ? .06 : id === 'pet' ? PET_REACH : paper ? PAPER_PICKUP_REACH : doll ? .60 : 1.15;
+        if (request && (rug || paper || doll) && distance <= radius && !cabin.failed) {
           const yaw = rug ? RUG_YAW : Math.atan2(request.point[0] - root.position.x, request.point[1] - root.position.z) + .08;
           root.rotation.y = angle(root.rotation.y, yaw, 1 - Math.exp(-dt * 14));
           if (cabin.apply && Math.abs(angle(root.rotation.y, yaw, 1) - root.rotation.y) < .045) {
@@ -783,13 +835,16 @@ export function OrbitalResidents(props: ResidentsProps) {
             if (rug) {
               root.position.set(RUG_SEAT[0], RUG_TOP, RUG_SEAT[1]);
               cabinPerformance.current = newRugPerformance();
+            } else if (doll) {
+              plushGrip.current = gripPlush(doll);
+              cabinPerformance.current = { kind: 'plush', placing: false, leaving: false, time: 0 };
             } else cabinPerformance.current = { kind: 'paper', time: 0, leaving: false, id: id.slice(PAPER_PICKUP_PREFIX.length),
               point: new THREE.Vector3(request.point[0], request.height, request.point[1]), offset: null, complete: request.perform };
             cancelApproach();
           }
         } else {
           cancelApproach();
-          if (request && !rug && !paper && distance <= radius) request.perform();
+          if (request && !rug && !paper && !doll && distance <= radius) request.perform();
         }
       }
       if (!s.stairs && !s.path.length && wanted !== 'standing') {
@@ -835,9 +890,10 @@ export function OrbitalResidents(props: ResidentsProps) {
         plushBodies.current = createPlushBodies(PLUSH_DOLLS);
       }
       const deck = deckFromAuthoredX(root.position.x);
+      const loose = plushBodies.current.filter(body => body !== plushGrip.current?.body);
       const floorDolls = {
-        lower: plushBodies.current.filter(body => deckFromAuthoredX(body.x) === 'lower'),
-        upper: plushBodies.current.filter(body => deckFromAuthoredX(body.x) === 'upper'),
+        lower: loose.filter(body => deckFromAuthoredX(body.x) === 'lower'),
+        upper: loose.filter(body => deckFromAuthoredX(body.x) === 'upper'),
       };
       const mover = {
         x: root.position.x, z: root.position.z,
@@ -846,9 +902,9 @@ export function OrbitalResidents(props: ResidentsProps) {
         radius: RADIUS, active: !stairSample && !cabinPerformance.current && (s.posture === 'standing' || s.exiting),
       };
       stepPlushDolls(floorDolls.lower, dt, deck === 'lower' ? [mover] : [], room.plushBoxes,
-        { ...PLUSH_FLOOR_BOUNDS, left: CABIN_DIVIDER_X + .05 }, p.reducedMotion);
+        plushBounds(false), p.reducedMotion);
       stepPlushDolls(floorDolls.upper, dt, deck === 'upper' ? [mover] : [], room.plushBoxes,
-        { ...PLUSH_FLOOR_BOUNDS, left: BEDROOM_LEFT + .15, right: CABIN_DIVIDER_X - .05 }, p.reducedMotion);
+        plushBounds(true), p.reducedMotion);
       if (s.posture === 'standing' && !s.exiting && !libraryActive && !stairSample && !cabinPerformance.current) {
         resolveMoverAgainstPlush(root.position, RADIUS, floorDolls[deck], (x, z) => free([x, z], room.boxes, DECK_WALK_BOUNDS[deck]));
       }
@@ -940,13 +996,13 @@ export function OrbitalResidents(props: ResidentsProps) {
       && !document.hidden && s.posture === 'standing' && wanted === 'standing' && !s.exiting
       && !walking && distance < .00001 && walkWeight.current === 0
       && !keys.current.size && !idleInput.current && !s.path.length && !s.stairs && !s.external
-      && !approach.current && !libraryActive && !cabinPerformance.current;
+      && !approach.current && !libraryActive && !cabinPerformance.current && !plushGrip.current;
     const im = idleMotion.current;
     const fittedIdle = rig.current?.fitted?.idle;
     const yawnClip = fittedIdle?.yawn ?? im.clip;
     const lookClip = fittedIdle?.look ?? im.lookClip;
     stepIdle(idle.current, rawDelta, standingAtRest && !p.reducedMotion, yawnClip?.duration ?? 0,
-      Math.random, lookClip?.duration ?? 0, standingAtRest, { rubEye: cabin.clips?.rubEye.duration, think: cabin.clips?.think.duration });
+      Math.random, lookClip?.duration ?? 0, standingAtRest, { rubEye: cabin.clips?.rubEye.duration });
     idleInput.current = false;
     if (idle.current.elapsed >= STANDING_IDLE.delay && !lookClip && !im.lookLoading && idle.current.elapsed >= im.lookRetryAt) {
       im.lookLoading = true;
@@ -988,7 +1044,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (performance && cabin.apply && cabin.clips) {
         applyCabinPerformance(performance, cabin.clips, cabin.apply);
         if (performance.kind === 'paper') {
-          if (performance.time >= PAPER_GRIP_TIME) {
+          if (performance.time >= PICKUP_GRIP_TIME) {
             const hand = rig.current.mesh.getObjectByName('mixamorigRightHand')!;
             performance.offset ??= hand.worldToLocal(performance.point.clone());
             const held = p.paperPickup.current ?? { id: performance.id, position: new THREE.Vector3() };
@@ -1000,11 +1056,24 @@ export function OrbitalResidents(props: ResidentsProps) {
           }
         }
       }
+      const thought = catalogThink.current;
+      const choosing = flow?.phase === 'catalog' && !p.reducedMotion;
+      if (choosing) thought.time = Math.min(thought.time + dt, 1.55);
+      thought.weight = clamp(thought.weight + (choosing ? 1 : -1) * dt * 4, 0, 1);
+      if (!thought.weight) thought.time = 0;
+      else if (choosing || !librarySample) cabin.apply?.('think', thought.time, ease(thought.weight));
+      if (plushGrip.current && cabin.clips) {
+        if (plushPose.current?.mesh !== rig.current.mesh) {
+          plushPose.current = { mesh: rig.current.mesh, apply: createPlushPose(rig.current.mesh) };
+        }
+        plushGrip.current.visible = deckFrame.current?.visible ?? true;
+        plushPose.current.apply(root, plushGrip.current, performance?.kind === 'plush' ? performance.time : cabin.clips.pickUp.duration, PICKUP_GRIP_TIME);
+      }
       // Add the offsets after authored animation, only when there is no contact pose to preserve.
       rig.current.followMotion(rawDelta,
         !interactionPose && !libraryActive && !p.focusedObject && !p.reducedMotion && !document.hidden,
         root.rotation.y, frameDx, frameDz, stairGait?.phase ?? s.walkTime);
-      rig.current.applyArmCorrectives(!interactionPose && !libraryActive);
+      rig.current.applyArmCorrectives(!interactionPose && !libraryActive && !plushGrip.current);
     }
     if (library && rig.current) library.tick(dt);
     rig.current?.updateSleeveContact?.();
@@ -1022,7 +1091,10 @@ export function OrbitalResidents(props: ResidentsProps) {
     const nearby = nearbyList[0] ?? null;
     const rugHint = cabinPerformance.current?.kind === 'floor' && !cabinPerformance.current.leaving
       && p.enabled && p.showNearbyHints !== false ? 'E · 起身' : '';
-    const hint = rugHint || (p.enabled && p.showNearbyHints !== false && (s.posture !== 'standing' || wanted !== 'standing')
+    const carrying = plushGrip.current;
+    const carryHint = carrying && !cabinPerformance.current && !s.stairs && p.enabled && p.showNearbyHints !== false
+      ? 'E · 放下' + plushLabels[carrying.body.id] : '';
+    const hint = carryHint || rugHint || (p.enabled && p.showNearbyHints !== false && (s.posture !== 'standing' || wanted !== 'standing')
       ? canUseComputer() ? 'E · 起身　Q · 使用电脑' : 'E · 起身'
       : nearbyList.map((target, index) => `${INTERACT_LABELS[index]} · ${target.hint}`).join('　'));
     if (nearby?.id !== s.nearby?.id || hint !== s.nearbyHint) {
@@ -1038,7 +1110,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       && free([x, z], room.boxes, DECK_WALK_BOUNDS.lower)
       && (!luna || state.current.stairs || deckFromAuthoredX(luna.x) === 'upper'
         || Math.hypot(x - luna.x, z - luna.z) > RADIUS + .28)
-      && plushBodies.current.every(plush => Math.hypot(x - plush.x, z - plush.z) > plush.radius + .28);
+      && plushBodies.current.every(plush => plush === plushGrip.current?.body || Math.hypot(x - plush.x, z - plush.z) > plush.radius + .28);
   };
   return <group name={`OrbitalResidents_${props.sceneId}`}>
     <group ref={deckFrame} name="Resident_DeckPlacement">
@@ -1047,7 +1119,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       </group>
     </group>
     {props.sceneId === 'habitat' && <Suspense fallback={null}><SlipperPair resident={resident} room={slipperRoom.current} reducedMotion={props.reducedMotion} /></Suspense>}
-    {props.sceneId === 'habitat' && <PlushDolls bodies={plushBodies} />}
+    {props.sceneId === 'habitat' && <PlushDolls bodies={plushBodies} grip={plushGrip} world={props} />}
     <ObjectHandle id="pet" action="pet" hint="和团子互动" world={props} panorama position={[CAT_HOME[0], CAT_MAT_Y, CAT_HOME[1]]}
       onClick={event => event.stopPropagation()}>
       <Cat resident={resident} value={props.objects.pet?.value ?? 0} command={props.objects.pet?.itemId} reducedMotion={props.reducedMotion}
