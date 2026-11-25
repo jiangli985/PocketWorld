@@ -11,6 +11,7 @@ import { WardrobeSurface } from './scene/orbital/wardrobe/WardrobeSurface';
 import { readOutfit } from './scene/orbital/wardrobe/outfit';
 import { DustPrompt } from './scene/orbital/OrbitalDustPrompt';
 import { readInitialViewMode, type SpacecraftViewMode } from './scene/orbital/spacecraftFlight';
+import wordmark from '../assets/brand/pocketworld-wordmark.webp';
 import './scene/orbital/orbital.css';
 
 export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters }) => {
@@ -169,7 +170,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
       onCancel={world.onReturn} />}
     <LibrarySurface library={library} />
     <header className="orbital-header">
-      <div className="orbital-wordmark"><span className="orbital-emblem" aria-hidden="true" /><span>pocketworld<span className="orbital-wordmark-dot">.</span></span></div>
+      <div className="orbital-wordmark"><span className="orbital-emblem" aria-hidden="true" /><img src={wordmark} alt="pocketworld" width={800} height={171} /></div>
       <p className="orbital-edition">A LITTLE SPACE TO BE YOURSELF</p>
     </header>
     {world.focusedObject !== 'wardrobe' && <DustPrompt text={status} reducedMotion={world.reducedMotion} />}
