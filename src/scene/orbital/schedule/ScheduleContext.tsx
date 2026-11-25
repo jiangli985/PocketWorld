@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import type { WorldFeatureAdapters } from '../../../types/world';
 import { createBookControl, type BoundBookControl } from '../journal/bookControl';
 import { flattenSchedule, isScheduleEntry, readScheduleNotebook, migrateSchedule, SCHEDULE_KEY, type ScheduleNotebook } from './schedule';
+import { PaperBallLitter } from './paperBallLitter';
 
 interface ScheduleContextValue {
   book: React.MutableRefObject<BoundBookControl>;
@@ -126,5 +127,7 @@ export function ScheduleProvider({ adapters, children }: { adapters?: WorldFeatu
     return discarded.length !== current.discarded.length && commit({ ...current, discarded });
   }, [commit]);
   const retry = () => ready && !remote ? commit(latest.current) : setAttempt(value => value + 1);
-  return <ScheduleContext.Provider value={{ book, state, ready, error, commit, retry, collectPaper }}>{children}</ScheduleContext.Provider>;
+  return <ScheduleContext.Provider value={{ book, state, ready, error, commit, retry, collectPaper }}>
+    <PaperBallLitter.Provider value={state.discarded}>{children}</PaperBallLitter.Provider>
+  </ScheduleContext.Provider>;
 }
