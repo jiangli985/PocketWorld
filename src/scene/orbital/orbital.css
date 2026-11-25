@@ -23,7 +23,18 @@
 @media (prefers-reduced-motion: reduce) { .orbital-stair-blackout.reveal { animation-duration: 1ms; } }
 .orbital-cabin-controls { position: absolute; top: var(--cabin-controls-top); left: 50%; transform: translateX(-50%); z-index: 4; display: flex; gap: 8px; }
 .orbital-cabin-controls .orbital-flight-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; white-space: nowrap; }
-.orbital-cabin-controls kbd { display: inline-grid; place-items: center; width: 18px; height: 20px; box-sizing: border-box; border: 1px solid #bda77d70; border-bottom-width: 2px; border-radius: 4px; background: #e5dcc41c; color: #f6e7c8; font: 600 11px/1 ui-monospace, monospace; letter-spacing: 0; }
+.orbital-cabin-controls kbd {
+  display: inline-grid; place-items: center; width: 22px; height: 21px; box-sizing: border-box;
+  padding-bottom: 2px; border: 1px solid #bcaa87; border-radius: 5px;
+  background: linear-gradient(#fbefd2, #e3d1aa) center 2px / calc(100% - 6px) calc(100% - 6px) no-repeat,
+    linear-gradient(145deg, #f0dfba, #b79c75);
+  box-shadow: inset 0 1px #fff5dc, inset 0 -2px #a48860, 0 3px #715a40, 0 4px 4px #0009;
+  color: #3d2e23; font: 700 11px/1 ui-monospace, monospace; letter-spacing: 0;
+}
+.orbital-cabin-controls button:active:not(:disabled) kbd {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px #fff5dc, inset 0 -2px #a48860, 0 1px #715a40, 0 2px 3px #0008;
+}
 .orbital-app:has(.orbital-cabin-controls) .orbital-dust-prompt { top: calc(var(--cabin-controls-top) + 48px); }
 .orbital-flight-pill { min-height: 36px; padding: 7px 14px; border: 1px solid rgba(229, 220, 196, 0.24); border-radius: 999px; background: rgba(11, 12, 26, 0.56); backdrop-filter: blur(8px); color: #ece6d8; font: 500 11px/1.2 'Avenir Next', 'PingFang SC', sans-serif; letter-spacing: 1.4px; cursor: pointer; user-select: none; touch-action: manipulation; transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease; }
 .orbital-flight-pill:hover { background: rgba(24, 24, 46, 0.78); border-color: rgba(229, 220, 196, 0.48); }
