@@ -35,7 +35,7 @@ export const MAX_DUST_PARTICLES = 3800;
 export const DUST_TONES = ['#fffaf0', '#f5ebd6', '#e6d1a7', '#ffffff', '#d4e2db'] as const;
 // Match the shared keycap size in orbital.css.
 export const PROMPT_KEYCAP_SIZE = 23;
-export const PROMPT_KEYCAP_GAP = 6;
+export const PROMPT_KEYCAP_GAP = 9;
 export const PROMPT_SHORTCUT_GAP = 16;
 
 const SPRING_STIFFNESS = 155;

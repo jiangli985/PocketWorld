@@ -77,9 +77,9 @@ function sampleGlyphs(
       for (const { key, label, width: itemWidth } of row) {
         const { actualBoundingBoxAscent, actualBoundingBoxDescent } = ctx.measureText(label);
         const centerY = y + (actualBoundingBoxDescent - actualBoundingBoxAscent) / 2;
-        keycaps.push({ key, x: left + PROMPT_KEYCAP_SIZE / 2 - width / 2, y: centerY });
-        const labelLeft = left + PROMPT_KEYCAP_SIZE + PROMPT_KEYCAP_GAP;
-        glyphs.push({ label, x: (labelLeft + left + itemWidth) / 2, y });
+        const labelWidth = itemWidth - PROMPT_KEYCAP_GAP - PROMPT_KEYCAP_SIZE;
+        glyphs.push({ label, x: left + labelWidth / 2, y });
+        keycaps.push({ key, x: left + itemWidth - PROMPT_KEYCAP_SIZE / 2 - width / 2, y: centerY });
         left += itemWidth + PROMPT_SHORTCUT_GAP;
       }
     });
