@@ -269,7 +269,6 @@ export function OrbitalResidents(props: ResidentsProps) {
       { id: 'book-01', kind: 'inspect', hint: '查看藏书', point: [bookX, bookZ], reach: 0.70 },
       { id: 'cabinet', kind: 'open', hint: '打开柜门', point: [cabinetX, cabinetZ], reach: 0.55 },
       { id: 'lamp', kind: 'toggle', hint: '开关灯', point: p.sceneId === 'habitat' ? [NIGHTSTAND_X - .11, NIGHTSTAND_Z + .77] : [-1.42, -2.55], reach: 0.46 },
-      { id: 'plant', kind: 'water', hint: '给盆栽浇水', point: p.sceneId === 'habitat' ? [NIGHTSTAND_X + .32, NIGHTSTAND_Z + .78] : [2.75, 1.85], reach: 0.55 },
       { id: 'pet', kind: 'pet', hint: '和团子互动', point: catLocation.current, reach: PET_REACH },
       { id: 'chair', kind: 'sit', hint: '坐下', point: [pose.x, pose.z], reach: CHAIR_REACH },
     ];

@@ -86,12 +86,10 @@ function FurnitureLamp({ world }: { world: WorldModelProps }) {
   </group>;
 }
 
-function FurniturePlant({ world, observatory }: { world: WorldModelProps; observatory: boolean }) {
-  const state = world.objects.plant ?? CLOSED_OBJECT;
-  return <ObjectHandle id="plant" action="water" hint="照料盆栽 · 浇水" world={world} position={observatory ? [2.75, 0, 1.85] : PLANT_POSITION}>
+function FurniturePlant({ observatory }: { observatory: boolean }) {
+  return <group position={observatory ? [2.75, 0, 1.85] : PLANT_POSITION}>
     <SuppliedAsset name="plant" size={observatory ? [1, 1.02, 1] : [.54, .88, .54]} fallback={<ReusableAsset path="plants/potted_plant_04.glb" height={observatory ? 1.02 : 0.85} />} />
-    {state.value > 0 && <Orb position={[0.03, 0.31, 0.02]} scale={[0.028, 0.012, 0.028]} color="#83b9b1" />}
-  </ObjectHandle>;
+  </group>;
 }
 
 function FurnitureHatch() {
@@ -136,7 +134,7 @@ export const HabitatFurniture: React.FC<WorldModelProps & { sofaTime: React.RefO
         height={TRASH_CAN.height} position={TRASH_CAN.position} rotation={[0, TRASH_CAN.yaw, 0]} />
     </>}
     <FurnitureLamp world={world} />
-    <FurniturePlant world={world} observatory={observatory} />
+    <FurniturePlant observatory={observatory} />
     <FurnitureHatch />
   </group>;
 };
