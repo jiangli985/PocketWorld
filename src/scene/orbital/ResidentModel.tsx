@@ -79,9 +79,9 @@ function LoadedResident({ assets, rig, onMounted, prefetchSeat, chairActive }: {
     let frame = 0;
     const load = () => {
       void loadResidentSeatContact(assets.outfit).then(contact => {
-        if (active) chair.setContact(contact);
+        if (active && chairAnimation.current === chair) chair.setContact(contact);
       }).catch(error => {
-        if (active) console.warn('Luna seat contact unavailable', error);
+        if (active && chairAnimation.current === chair) console.warn('Luna seat contact unavailable', error);
       });
     };
     if (chairActive) load();
