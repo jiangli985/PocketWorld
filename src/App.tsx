@@ -171,7 +171,6 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     <LibrarySurface library={library} />
     <header className="orbital-header">
       <div className="orbital-wordmark"><span className="orbital-emblem" aria-hidden="true" /><img src={wordmark} alt="pocketworld" width={800} height={171} /></div>
-      <p className="orbital-edition">A LITTLE SPACE TO BE YOURSELF</p>
     </header>
     {world.focusedObject !== 'wardrobe' && <DustPrompt text={status} reducedMotion={world.reducedMotion} />}
     {showFlightControls && <nav className="orbital-flight-bar" aria-label="飞船巡航控制">

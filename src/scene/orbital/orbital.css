@@ -10,9 +10,8 @@
 .orbital-header { position: absolute; top: 34px; left: 42px; right: 42px; display: flex; align-items: center; pointer-events: none; z-index: 4; }
 .orbital-wordmark { display: flex; align-items: center; gap: 13px; }
 .orbital-wordmark img { display: block; width: 180px; height: auto; }
-.orbital-emblem { display: block; width: 22px; height: 22px; border: 1px solid #e5dcc4; border-radius: 50%; position: relative; }
-.orbital-emblem::after { content: ''; position: absolute; inset: 6px -5px; border: 1px solid #bca783; border-radius: 50%; transform: rotate(-35deg); }
-.orbital-edition { margin: 4px 0 0 27px; font-size: 8px; letter-spacing: 2.4px; color: #8c969b; }
+.orbital-emblem { display: block; width: 28px; height: 28px; border: 1px solid #e5dcc4; border-radius: 50%; position: relative; }
+.orbital-emblem::after { content: ''; position: absolute; inset: 8px -6px; border: 1px solid #bca783; border-radius: 50%; transform: rotate(-35deg); }
 .orbital-dust-prompt { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 4; display: flex; justify-content: center; width: min(1040px, calc(100vw - 24px)); }
 .orbital-dust-canvas { display: block; pointer-events: none; }
 .orbital-app:has(.library-surface) .orbital-dust-prompt { display: none; }
@@ -34,7 +33,6 @@
 .orbital-now-playing p { margin: 5px 0 0; font-size: 11px; letter-spacing: 1px; }
 .orbital-record-dot { height: 28px; width: 28px; border-radius: 50%; border: 1px solid #b4aa8b99; background: repeating-radial-gradient(#111a20 0 2px, #57605b 3px, #111a20 4px); position: relative; }
 .orbital-record-dot::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #bf9a65; position: absolute; top: 10px; left: 10px; }
-.is-focused .orbital-edition { opacity: .3; }
 .orbital-drop-message { position: absolute; inset: 0; background: #08141dce; backdrop-filter: blur(8px); display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; z-index: 50; }
 .orbital-drop-message p { font-family: 'Songti SC', Georgia, serif; font-size: 25px; letter-spacing: 3px; }
 .orbital-drop-message small { color: #a4b1b2; letter-spacing: 2px; }
@@ -79,7 +77,6 @@
   .orbital-header { top: max(23px, env(safe-area-inset-top)); left: 22px; right: 22px; }
   .orbital-wordmark { gap: 10px; }
   .orbital-wordmark img { width: 144px; }
-  .orbital-edition { display: none; }
   .orbital-dust-prompt { top: max(54px, calc(env(safe-area-inset-top) + 34px)); }
   .orbital-now-playing { left: 24px; bottom: max(28px, env(safe-area-inset-bottom)); }
   .orbital-now-playing p { max-width: 200px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
