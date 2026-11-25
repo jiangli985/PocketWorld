@@ -40,6 +40,15 @@ export const PROMPT_SHORTCUT_GAP = 16;
 
 const SPRING_STIFFNESS = 155;
 const SPRING_DAMPING = 24.5;
+
+function decayDustProgress(progress: number, dt: number, reducedMotion: boolean): number {
+  return Math.max(0, progress - dt * (reducedMotion ? 10 : 6));
+}
+
+export function dustKeycapOpacity(previous: number, settleProgress: number, targeted: boolean, rawDt: number, reducedMotion: boolean): number {
+  return targeted ? settleProgress : decayDustProgress(previous, Math.min(Math.max(rawDt, 0), 0.05), reducedMotion);
+}
+
 export function createDustPromptState(): DustPromptState {
   return {
     text: '',
@@ -163,6 +172,7 @@ export function setDustTargets(
 
   const bounded = decimatePoints(points, MAX_DUST_PARTICLES);
   const hadActive = state.particles.length > 0;
+  if (state.text !== normalized) state.settleProgress = 0;
   state.text = normalized;
 
   let minX = Infinity;
@@ -304,7 +314,7 @@ export function stepDustPrompt(
     const blend = reducedMotion ? 1 : Math.min(1, dt * 7);
     state.settleProgress += (ratio - state.settleProgress) * blend;
   } else {
-    state.settleProgress = Math.max(0, state.settleProgress - dt * (reducedMotion ? 10 : 6));
+    state.settleProgress = decayDustProgress(state.settleProgress, dt, reducedMotion);
   }
 
   state.active = state.text !== '' || state.particles.length > 0;

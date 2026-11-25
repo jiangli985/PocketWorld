@@ -15,6 +15,7 @@ vm.runInNewContext(
 const {
   MAX_DUST_PARTICLES,
   createDustPromptState,
+  dustKeycapOpacity,
   decimatePoints,
   layoutPromptShortcuts,
   splitPromptLines,
@@ -121,6 +122,45 @@ test('retargeting reuses active particles and disperses surplus', () => {
   for (let i = 0; i < 90; i++) stepDustPrompt(state, 1 / 60, false);
   assert.equal(state.particles.length, 4);
   assert.ok(state.particles.every(p => p.mode === 'converge'));
+});
+
+test('keycaps follow the text settling and fade through the dispersal frames', () => {
+  const state = createDustPromptState();
+  const rng = makeRng(17);
+  const points = [{ x: 280, y: 30 }, { x: 305, y: 36 }, { x: 320, y: 34 }];
+  setDustTargets(state, 'E · 查看藏书', points, 300, 34, false, rng);
+  let opacity = dustKeycapOpacity(0, state.settleProgress, true, 1 / 60, false);
+  assert.equal(opacity, 0);
+  let fadingIn = false;
+  for (let i = 0; i < 100; i++) {
+    stepDustPrompt(state, 1 / 60);
+    opacity = dustKeycapOpacity(opacity, state.settleProgress, true, 1 / 60, false);
+    fadingIn ||= opacity > 0.1 && opacity < 0.9;
+  }
+  assert.ok(fadingIn);
+  assert.ok(opacity > 0.99);
+
+  setDustTargets(state, '', [], 300, 34, false, rng);
+  stepDustPrompt(state, 1 / 60);
+  opacity = dustKeycapOpacity(opacity, state.settleProgress, false, 1 / 60, false);
+  assert.ok(opacity > 0 && opacity < 0.99);
+  for (let i = 0; i < 12; i++) {
+    stepDustPrompt(state, 1 / 60);
+    opacity = dustKeycapOpacity(opacity, state.settleProgress, false, 1 / 60, false);
+  }
+  assert.equal(opacity, 0);
+  assert.ok(state.particles.some(particle => particle.mode === 'disperse'));
+});
+
+test('new actions settle from zero and reduced motion settles both in one step', () => {
+  const state = createDustPromptState();
+  const first = [{ x: 280, y: 32 }];
+  setDustTargets(state, 'E · 使用唱机', first, 300, 34, true);
+  stepDustPrompt(state, 1 / 60, true);
+  assert.equal(dustKeycapOpacity(0, state.settleProgress, true, 1 / 60, true), 1);
+  setDustTargets(state, 'E · 打开日记', [{ x: 325, y: 36 }], 300, 34);
+  assert.equal(state.settleProgress, 0);
+  assert.equal(dustKeycapOpacity(1, state.settleProgress, true, 1 / 60, false), 0);
 });
 
 test('reducedMotion settles immediately and clears cleanly', () => {

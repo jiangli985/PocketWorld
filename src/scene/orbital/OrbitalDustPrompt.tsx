@@ -5,6 +5,7 @@ import {
   PROMPT_KEYCAP_SIZE,
   PROMPT_SHORTCUT_GAP,
   createDustPromptState,
+  dustKeycapOpacity,
   layoutPromptShortcuts,
   setDustTargets,
   splitPromptLines,
@@ -88,6 +89,11 @@ function sampleGlyphs(
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';
   for (const { label, x, y } of glyphs) ctx.fillText(label, x, y);
+  // Gather dust into the keycap as well. The bevel covers the inset mask as it settles.
+  const maskSize = PROMPT_KEYCAP_SIZE - 4;
+  ctx.beginPath();
+  for (const { x, y } of keycaps) ctx.roundRect(x + (width - maskSize) / 2, y - maskSize / 2, maskSize, maskSize, 4);
+  ctx.fill();
 
   const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
   const points: DustPoint[] = [];
@@ -138,7 +144,9 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const keycapLayerRef = useRef<HTMLDivElement>(null);
   const [keycaps, setKeycaps] = useState<PromptKeycap[]>([]);
+  const keycapMotion = useRef({ targeted: false, opacity: 0 });
   const stateRef = useRef(createDustPromptState());
   const shadowRef = useRef<HTMLCanvasElement | null>(null);
   const coreRef = useRef<HTMLCanvasElement | null>(null);
@@ -160,6 +168,11 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
       lastTimeRef.current = now;
 
       stepDustPrompt(state, dt, propsRef.current.reducedMotion);
+      const motion = keycapMotion.current;
+      const previousOpacity = motion.opacity;
+      motion.opacity = dustKeycapOpacity(previousOpacity, state.settleProgress, motion.targeted, dt, propsRef.current.reducedMotion);
+      if (keycapLayerRef.current) keycapLayerRef.current.style.opacity = String(motion.opacity);
+      if (!motion.targeted && previousOpacity > 0 && motion.opacity === 0) setKeycaps([]);
 
       if (canvas) {
         const ctx = canvas.getContext('2d');
@@ -205,7 +218,7 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
         }
       }
 
-      if (state.active) {
+      if (state.active || motion.opacity > 0) {
         rafRef.current = window.requestAnimationFrame(tick);
       } else {
         rafRef.current = 0;
@@ -215,6 +228,24 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
     };
 
     rafRef.current = window.requestAnimationFrame(tick);
+  };
+
+  const syncPrompt = (value: string, width: number, reduce: boolean) => {
+    const state = stateRef.current;
+    const motion = keycapMotion.current;
+    const { points, shadow, core, keycaps } = sampleGlyphs(value, width, CANVAS_HEIGHT);
+    motion.targeted = keycaps.length > 0;
+    if (motion.targeted || motion.opacity === 0) setKeycaps(keycaps);
+    if (motion.targeted && state.text !== value.trim()) {
+      motion.opacity = reduce ? 1 : 0;
+      if (keycapLayerRef.current) keycapLayerRef.current.style.opacity = String(motion.opacity);
+    }
+    if (value.trim() || !state.particles.length) {
+      shadowRef.current = shadow;
+      coreRef.current = core;
+    }
+    setDustTargets(state, value, points, width / 2, TEXT_CENTER_Y, reduce);
+    if (state.active || motion.opacity > 0) startLoop();
   };
 
   useEffect(() => {
@@ -230,19 +261,7 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
       canvas.style.width = `${measured}px`;
       canvas.style.height = `${CANVAS_HEIGHT}px`;
 
-      const { points, shadow, core, keycaps } = sampleGlyphs(propsRef.current.text, measured, CANVAS_HEIGHT);
-      setKeycaps(keycaps);
-      shadowRef.current = shadow;
-      coreRef.current = core;
-      setDustTargets(
-        stateRef.current,
-        propsRef.current.text,
-        points,
-        measured / 2,
-        TEXT_CENTER_Y,
-        propsRef.current.reducedMotion,
-      );
-      if (stateRef.current.active) startLoop();
+      syncPrompt(propsRef.current.text, measured, propsRef.current.reducedMotion);
     };
 
     syncLayout();
@@ -253,25 +272,7 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
   }, []);
 
   useEffect(() => {
-    const width = widthRef.current;
-    const { points, shadow, core, keycaps } = sampleGlyphs(text, width, CANVAS_HEIGHT);
-    setKeycaps(keycaps);
-    if (text.trim()) {
-      shadowRef.current = shadow;
-      coreRef.current = core;
-    } else if (!stateRef.current.particles.length) {
-      shadowRef.current = null;
-      coreRef.current = null;
-    }
-    setDustTargets(
-      stateRef.current,
-      text,
-      points,
-      width / 2,
-      TEXT_CENTER_Y,
-      reducedMotion,
-    );
-    if (stateRef.current.active) startLoop();
+    syncPrompt(text, widthRef.current, reducedMotion);
   }, [text, reducedMotion]);
 
   useEffect(() => () => {
@@ -284,8 +285,10 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
   return (
     <div ref={containerRef} className="orbital-dust-prompt">
       <canvas ref={canvasRef} className="orbital-dust-canvas" aria-hidden="true" />
-      {keycaps.map(({ key, x, y }) => <kbd key={key} className="orbital-dust-keycap" aria-hidden="true"
-        style={{ left: `calc(50% + ${x}px)`, top: y }}>{key}</kbd>)}
+      <div ref={keycapLayerRef} className="orbital-dust-keycaps" aria-hidden="true">
+        {keycaps.map(({ key, x, y }) => <kbd key={key} className="orbital-dust-keycap" aria-hidden="true"
+          style={{ left: `calc(50% + ${x}px)`, top: y }}>{key}</kbd>)}
+      </div>
       <p className="sr-only" role="status" aria-live="polite">{text}</p>
     </div>
   );
