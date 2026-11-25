@@ -6,22 +6,26 @@ type DeckOpacity = Record<CabinDeck, number>;
 export type CabinOpacity = DeckOpacity & { resident: number };
 export const QUICK_CABIN_DURATION = .65;
 
-export function cabinDeckOpacity(view: CabinView, ascent: number | null = null, from: CabinDeck | null = null): DeckOpacity {
+export function cabinZoomIsolation(distanceRatio: number) {
+  return 1 - MathUtils.smoothstep(distanceRatio, .72, .90);
+}
+
+export function cabinDeckOpacity(view: CabinView, isolation: number, ascent: number | null = null, from: CabinDeck | null = null): DeckOpacity {
   if (ascent === null || !from) {
-    return { lower: Number(view !== 'upper'), upper: Number(view !== 'lower') };
+    return { lower: view === 'upper' ? 1 - isolation : 1, upper: view === 'lower' ? 1 - isolation : 1 };
   }
   const progress = from === 'lower' ? ascent : 1 - ascent;
-  const leaving = 1 - MathUtils.smoothstep(progress, .76, 1);
-  const arriving = view === 'overview' ? 1 : MathUtils.smoothstep(progress, 0, .26);
+  const leaving = 1 - isolation * MathUtils.smoothstep(progress, .76, 1);
+  const arriving = 1 - isolation * (1 - MathUtils.smoothstep(progress, 0, .26));
   return from === 'lower' ? { lower: leaving, upper: arriving } : { lower: arriving, upper: leaving };
 }
 
-export function quickCabinFrame(progress: number, start: DeckOpacity, target: CabinDeck) {
-  const leaving = 1 - MathUtils.smoothstep(progress, 0, .5);
+export function quickCabinFrame(progress: number, start: DeckOpacity, target: CabinDeck, isolation: number) {
+  const leaving = MathUtils.smoothstep(progress, 0, .5);
   const arriving = MathUtils.smoothstep(progress, .12, .85);
   return {
-    lower: target === 'lower' ? MathUtils.lerp(start.lower, 1, arriving) : start.lower * leaving,
-    upper: target === 'upper' ? MathUtils.lerp(start.upper, 1, arriving) : start.upper * leaving,
+    lower: target === 'lower' ? MathUtils.lerp(start.lower, 1, arriving) : MathUtils.lerp(start.lower, 1 - isolation, leaving),
+    upper: target === 'upper' ? MathUtils.lerp(start.upper, 1, arriving) : MathUtils.lerp(start.upper, 1 - isolation, leaving),
     resident: 1 - MathUtils.smoothstep(progress, .08, .43) + MathUtils.smoothstep(progress, .63, .93),
     relocate: progress >= .5,
   };

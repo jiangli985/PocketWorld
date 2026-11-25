@@ -9,7 +9,7 @@ import { SCENE_ORIGINS, type WorldAction, type WorldObjectState, type WorldScene
 import { roomAudio } from '../audioEngine';
 import { CAMERA_FOV, HOME_TARGET, HOME_ZOOM, OUTFIT_TARGET, outfitCameraPosition, cabinCameraFrame, stairCameraFrames, type CabinView } from './cabinView';
 import { CabinFadeGroup, CabinOpacityContext, CabinUpperDeck } from './CabinUpperDeck';
-import { cabinDeckOpacity, quickCabinFrame, QUICK_CABIN_DURATION, type CabinOpacity } from './cabinCutaway';
+import { cabinDeckOpacity, cabinZoomIsolation, quickCabinFrame, QUICK_CABIN_DURATION, type CabinOpacity } from './cabinCutaway';
 import { BedroomGuard, CabinStaircase } from './CabinStructure';
 import { stairDestination, type CabinResidentView } from './cabinStairs';
 import { Cosmos, createSunState, type SunState } from './Cosmos';
@@ -106,13 +106,19 @@ function CameraRig(props: CameraRigProps) {
     lower: cabinCameraFrame('lower', aspect),
     upper: cabinCameraFrame('upper', aspect),
   }), [aspect]);
+  const floorFramingDistance = Math.min(cabinFrames.lower.distance, cabinFrames.upper.distance);
   const stairFrames = useMemo(() => stairCameraFrames(aspect), [aspect]);
-  const deckCamera = useRef({ viewRevision: props.viewRevision, settling: false, onStairs: false });
+  const deckCamera = useRef({ viewRevision: props.viewRevision, settling: false, onStairs: false, zoomRatio: null as number | null });
   const quickFlight = useRef<{ elapsed: number; start: CabinOpacity; zoom: number; moved: boolean } | null>(null);
   const stairEye = useRef(new THREE.Vector3());
   const stairTarget = useRef(new THREE.Vector3());
   const orbitDistance = useMemo(() => orbitDistanceForAspect(aspect), [aspect]);
   const zoomFlight = useRef([HOME_ZOOM, HOME_ZOOM]);
+  const cabinFrameScale = (distance: number) => {
+    const ratio = deckCamera.current.zoomRatio;
+    if (ratio === null) return 1;
+    return THREE.MathUtils.clamp(ratio * floorFramingDistance, 5, cabinFrames.overview.distance * 1.5) / distance;
+  };
   const cameraView = props.library?.cameraView;
   const sideView = props.focusedObject === 'book-01' && cameraView === 'side';
   const sideSlot = sideView ? props.library?.view.book?.slotId : undefined;
@@ -147,7 +153,9 @@ function CameraRig(props: CameraRigProps) {
       const frame = cabinFrames[props.cabinView];
       const look = origin.clone().add(showOutfit ? OUTFIT_TARGET : frame.target);
       if (camera instanceof THREE.PerspectiveCamera) { camera.zoom = HOME_ZOOM; camera.fov = CAMERA_FOV; camera.updateProjectionMatrix(); }
-      camera.position.copy(showOutfit ? outfitCameraPosition(aspect) : frame.position).add(origin);
+      if (showOutfit) camera.position.copy(outfitCameraPosition(aspect));
+      else camera.position.lerpVectors(frame.target, frame.position, cabinFrameScale(frame.distance));
+      camera.position.add(origin);
       deckCamera.current.viewRevision = props.viewRevision;
       deckCamera.current.settling = false;
       controls.current.target.copy(look);
@@ -176,7 +184,7 @@ function CameraRig(props: CameraRigProps) {
     if (props.viewMode === 'entering-cabin') {
       const frame = cabinFrames[props.cabinView];
       target.current.copy(origin).add(frame.target);
-      destination.current.copy(origin).add(frame.position);
+      destination.current.lerpVectors(frame.target, frame.position, cabinFrameScale(frame.distance)).add(origin);
       if (camera instanceof THREE.PerspectiveCamera) zoomFlight.current = [camera.zoom, HOME_ZOOM];
       viewFlight.current = { active: true, elapsed: 0, duration: props.reducedMotion ? REDUCED_TRANSITION_DURATION : ENTER_CABIN_DURATION, mode: 'entering-cabin' };
     } else {
@@ -238,7 +246,8 @@ function CameraRig(props: CameraRigProps) {
     } else {
       const frame = cabinFrames[props.cabinView];
       target.current.copy(origin).add(frame.target);
-      destination.current.copy(origin).add(frame.position);
+      const scale = props.transition.toScene === 'habitat' ? cabinFrameScale(frame.distance) : 1;
+      destination.current.lerpVectors(frame.target, frame.position, scale).add(origin);
     }
     if (props.transition.phase === 'error') {
       if (camera instanceof THREE.PerspectiveCamera) { camera.zoom = zoomFlight.current[1]; camera.updateProjectionMatrix(); }
@@ -313,6 +322,10 @@ function CameraRig(props: CameraRigProps) {
     const ascent = inHabitat ? resident.stairAscent : null;
     const onStairs = ascent !== null;
     const opacity = props.deckOpacity.current;
+    const zoomRatio = camera.position.distanceTo(controls.current.target) / floorFramingDistance;
+    if (inHabitat && !locked && !moving.current && !deck.settling && !onStairs && !deck.onStairs
+      && !quickFlight.current && deck.viewRevision === props.viewRevision) deck.zoomRatio = zoomRatio;
+    const isolation = cabinZoomIsolation(deck.zoomRatio ?? zoomRatio);
     if (props.quickDeck && inHabitat && !locked) {
       const nextDeck = props.quickDeck;
       controls.current.enabled = false;
@@ -325,7 +338,7 @@ function CameraRig(props: CameraRigProps) {
       const quick = quickFlight.current;
       quick.elapsed += Math.min(delta, .1);
       const progress = props.reducedMotion ? 1 : Math.min(quick.elapsed / QUICK_CABIN_DURATION, 1);
-      const frame = quickCabinFrame(progress, quick.start, nextDeck);
+      const frame = quickCabinFrame(progress, quick.start, nextDeck, isolation);
       opacity.lower = frame.lower;
       opacity.upper = frame.upper;
       opacity.resident = frame.resident;
@@ -341,7 +354,8 @@ function CameraRig(props: CameraRigProps) {
       }
       const blend = easeInOutCubic(progress);
       const end = cabinFrames[nextDeck];
-      camera.position.lerpVectors(fromPosition.current, end.position, blend);
+      const eye = stairEye.current.lerpVectors(end.target, end.position, cabinFrameScale(end.distance));
+      camera.position.lerpVectors(fromPosition.current, eye, blend);
       controls.current.target.lerpVectors(fromTarget.current, end.target, blend);
       if (camera instanceof THREE.PerspectiveCamera) {
         camera.zoom = THREE.MathUtils.lerp(quick.zoom, HOME_ZOOM, blend);
@@ -367,8 +381,9 @@ function CameraRig(props: CameraRigProps) {
       deck.settling = true;
     }
     const focusDeck = props.focusedObject === 'clock' || props.focusedObject === 'wardrobe' ? 'upper' : 'lower';
-    const view = !inHabitat ? 'overview' : props.focusedObject ? focusDeck : landed ? resident.deck : props.cabinView;
-    const fade = cabinDeckOpacity(view, ascent, resident.stairFrom);
+    const activeDeck = landed || props.cabinView === 'overview' ? resident.deck : props.cabinView;
+    const view = !inHabitat ? 'overview' : props.focusedObject ? focusDeck : activeDeck;
+    const fade = cabinDeckOpacity(view, props.focusedObject ? 1 : isolation, ascent, resident.stairFrom);
     for (const part of ['lower', 'upper'] as const) {
       const next = props.reducedMotion ? fade[part] : THREE.MathUtils.damp(opacity[part], fade[part], 15, delta);
       opacity[part] = Math.abs(next - fade[part]) < .008 ? fade[part] : next;
@@ -377,9 +392,21 @@ function CameraRig(props: CameraRigProps) {
     if (!moving.current) {
       const adjusting = inHabitat && !locked && (onStairs || deck.settling);
       controls.current.enabled = !locked && !adjusting;
-      if (!adjusting) return;
-      const end = cabinFrames[props.cabinView];
-      const eye = onStairs ? stairEye.current.lerpVectors(stairFrames.lower.position, stairFrames.upper.position, ascent) : end.position;
+      if (!adjusting) {
+        if (inHabitat && !locked && props.cabinView === 'overview') {
+          const pivot = stairTarget.current.lerpVectors(HOME_TARGET, cabinFrames[resident.deck].target, isolation);
+          const shift = stairEye.current.subVectors(pivot, controls.current.target);
+          if (!props.reducedMotion) shift.multiplyScalar(1 - Math.exp(-Math.min(delta, .1) * 12));
+          camera.position.add(shift);
+          controls.current.target.add(shift);
+          camera.lookAt(controls.current.target);
+        }
+        return;
+      }
+      const end = cabinFrames[landed ? resident.deck : props.cabinView];
+      const eye = onStairs
+        ? stairEye.current.lerpVectors(stairFrames.lower.position, stairFrames.upper.position, ascent)
+        : stairEye.current.lerpVectors(end.target, end.position, cabinFrameScale(end.distance));
       const pivot = onStairs ? stairTarget.current.lerpVectors(stairFrames.lower.target, stairFrames.upper.target, ascent) : end.target;
       const blend = props.reducedMotion ? 1 : 1 - Math.exp(-Math.min(delta, .1) * (onStairs ? 6 : 10));
       camera.position.lerp(eye, blend);
@@ -489,7 +516,7 @@ function OrbitalLighting({ objects, sceneId, sun }: Pick<WorldSceneProps, 'objec
 }
 function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpen: boolean; outfitPreview: boolean }) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
-  const deckOpacity = useRef<CabinOpacity>({ ...cabinDeckOpacity(props.cabinView), resident: 1 });
+  const deckOpacity = useRef<CabinOpacity>({ ...cabinDeckOpacity(props.cabinView, props.outfitPreview ? 1 : 0), resident: 1 });
   const residentView = useRef<CabinResidentView>({ deck: 'lower', stairAscent: null, stairFrom: null });
   const sofaTime = useRef<number | null>(null);
   const interaction = useRef<NonNullable<WorldSceneProps['onApproach']> | null>(null);
