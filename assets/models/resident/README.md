@@ -1,5 +1,19 @@
 # Luna 动画制作源
 
+## 生活舱日常动作
+
+地毯的盘腿坐地使用 MotionSmith Take 2 原地版，盘腿起身、捡东西、揉眼睛、托腮思考和向高处取物均使用 Take 1。摘取姿态来自 UE5 Manny 的 30 fps 骨骼动画。脚底和骨盆按 Luna 日常装的实际蒙皮校准。盘腿时，裙装的前幅分别越过左右膝，中间略低，末端向下折落。侧幅绕向膝外侧，后摆在地毯上摊开。入座和起身时沿动作过渡。脸部手势保留原片时序，腕位按 Luna 的脸型缩放。书架目录使用托下巴动作的抬手段并保持姿势。拾物在 1.9 秒把纸团交给右手。拾娃娃复用同一动作，起身后双手托住，放下时反向播放。高处取物在书本接触前交回书柜原动作。
+
+五条待机同样按日常装导出。从 [Feminine Idle](https://cosindra.ai/motionsmith/motions/idle-feminine) Take 1 提取躯干与左臂，并按日常装调整掌面朝向和腰侧落点。[Neck Stretch](https://cosindra.ai/motionsmith/motions/idle-neck-stretch) Take 2 使用胸部以上旋转。[Seated Dozing Idle](https://cosindra.ai/motionsmith/motions/seated-dozing-idle) Take 1 保留点头回抬的节奏，用躯干辅助前倾。[Seated Idle](https://cosindra.ai/motionsmith/motions/sit-chair-idle) Take 5 和 [Floor Sitting Idle](https://cosindra.ai/motionsmith/motions/sit-floor-idle) Take 1 保留原片的视线方向，用淡入淡出形成转头。三段坐姿只叠加脊柱、颈或头的相对旋转。叠加时保留原坐姿接触和地毯蒙皮。
+
+原片放在仓库外同一个目录，每个文件保留 MotionSmith 的默认名。使用 Node.js 24 重建日常装的动画 GLB。
+
+```bash
+node scripts/bake-luna-cabin-actions.mjs /path/to/downloads
+```
+
+来源、Take 和源文件校验值见[素材登记](../../models.sources.json)。
+
 ## 楼梯步态
 
 Luna 上、下楼各取 MotionSmith Take 1 中连续的左右两步。原文件均为 UE5 Manny 骨架、30 fps。帧号从 0 开始，上楼两个步段的边界为 48、64、80，下楼为 57、76、94，分别取脚趾开始离开踏面的帧。导出脚踝推进与抬升、脚掌俯仰、躯干倾斜、双膝屈曲、髋踝相对位置和双侧肩、肘、腕的运动方向。运行时按腿长和踏面尺寸重定向，并在首末级与平台衔接。两个方向都用支撑踝定位骨盆，按原片的前移曲线跨过左右脚换重的瞬间。骨盆至颈部的倾角驱动躯干，头部俯仰单独采样。上楼时，骨盆的抬升曲线限制承重腿伸直时身体的上升速度。下楼时，骨盆的降高曲线控制左右脚换重。前脚掌靠近踏板前缘，后跟越过台阶后逐渐下降，落脚时膝盖保留原片的轻微弯曲。[上楼原片](https://cosindra.ai/motionsmith/motions/walk-upstairs) · [下楼原片](https://cosindra.ai/motionsmith/motions/walk-downstairs)

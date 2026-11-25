@@ -10,6 +10,7 @@ interface ScheduleContextValue {
   error: string;
   commit: (next: ScheduleNotebook, options?: { retainDraftOnError?: boolean }) => boolean;
   retry: () => void;
+  collectPaper: (id: string) => boolean;
 }
 const ScheduleContext = createContext<ScheduleContextValue | null>(null);
 export function useSchedule() {
@@ -119,6 +120,11 @@ export function ScheduleProvider({ adapters, children }: { adapters?: WorldFeatu
     sync(next);
     return true;
   }, [ready, sync]);
+  const collectPaper = useCallback((id: string) => {
+    const current = latest.current;
+    const discarded = current.discarded.filter(ball => ball.id !== id);
+    return discarded.length !== current.discarded.length && commit({ ...current, discarded });
+  }, [commit]);
   const retry = () => ready && !remote ? commit(latest.current) : setAttempt(value => value + 1);
-  return <ScheduleContext.Provider value={{ book, state, ready, error, commit, retry }}>{children}</ScheduleContext.Provider>;
+  return <ScheduleContext.Provider value={{ book, state, ready, error, commit, retry, collectPaper }}>{children}</ScheduleContext.Provider>;
 }

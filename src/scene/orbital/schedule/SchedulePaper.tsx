@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PaperBall, SchedulePage } from './schedule';
+import type { PaperPickup } from '../cabinActions';
 import { SCHEDULE_BOOK_POSITION } from './bookLayout';
 
 export const GLASS_POSITION: [number, number, number] = [0.69, 2.53, -3.13];
@@ -106,10 +107,17 @@ export function PostedPaper({ page, position, onSelect }: { page: SchedulePage; 
     </mesh>)}
   </group>;
 }
-export function FloorPaperBall({ ball }: { ball: PaperBall }) {
+export function FloorPaperBall({ ball, pickup }: { ball: PaperBall; pickup: React.RefObject<PaperPickup | null> }) {
+  const mesh = useRef<THREE.Mesh>(null);
+  const start = useMemo(() => paperBallPosition(ball.seed), [ball.seed]);
+  useFrame(() => {
+    if (!mesh.current) return;
+    if (pickup.current?.id === ball.id) mesh.current.position.copy(pickup.current.position);
+    else mesh.current.position.fromArray(start);
+  });
   const { geometry } = useMemo(() => paperGeometry(true), []);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  return <mesh name={`discarded-schedule-${ball.id}`} geometry={geometry} position={paperBallPosition(ball.seed)} rotation={[0.4, ball.seed, 0.3]} castShadow receiveShadow>
+  return <mesh ref={mesh} name={`discarded-schedule-${ball.id}`} geometry={geometry} position={start} rotation={[0.4, ball.seed, 0.3]} castShadow receiveShadow>
     <meshStandardMaterial color="#e7ddc3" roughness={1} side={THREE.DoubleSide} flatShading />
   </mesh>;
 }

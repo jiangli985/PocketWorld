@@ -273,6 +273,43 @@
       "sha256": "519fcea80093b9ea1d397fcee19bef3fdf67273381142f9aa60f44f59c9f1f46",
       "processing": "scripts/bake-luna-stairs.mjs samples consecutive right and left steps from the original GLBs. The shipped profiles contain ankle travel, pitch, torso lean, knee flexion, hip offsets and upper arm, forearm and hand directions. Both directions store pelvis travel relative to the planted ankle, vertical travel and head pitch through each toe-off. Character meshes and original clips are not bundled.",
       "descentSourcePage": "https://cosindra.ai/motionsmith/motions/walk-downstairs"
+    },
+    {
+      "file": "assets/public/models/resident/luna-cabin-actions-everyday.glb",
+      "source": "Cosindra MotionSmith gallery, eleven UE5 Manny clips fitted to Luna at 15 or 30 fps.",
+      "sourcePage": "https://cosindra.ai/motionsmith/motions/sit-floor",
+      "sourcePages": {
+        "MotionSmith_sit_floor_take2.glb": "https://cosindra.ai/motionsmith/motions/sit-floor",
+        "MotionSmith_stand_up_floor_take1.glb": "https://cosindra.ai/motionsmith/motions/stand-up-floor",
+        "MotionSmith_pick_up_take1.glb": "https://cosindra.ai/motionsmith/motions/pick-up",
+        "MotionSmith_rub_eye_take1.glb": "https://cosindra.ai/motionsmith/motions/rub-eye",
+        "MotionSmith_thinking_take1.glb": "https://cosindra.ai/motionsmith/motions/thinking",
+        "MotionSmith_reach_high_take1.glb": "https://cosindra.ai/motionsmith/motions/reach-high",
+        "MotionSmith_idle_feminine_take1.glb": "https://cosindra.ai/motionsmith/motions/idle-feminine",
+        "MotionSmith_idle_neck_stretch_take2.glb": "https://cosindra.ai/motionsmith/motions/idle-neck-stretch",
+        "MotionSmith_seated_dozing_idle_take1.glb": "https://cosindra.ai/motionsmith/motions/seated-dozing-idle",
+        "MotionSmith_sit_chair_idle_take5.glb": "https://cosindra.ai/motionsmith/motions/sit-chair-idle",
+        "MotionSmith_sit_floor_idle_take1.glb": "https://cosindra.ai/motionsmith/motions/sit-floor-idle"
+      },
+      "sourceSha256": {
+        "MotionSmith_sit_floor_take2.glb": "9627ea368f5e88dc50ff4b128dc8d911c0272f250f7b56a2b3d30df8b9593ad7",
+        "MotionSmith_stand_up_floor_take1.glb": "ef437ec9152752e6fdd26410194efc4a40a3fb167ae983b3000c6df390385601",
+        "MotionSmith_pick_up_take1.glb": "4cfe5bec54742ad408ecb13ea0887758a7dbb1fd6fbbf977ede8d7129ac8a411",
+        "MotionSmith_rub_eye_take1.glb": "5eb1c241e3ce8955e426467b0f2d74fb0adae0d8a64c614377e8d06a94ce6d05",
+        "MotionSmith_thinking_take1.glb": "58f8fddf3880997ad35037d41582bf0fa014a17377b8b1f8f5b9d245b5cc71a8",
+        "MotionSmith_reach_high_take1.glb": "be8fbb3994ebaa2d5fbc08dd2700374bdb222e0809040b75cf311b606336a7a9",
+        "MotionSmith_idle_feminine_take1.glb": "78ab31313c54ff26de4f5750bca86746d9b1eca93500f4cf38a936984aa09167",
+        "MotionSmith_idle_neck_stretch_take2.glb": "0972a23a29d0c383749d8ab4bf269adda744b0730edf3ba2f8ac105c8c5bfe34",
+        "MotionSmith_seated_dozing_idle_take1.glb": "361e214fee5ddb4fffcc7c5177a5021e5b63b908fbba2c2b5f8fb7d9e84a16e0",
+        "MotionSmith_sit_chair_idle_take5.glb": "c9452ecde98b5f0a0f7055feec5b45368592551f61d232afa8b619f96c0f9214",
+        "MotionSmith_sit_floor_idle_take1.glb": "2fd5791517056e3fddb0a20f74507ef75c96296ea6b70c89fe4d382cf3e12d97"
+      },
+      "license": "The MotionSmith gallery permits commercial game use without attribution.",
+      "licensePage": "https://cosindra.ai/license",
+      "used": true,
+      "bytes": 1013604,
+      "sha256": "2966d4f116d6e160ac5e2bfab39e55a9931fa3fae06cdd4eac6a5ea652983971",
+      "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, fits hand gestures to the face or waist, and exports masked idle rotations and action tracks without meshes or textures."
     }
   ]
 }
