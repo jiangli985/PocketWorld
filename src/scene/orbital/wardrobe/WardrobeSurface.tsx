@@ -2,11 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { WorldTransition } from '../../../types/world';
 import { outfitChoices, outfitNames, type ResidentOutfit } from './outfit';
 import everyday from '../../../../assets/models/resident/wardrobe/everyday.webp';
-import snowflower from '../../../../assets/models/resident/wardrobe/snowflower.webp';
-import cloudhoodie from '../../../../assets/models/resident/wardrobe/cloudhoodie.webp';
 import './wardrobe.css';
 
-const portraits = { everyday, snowflower, cloudhoodie };
+const portraits = { everyday };
 
 interface Props {
   current: ResidentOutfit;
@@ -38,8 +36,8 @@ export function WardrobeSurface({ current, transition, error, onChoose, onCancel
     </> : (
       <form className="wardrobe-picker" onSubmit={event => { event.preventDefault(); if (selected !== current) onChoose(selected); }}>
         <div className="wardrobe-heading"><h2>衣柜</h2><button type="button" className="wardrobe-close" aria-label="关闭衣柜" onClick={onCancel}>×</button></div>
-        <fieldset><legend>选择一套服装</legend><div className="wardrobe-choices">
-          {outfitChoices.map(id => <label key={id} className={'wardrobe-option outfit-' + id}>
+        <fieldset><legend>{outfitChoices.length === 1 ? '当前装扮' : '选择一套服装'}</legend><div className="wardrobe-choices">
+          {outfitChoices.map(id => <label key={id} className="wardrobe-option">
             <input type="radio" name="wardrobe-outfit" value={id} autoFocus={id === current} checked={id === selected} onChange={() => setSelected(id)} />
             <span className="wardrobe-card">
               <span className="wardrobe-portrait"><img src={portraits[id]} alt="" /></span>
@@ -49,7 +47,7 @@ export function WardrobeSurface({ current, transition, error, onChoose, onCancel
           </label>)}
         </div></fieldset>
         {error && <p role="alert" className="wardrobe-error">{error}</p>}
-        <div className="wardrobe-footer"><button type="submit" disabled={selected === current}>换上这套</button></div>
+        {outfitChoices.length > 1 && <div className="wardrobe-footer"><button type="submit" disabled={selected === current}>换上这套</button></div>}
       </form>
     )}
   </dialog>;

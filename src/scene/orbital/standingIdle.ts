@@ -140,7 +140,6 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
     return { joint, curve: track.createInterpolant() };
   }) ?? [];
   const yawnChannels = bind(clip), lookChannels = bind(lookClip);
-  const fittedSleeves = root.userData.outfit === 'cloudhoodie';
   const spine = bone('Spine2'), neck = bone('Neck'), head = bone('Head');
   const arms = (['Right', 'Left'] as const).map(side => {
     const direction = side === 'Left' ? 1 : -1;
@@ -167,14 +166,9 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
     rotation.premultiply(basis).multiply(inverseBasis.copy(basis).invert());
     joint.quaternion.premultiply(rotation);
   };
-  const sleeveBreath = (joint: THREE.Object3D, x: number, y: number, z: number, weight: number) => {
-    joint.quaternion.multiply(rotation.setFromEuler(euler.set(x * weight, y * weight, z * weight)));
-  };
-  const breathingOffset = fittedSleeves ? sleeveBreath : modelOffset;
   return (state: IdleState, animate = true) => {
-    const restWeight = fittedSleeves ? 0 : smooth(state.restWeight);
+    const restWeight = smooth(state.restWeight);
     const weight = animate ? smooth(state.weight) : 0;
-    const armWeight = fittedSleeves ? weight * .18 : weight;
     const breath = Math.sin(state.phase * Math.PI * 2 / STANDING_IDLE.breathPeriod);
     const sway = Math.sin(state.phase * Math.PI * 2 / STANDING_IDLE.swayPeriod);
     const shortWeight = animate ? state.shortWeight : 0;
@@ -182,8 +176,8 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
     const clasp = state.shortKind === 'clasp' ? shortWeight : 0;
     if (restWeight || weight || shortWeight) {
       root.getWorldQuaternion(modelRotation);
-      breathingOffset(spine, breath * STANDING_IDLE.breathPitch, 0, sway * STANDING_IDLE.swayRoll, weight);
-      breathingOffset(neck, -breath * .012, sway * STANDING_IDLE.headTurn, -sway * (fittedSleeves ? .015 : .022), weight);
+      modelOffset(spine, breath * STANDING_IDLE.breathPitch, 0, sway * STANDING_IDLE.swayRoll, weight);
+      modelOffset(neck, -breath * .012, sway * STANDING_IDLE.headTurn, -sway * .022, weight);
       modelOffset(spine, .018 * listen + .043 * clasp, .058 * listen, -.018 * listen, 1);
       modelOffset(neck, .14 * listen + .20 * clasp, .23 * listen - .038 * clasp, -.12 * listen + .032 * clasp, 1);
       modelOffset(head, .064 * listen + .10 * clasp, .10 * listen, -.094 * listen, 1);
@@ -194,15 +188,9 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
         modelOffset(upper, -.125, 0, -direction * .15, restWeight);
         modelOffset(forearm, -.155, 0, -direction * .038, restWeight);
         modelOffset(hand, .085, -direction * .065, -direction * .025, restWeight);
-        if (fittedSleeves) {
-          sleeveBreath(shoulder, 0, 0, -direction * breath * STANDING_IDLE.shoulderRoll, armWeight);
-          sleeveBreath(upper, sway * STANDING_IDLE.armSwing, 0, -direction * .025, armWeight);
-          sleeveBreath(forearm, STANDING_IDLE.elbowRelax * (.65 + .35 * breath), 0, 0, armWeight);
-        } else {
-          modelOffset(shoulder, 0, 0, direction * breath * STANDING_IDLE.shoulderRoll, weight);
-          modelOffset(upper, (sway - .38) * STANDING_IDLE.armSwing, 0, -direction * sway * .018, weight);
-          modelOffset(forearm, -STANDING_IDLE.elbowRelax * (.60 + .40 * breath), 0, 0, weight);
-        }
+        modelOffset(shoulder, 0, 0, direction * breath * STANDING_IDLE.shoulderRoll, weight);
+        modelOffset(upper, (sway - .38) * STANDING_IDLE.armSwing, 0, -direction * sway * .018, weight);
+        modelOffset(forearm, -STANDING_IDLE.elbowRelax * (.60 + .40 * breath), 0, 0, weight);
         if (clasp) {
           for (const part of parts) part.joint.quaternion.slerp(part.base, clasp);
           // Sweep forward before closing the gap between the wrists.

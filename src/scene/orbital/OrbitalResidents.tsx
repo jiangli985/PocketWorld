@@ -243,10 +243,6 @@ export function OrbitalResidents(props: ResidentsProps) {
   const libraryPlayer = useRef<{ motion: LibraryMotion; rig: ResidentRig; apply: ReturnType<typeof createLibraryPlayer> }>();
   useEffect(() => {
     if (!libraryOpen || !libraryAsset) return;
-    if (rig.current?.fitted) {
-      libraryAsset.current = rig.current.fitted.library;
-      return;
-    }
     let live = true;
     libraryAsset.current = undefined;
     void loadLibraryMotion().then(motion => {
@@ -261,7 +257,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   const sofaMotion = useRef({ time: 0, clip: null as THREE.AnimationClip | null,
     apply: null as ReturnType<typeof sofaPlayer> | null, rig: null as ResidentRig | null });
   useEffect(() => {
-    if (!props.objects.sofa?.active || props.sceneId !== 'habitat' || rig.current?.fitted) return;
+    if (!props.objects.sofa?.active || props.sceneId !== 'habitat') return;
     let live = true;
     void loadSofaClip().then(clip => { if (live) sofaMotion.current.clip = clip; }).catch(() => {
       if (live) {
@@ -537,7 +533,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     const readerYaw = Math.PI + shelfYaw(p.sceneId);
     const libraryActive = !!flow && flow.phase !== 'idle';
     const libraryWalking = !!flow && ['approach', 'align', 'recenter'].includes(flow.phase);
-    const motion = libraryActive ? (rig.current?.fitted?.library ?? library?.motion.current) : undefined;
+    const motion = libraryActive ? library?.motion.current : undefined;
     if (motion && rig.current && (libraryPlayer.current?.motion !== motion || libraryPlayer.current.rig !== rig.current)) {
       try {
         libraryPlayer.current = { motion, rig: rig.current, apply: createLibraryPlayer(rig.current.mesh, motion) };
@@ -592,7 +588,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     let stairGait: StairGait | null = null;
     let onStairContact = false;
     const sofa = sofaMotion.current;
-    const sofaClip = rig.current?.fitted?.sofa ?? sofa.clip;
+    const sofaClip = sofa.clip;
     if (sofa.rig !== rig.current || (sofaClip && !sofa.apply && rig.current)) {
       sofa.apply = rig.current && sofaClip ? sofaPlayer(rig.current.mesh, sofaClip) : null;
       sofa.rig = rig.current;
@@ -888,9 +884,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       && !keys.current.size && !idleInput.current && !s.path.length && !s.stairs && !s.external
       && !approach.current && !libraryActive;
     const im = idleMotion.current;
-    const fittedIdle = rig.current?.fitted?.idle;
-    const yawnClip = fittedIdle?.yawn ?? im.clip;
-    const lookClip = fittedIdle?.look ?? im.lookClip;
+    const { clip: yawnClip, lookClip } = im;
     stepIdle(idle.current, rawDelta, standingAtRest && !p.reducedMotion, yawnClip?.duration ?? 0,
       Math.random, lookClip?.duration ?? 0, standingAtRest);
     idleInput.current = false;
@@ -929,7 +923,6 @@ export function OrbitalResidents(props: ResidentsProps) {
       rig.current.applyArmCorrectives(!interactionPose && !libraryActive);
     }
     if (library && rig.current) library.tick(dt);
-    rig.current?.updateSleeveContact?.();
     root.userData.onStairs = !!stairSample;
     root.userData.posture = s.exiting ? 'standing-up' : s.posture;
     root.userData.standingIdle = { elapsed: idle.current.elapsed, weight: idle.current.weight, yawnTime: idle.current.yawnTime,
