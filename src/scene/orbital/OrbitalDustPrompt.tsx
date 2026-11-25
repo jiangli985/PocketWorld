@@ -5,10 +5,11 @@ import {
   PROMPT_KEYCAP_SIZE,
   PROMPT_SHORTCUT_GAP,
   createDustPromptState,
-  dustKeycapOpacity,
+  dustPromptCoreProgress,
   layoutPromptShortcuts,
   setDustTargets,
   splitPromptLines,
+  stepDustKeycapProgress,
   stepDustPrompt,
   type DustPoint,
 } from './dustPromptEngine';
@@ -57,6 +58,8 @@ function sampleGlyphs(
   const font = `600 ${fontSize}px ${FONT_FAMILY}`;
   ctx.scale(scale, scale);
   ctx.font = font;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
 
   const padX = Math.min(180, Math.max(40, Math.round(width * 0.18)));
   const innerWidth = Math.max(150, width - padX * 2);
@@ -72,7 +75,9 @@ function sampleGlyphs(
       const y = startY + index * lineHeight;
       let left = (width - rowWidth) / 2;
       for (const { key, label, width: itemWidth } of row) {
-        keycaps.push({ key, x: left + PROMPT_KEYCAP_SIZE / 2 - width / 2, y });
+        const { actualBoundingBoxAscent, actualBoundingBoxDescent } = ctx.measureText(label);
+        const centerY = y + (actualBoundingBoxDescent - actualBoundingBoxAscent) / 2;
+        keycaps.push({ key, x: left + PROMPT_KEYCAP_SIZE / 2 - width / 2, y: centerY });
         const labelLeft = left + PROMPT_KEYCAP_SIZE + PROMPT_KEYCAP_GAP;
         glyphs.push({ label, x: (labelLeft + left + itemWidth) / 2, y });
         left += itemWidth + PROMPT_SHORTCUT_GAP;
@@ -85,15 +90,17 @@ function sampleGlyphs(
     lines.forEach((label, index) => glyphs.push({ label, x: width / 2, y: startY + index * lineHeight }));
   }
 
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';
   for (const { label, x, y } of glyphs) ctx.fillText(label, x, y);
-  // Gather dust into the keycap as well. The bevel covers the inset mask as it settles.
+  // The outline and letter gather before the solid keycap appears.
   const maskSize = PROMPT_KEYCAP_SIZE - 4;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.4;
   ctx.beginPath();
   for (const { x, y } of keycaps) ctx.roundRect(x + (width - maskSize) / 2, y - maskSize / 2, maskSize, maskSize, 4);
-  ctx.fill();
+  ctx.stroke();
+  ctx.font = '700 11px system-ui, sans-serif';
+  for (const { key, x, y } of keycaps) ctx.fillText(key, x + width / 2 - 1.5, y - 1.5);
 
   const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
   const points: DustPoint[] = [];
@@ -146,7 +153,7 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const keycapLayerRef = useRef<HTMLDivElement>(null);
   const [keycaps, setKeycaps] = useState<PromptKeycap[]>([]);
-  const keycapMotion = useRef({ targeted: false, opacity: 0 });
+  const keycapMotion = useRef({ targeted: false, progress: 0 });
   const stateRef = useRef(createDustPromptState());
   const shadowRef = useRef<HTMLCanvasElement | null>(null);
   const coreRef = useRef<HTMLCanvasElement | null>(null);
@@ -169,10 +176,10 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
 
       stepDustPrompt(state, dt, propsRef.current.reducedMotion);
       const motion = keycapMotion.current;
-      const previousOpacity = motion.opacity;
-      motion.opacity = dustKeycapOpacity(previousOpacity, state.settleProgress, motion.targeted, dt, propsRef.current.reducedMotion);
-      if (keycapLayerRef.current) keycapLayerRef.current.style.opacity = String(motion.opacity);
-      if (!motion.targeted && previousOpacity > 0 && motion.opacity === 0) setKeycaps([]);
+      const previousProgress = motion.progress;
+      motion.progress = stepDustKeycapProgress(previousProgress, state.settleProgress, motion.targeted, dt, propsRef.current.reducedMotion);
+      if (keycapLayerRef.current) keycapLayerRef.current.style.opacity = String(dustPromptCoreProgress(motion.progress));
+      if (!motion.targeted && previousProgress > 0 && motion.progress === 0) setKeycaps([]);
 
       if (canvas) {
         const ctx = canvas.getContext('2d');
@@ -189,9 +196,10 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
             ctx.restore();
           }
 
-          if (coreRef.current && state.settleProgress > 0.55) {
+          const coreProgress = dustPromptCoreProgress(state.settleProgress);
+          if (coreRef.current && coreProgress > 0) {
             ctx.save();
-            ctx.globalAlpha = ((state.settleProgress - 0.55) / 0.45) * 0.28;
+            ctx.globalAlpha = coreProgress * 0.28;
             ctx.drawImage(coreRef.current, 0, 0, width, CANVAS_HEIGHT);
             ctx.restore();
           }
@@ -218,7 +226,7 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
         }
       }
 
-      if (state.active || motion.opacity > 0) {
+      if (state.active || motion.progress > 0) {
         rafRef.current = window.requestAnimationFrame(tick);
       } else {
         rafRef.current = 0;
@@ -235,17 +243,17 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
     const motion = keycapMotion.current;
     const { points, shadow, core, keycaps } = sampleGlyphs(value, width, CANVAS_HEIGHT);
     motion.targeted = keycaps.length > 0;
-    if (motion.targeted || motion.opacity === 0) setKeycaps(keycaps);
+    if (motion.targeted || motion.progress === 0) setKeycaps(keycaps);
     if (motion.targeted && state.text !== value.trim()) {
-      motion.opacity = reduce ? 1 : 0;
-      if (keycapLayerRef.current) keycapLayerRef.current.style.opacity = String(motion.opacity);
+      motion.progress = reduce ? 1 : 0;
+      if (keycapLayerRef.current) keycapLayerRef.current.style.opacity = String(motion.progress);
     }
     if (value.trim() || !state.particles.length) {
       shadowRef.current = shadow;
       coreRef.current = core;
     }
     setDustTargets(state, value, points, width / 2, TEXT_CENTER_Y, reduce);
-    if (state.active || motion.opacity > 0) startLoop();
+    if (state.active || motion.progress > 0) startLoop();
   };
 
   useEffect(() => {

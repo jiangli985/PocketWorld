@@ -35,7 +35,7 @@ export const MAX_DUST_PARTICLES = 3800;
 export const DUST_TONES = ['#fffaf0', '#f5ebd6', '#e6d1a7', '#ffffff', '#d4e2db'] as const;
 // Match the shared keycap size in orbital.css.
 export const PROMPT_KEYCAP_SIZE = 23;
-export const PROMPT_KEYCAP_GAP = 7;
+export const PROMPT_KEYCAP_GAP = 6;
 export const PROMPT_SHORTCUT_GAP = 16;
 
 const SPRING_STIFFNESS = 155;
@@ -45,8 +45,13 @@ function decayDustProgress(progress: number, dt: number, reducedMotion: boolean)
   return Math.max(0, progress - dt * (reducedMotion ? 10 : 6));
 }
 
-export function dustKeycapOpacity(previous: number, settleProgress: number, targeted: boolean, rawDt: number, reducedMotion: boolean): number {
+export function stepDustKeycapProgress(previous: number, settleProgress: number, targeted: boolean, rawDt: number, reducedMotion: boolean): number {
   return targeted ? settleProgress : decayDustProgress(previous, Math.min(Math.max(rawDt, 0), 0.05), reducedMotion);
+}
+
+export function dustPromptCoreProgress(settleProgress: number): number {
+  const start = .55;
+  return Math.max(0, (settleProgress - start) / (1 - start));
 }
 
 export function createDustPromptState(): DustPromptState {
