@@ -1,8 +1,9 @@
 export const outfitNames = {
   everyday: '日常装',
+  cardigan: '丁香针织开衫',
 } as const;
 export type ResidentOutfit = keyof typeof outfitNames;
-export const outfitChoices = Object.keys(outfitNames) as ResidentOutfit[];
+export const outfitSlots: readonly (ResidentOutfit | null)[] = ['everyday', null, 'cardigan'];
 
 export function readOutfit(value?: string | null): ResidentOutfit {
   return isOutfit(value) ? value : 'everyday';

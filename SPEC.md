@@ -36,7 +36,7 @@ PocketWorld 是浏览器里的 3D 轨道居住舱。访客在生活舱里环绕�
 
 ### 2.3 住民与物品交互
 
-- 点击二层木框窗旁的高衣柜，或靠近后按提示键，Luna 会走到柜前，移开推拉门并显示日常装的缩略图和穿着状态。关闭衣柜后可继续操作房间。
+- 点击二层木框窗旁的高衣柜，或靠近后按提示键，Luna 会走到柜前并移开推拉门。第一格是日常装，第二格空置，第三格是丁香针织开衫。确认后显示换装转场和穿着检视，减少动态效果时跳过检视。关闭衣柜后可继续操作房间。
 
 - Luna 停步站定后放松肩、肘、腕，手臂收向身侧。日常裙装两侧的形态键分别随同侧手臂靠近而收拢，抬手时恢复。站定约 6 秒后加入小幅呼吸和上身重心变化。连续空闲 12–18 秒后首次偏头听一会，之后每隔 22–32 秒轮播低头拢手、揉眼睛、单手搭腰换重心、活动脖子和偏头。20–30 秒首次环顾，之后间隔 24–36 秒；50–70 秒首次伸懒腰，之后间隔 65–95 秒。一次只播放一个动作，前后至少留 8 秒普通待机。同一时刻有多个动作到期时，伸懒腰优先，其次为环顾。移动和交互重置计时；坐姿和物品交互沿用各自接触姿势。减少动态效果时保留自然站姿，停用装饰待机。参数集中在 `src/scene/orbital/standingIdle.ts`。
 - 住民用 `WASD` 或方向键行走，也可以点击地面走过去。Luna 的裙摆随步伐和转身轻摆，长发也会跟随站立时的转头动作。停步后摆动逐渐收住。坐姿、取阅书籍、物品近景及减少动态效果模式停用额外摆动。
@@ -162,7 +162,7 @@ PocketWorld 是浏览器里的 3D 轨道居住舱。访客在生活舱里环绕�
 | `pocketworld:schedule` | 旧版日程，只读取并迁移，原记录保留 | 无 |
 | `pocketworld:library:collection:v1` | 藏书、书位与阅读位置 | `library/` |
 | `pocketworld:library:books` | 旧版藏书，只读取并迁移，原记录保留 | 无 |
-| `pocketworld:wardrobe:outfit` | 当前装扮为 `everyday`。旧存档中的 `snowflower` 和 `cloudhoodie` 读作日常装。 | `orbital/wardrobe/` |
+| `pocketworld:wardrobe:outfit` | 可选 `everyday` 和 `cardigan`。旧存档中的 `snowflower` 和 `cloudhoodie` 读作日常装。 | `orbital/wardrobe/` |
 | `pocketworld:clock:v1` | 闹钟设定时刻、启用状态、倒计时与铃声选择 | `clock/` |
 
 `pocketworld:library:write` 是 Web Locks 的锁名，不是存储键。
@@ -178,7 +178,7 @@ PocketWorld 是浏览器里的 3D 轨道居住舱。访客在生活舱里环绕�
 | `?dev=shooter` | 「团团魔法录」独立调试页面，带静音、停用和装卸控制 |
 | `?sun=<0–1>` | 轨道居住舱，太阳固定在指定相位：0 为正午（背对地球），0.4 开始日落，0.5 为地影中点，0.6 日出 |
 | `?sunSpeed=<倍数>` | 轨道居住舱，太阳周期按倍数加速（0–240，默认 1，0 为暂停）；同时给出 `?sun=` 时不生效 |
-| `?view=cabin&outfit=everyday` | 从人物近景进入生活舱。旧的 `outfit=snowflower` 与 `outfit=cloudhoodie` 预览链接同样显示日常装。 |
+| `?view=cabin&outfit=everyday` / `?view=cabin&outfit=cardigan` | 从人物近景进入生活舱。旧的 `outfit=snowflower` 与 `outfit=cloudhoodie` 预览链接同样显示日常装。 |
 | `?view=orbit` / `?view=cabin` | 轨道居住舱，分别跳过开场推近直接停在舱外飞船视角或直接进入生活舱内 |
 
 入口选择在 `src/main.tsx`。独立页面不导入房间和 Three.js。

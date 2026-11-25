@@ -76,35 +76,37 @@ test('both elbows and wrists articulate as the hands exchange leading sides', as
 test('the ascending pelvis, neck and head advance through both support exchanges', async () => {
   // Pelvis-to-neck pitch in degrees from ascent frames 48, 52, …, 76 in the original GLB.
   const sourcePitch = [-.10, -1.81, -2.37, -.10, .77, .16, -.51, .17];
-  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-walk-room.glb', import.meta.url));
-  const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'));
-  const joints = ['Hips', 'Neck', 'Head'].map(name => gltf.scene.getObjectByName('mixamorig' + name));
-  try {
-    rig.mesh.rotation.y = Math.PI;
-    const furthest = joints.map(() => -Infinity);
-    const headHeights = [];
-    // At 60 Hz each tread takes 36 frames. Sample three steps to cross both seams.
-    for (let frame = 0; frame <= 108; frame++) {
-      const progress = 8 - .78 + frame / 36;
-      const gait = sampleStairGait(progress, true);
-      rig.mesh.position.set(CABIN_STAIRS.x, progress * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
-      rig.applyPose(gait.phase, 0);
-      rig.applyStairPose(gait, CABIN_STAIRS.x, stairTreadSurface);
-      const points = joints.map(joint => joint.getWorldPosition(new Vector3()));
-      for (const [i, point] of points.entries()) {
-        const forward = -point.z;
-        furthest[i] = Math.max(furthest[i], forward);
-        assert(furthest[i] - forward < .003, `${joints[i].name} rocked back during ascent`);
+  for (const outfit of ['walk-room', 'cardigan']) {
+    const { gltf } = await load(new URL(`../../../assets/public/models/resident/luna-${outfit}.glb`, import.meta.url));
+    const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'), outfit !== 'walk-room');
+    const joints = ['Hips', 'Neck', 'Head'].map(name => gltf.scene.getObjectByName('mixamorig' + name));
+    try {
+      rig.mesh.rotation.y = Math.PI;
+      const furthest = joints.map(() => -Infinity);
+      const headHeights = [];
+      // At 60 Hz each tread takes 36 frames. Sample three steps to cross both seams.
+      for (let frame = 0; frame <= 108; frame++) {
+        const progress = 8 - .78 + frame / 36;
+        const gait = sampleStairGait(progress, true);
+        rig.mesh.position.set(CABIN_STAIRS.x, progress * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
+        rig.applyPose(gait.phase, 0);
+        rig.applyStairPose(gait, CABIN_STAIRS.x, stairTreadSurface);
+        const points = joints.map(joint => joint.getWorldPosition(new Vector3()));
+        for (const [i, point] of points.entries()) {
+          const forward = -point.z;
+          furthest[i] = Math.max(furthest[i], forward);
+          assert(furthest[i] - forward < .003, `${outfit} ${joints[i].name} rocked back during ascent`);
+        }
+        headHeights.push(points[2].y);
+        if (frame >= 4) assert(points[2].y - headHeights[frame - 4] < .09, 'spread the uphill lift through weight transfer');
+        if (frame % 9 === 0) {
+          const trunk = points[1].clone().sub(points[0]);
+          const pitch = Math.atan2(-trunk.z, trunk.y) * 180 / Math.PI;
+          assert(Math.abs(pitch - sourcePitch[frame / 9 % 8]) < 1, 'keep the small recorded torso tilt through the step');
+        }
       }
-      headHeights.push(points[2].y);
-      if (frame >= 4) assert(points[2].y - headHeights[frame - 4] < .09, 'spread the uphill lift through weight transfer');
-      if (frame % 9 === 0) {
-        const trunk = points[1].clone().sub(points[0]);
-        const pitch = Math.atan2(-trunk.z, trunk.y) * 180 / Math.PI;
-        assert(Math.abs(pitch - sourcePitch[frame / 9 % 8]) < 1, 'keep the small recorded torso tilt through the step');
-      }
-    }
-  } finally { rig.dispose(); }
+    } finally { rig.dispose(); }
+  }
 });
 
 test('the descending torso and its balance above the planted ankle match the side view of Take 1', async () => {
@@ -114,21 +116,23 @@ test('the descending torso and its balance above the planted ankle match the sid
     [10, -15.43, -6.80], [10 + 5 / 18, -13.41, -2.46], [10 + 14 / 18, -12.55, 5.37],
   ];
   const angle = (from, to) => Math.atan2(to.z - from.z, to.y - from.y) * 180 / Math.PI;
-  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-walk-room.glb', import.meta.url));
-  const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'));
-  const point = name => gltf.scene.getObjectByName('mixamorig' + name).getWorldPosition(new Vector3());
-  try {
-    for (const [cycle, trunkAngle, balanceAngle] of poses) {
-      const progress = 18 - (cycle + .18) / (1 + .4 / 18);
-      const gait = sampleStairGait(progress, false);
-      rig.mesh.position.set(CABIN_STAIRS.x, progress * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
-      rig.applyPose(gait.phase, 0);
-      rig.applyStairPose(gait, CABIN_STAIRS.x, stairTreadSurface);
-      const neck = point('Neck'), ankle = point(sides[gait.feet.findIndex(foot => !foot.swing)] + 'Foot');
-      assert(Math.abs(angle(point('Hips'), neck) - trunkAngle) < 2, 'retarget the full torso rather than bending only the chest');
-      assert(Math.abs(angle(ankle, neck) - balanceAngle) < 4, 'the whole body must stay balanced over the step');
-    }
-  } finally { rig.dispose(); }
+  for (const outfit of ['walk-room', 'cardigan']) {
+    const { gltf } = await load(new URL(`../../../assets/public/models/resident/luna-${outfit}.glb`, import.meta.url));
+    const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'), outfit !== 'walk-room');
+    const point = name => gltf.scene.getObjectByName('mixamorig' + name).getWorldPosition(new Vector3());
+    try {
+      for (const [cycle, trunkAngle, balanceAngle] of poses) {
+        const progress = 18 - (cycle + .18) / (1 + .4 / 18);
+        const gait = sampleStairGait(progress, false);
+        rig.mesh.position.set(CABIN_STAIRS.x, progress * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
+        rig.applyPose(gait.phase, 0);
+        rig.applyStairPose(gait, CABIN_STAIRS.x, stairTreadSurface);
+        const neck = point('Neck'), ankle = point(sides[gait.feet.findIndex(foot => !foot.swing)] + 'Foot');
+        assert(Math.abs(angle(point('Hips'), neck) - trunkAngle) < 2, 'retarget the full torso rather than bending only the chest');
+        assert(Math.abs(angle(ankle, neck) - balanceAngle) < 4, 'the whole body must stay balanced over the step');
+      }
+    } finally { rig.dispose(); }
+  }
 });
 
 test('descending moves the pelvis forward and brakes each receiving foot before contact', async () => {
@@ -187,53 +191,55 @@ function soleVertices(asset) {
   return vertices;
 }
 
-test('everyday keeps the supporting sole on the tread during both gaits', async () => {
-  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-walk-room.glb', import.meta.url));
-  const asset = clone(gltf.scene);
-  const rig = createResidentRig(asset, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'));
-  try {
-    rig.applyPose(0, 0);
-    rig.mesh.updateMatrixWorld(true);
-    const soles = soleVertices(asset);
-    assert(soles.every(vertices => vertices.length > 100));
-    const position = new Vector3();
-    for (const ascending of [true, false]) {
-      rig.mesh.rotation.y = ascending ? Math.PI : 0;
-      const kneeError = [0, 0], sampleCount = [0, 0];
-      let maxSwing = 0;
-      for (let i = -30; i <= 18 * 24 + 30; i++) {
-        const travel = i / 24;
-        const progress = ascending ? travel : CABIN_STAIRS.steps - travel;
-        const gait = sampleStairGait(progress, ascending);
+for (const file of ['luna-walk-room.glb', 'luna-cardigan.glb']) {
+  test(`${file} keeps the supporting sole on the tread during both gaits`, async () => {
+    const { gltf } = await load(new URL(`../../../assets/public/models/resident/${file}`, import.meta.url));
+    const asset = clone(gltf.scene);
+    const rig = createResidentRig(asset, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'), file !== 'luna-walk-room.glb');
+    try {
+      rig.applyPose(0, 0);
+      rig.mesh.updateMatrixWorld(true);
+      const soles = soleVertices(asset);
+      assert(soles.every(vertices => vertices.length > 100));
+      const position = new Vector3();
+      for (const ascending of [true, false]) {
+        rig.mesh.rotation.y = ascending ? Math.PI : 0;
+        const kneeError = [0, 0], sampleCount = [0, 0];
+        let maxSwing = 0;
+        for (let i = -30; i <= 18 * 24 + 30; i++) {
+          const travel = i / 24;
+          const progress = ascending ? travel : CABIN_STAIRS.steps - travel;
+          const gait = sampleStairGait(progress, ascending);
 
-        rig.mesh.position.set(CABIN_STAIRS.x, Math.max(0, Math.min(progress, 18)) * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
-        rig.applyPose(gait.phase, 1 - gait.weight);
-        rig.applyStairPose(gait, CABIN_STAIRS.x, stairTreadSurface);
-        rig.mesh.updateMatrixWorld(true);
-        for (const [side, vertices] of soles.entries()) {
-          const foot = gait.feet[side];
-          if (travel >= 7 && travel < 9) {
-            const [hip, knee, ankle] = ['UpLeg', 'Leg', 'Foot'].map(name =>
-              asset.getObjectByName('mixamorig' + sides[side] + name).getWorldPosition(new Vector3()));
-            const angle = knee.clone().sub(hip).angleTo(ankle.sub(knee));
-            const role = foot.swing ? 1 : 0;
-            kneeError[role] += Math.abs(angle - gait.legs[side].flexion) * 180 / Math.PI;
-            sampleCount[role]++;
-            if (foot.swing) maxSwing = Math.max(maxSwing, angle * 180 / Math.PI);
+          rig.mesh.position.set(CABIN_STAIRS.x, Math.max(0, Math.min(progress, 18)) * STAIR_RISE, CABIN_STAIRS.lowerZ - progress * STAIR_TREAD_RUN);
+          rig.applyPose(gait.phase, 1 - gait.weight);
+          rig.applyStairPose(gait, CABIN_STAIRS.x, stairTreadSurface);
+          rig.mesh.updateMatrixWorld(true);
+          for (const [side, vertices] of soles.entries()) {
+            const foot = gait.feet[side];
+            if (travel >= 7 && travel < 9) {
+              const [hip, knee, ankle] = ['UpLeg', 'Leg', 'Foot'].map(name =>
+                asset.getObjectByName('mixamorig' + sides[side] + name).getWorldPosition(new Vector3()));
+              const angle = knee.clone().sub(hip).angleTo(ankle.sub(knee));
+              const role = foot.swing ? 1 : 0;
+              kneeError[role] += Math.abs(angle - gait.legs[side].flexion) * 180 / Math.PI;
+              sampleCount[role]++;
+              if (foot.swing) maxSwing = Math.max(maxSwing, angle * 180 / Math.PI);
+            }
+            let gap = Infinity;
+            for (const { mesh, vertex } of vertices) {
+              mesh.getVertexPosition(vertex, position).applyMatrix4(mesh.matrixWorld);
+              gap = Math.min(gap, position.y - foot.y);
+              assert(position.y >= stairTreadSurface(position.z) - .003,
+                `${sides[side]} sole intersected a riser at ${progress.toFixed(3)} while walking ${ascending ? 'up' : 'down'}`);
+            }
+            if (!foot.swing && gait.weight === 1) assert(gap >= -.002 && gap < .005, `supporting sole is ${gap} m from the tread`);
           }
-          let gap = Infinity;
-          for (const { mesh, vertex } of vertices) {
-            mesh.getVertexPosition(vertex, position).applyMatrix4(mesh.matrixWorld);
-            gap = Math.min(gap, position.y - foot.y);
-            assert(position.y >= stairTreadSurface(position.z) - .003,
-              `${sides[side]} sole intersected a riser at ${progress.toFixed(3)} while walking ${ascending ? 'up' : 'down'}`);
-          }
-          if (!foot.swing && gait.weight === 1) assert(gap >= -.002 && gap < .005, `supporting sole is ${gap} m from the tread`);
         }
+        assert(kneeError[0] / sampleCount[0] < 7, 'support knee must follow the recorded bend through weight transfer');
+        assert(kneeError[1] / sampleCount[1] < 9, 'swing knee must track the reference through the step');
+        if (!ascending) assert(maxSwing < 99, 'the descending heel must not kick back into the skirt');
       }
-      assert(kneeError[0] / sampleCount[0] < 7, 'support knee must follow the recorded bend through weight transfer');
-      assert(kneeError[1] / sampleCount[1] < 9, 'swing knee must track the reference through the step');
-      if (!ascending) assert(maxSwing < 99, 'the descending heel must not kick back into the skirt');
-    }
-  } finally { rig.dispose(); }
-});
+    } finally { rig.dispose(); }
+  });
+}
