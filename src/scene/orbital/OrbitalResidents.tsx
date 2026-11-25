@@ -294,7 +294,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   const sofaMotion = useRef({ time: 0, clip: null as THREE.AnimationClip | null,
     apply: null as ReturnType<typeof sofaPlayer> | null, rig: null as ResidentRig | null });
   useEffect(() => {
-    if (!props.objects.sofa?.active || props.sceneId !== 'habitat' || props.outfit === 'ribbon') return;
+    if (!props.objects.sofa?.active || props.sceneId !== 'habitat' || props.outfit !== 'everyday') return;
     let live = true;
     void loadSofaClip().then(clip => { if (live) sofaMotion.current.clip = clip; }).catch(() => {
       if (live) {
@@ -1028,7 +1028,9 @@ export function OrbitalResidents(props: ResidentsProps) {
       && !keys.current.size && !idleInput.current && !s.path.length && !s.stairs && !s.external
       && !approach.current && !libraryActive && !cabinPerformance.current && !plushGrip.current;
     const im = idleMotion.current;
-    const { clip: yawnClip, lookClip } = im;
+    const fittedIdle = rig.current?.fitted?.idle;
+    const yawnClip = fittedIdle?.yawn ?? im.clip;
+    const lookClip = fittedIdle?.look ?? im.lookClip;
     stepIdle(idle.current, rawDelta, standingAtRest && !p.reducedMotion, yawnClip?.duration ?? 0,
       Math.random, lookClip?.duration ?? 0, standingAtRest, cabin.clips);
     idleInput.current = false;
@@ -1110,6 +1112,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       rig.current.applyArmCorrectives(!interactionPose && !libraryActive && !plushGrip.current);
     }
     if (library && rig.current) library.tick(dt);
+    rig.current?.updateSleeveContact?.();
     root.userData.onStairs = !!stairSample;
     root.userData.posture = s.exiting ? 'standing-up' : s.posture;
     root.userData.cabinAction = cabinPerformance.current?.kind === 'floor' ? cabinPerformance.current.phase : cabinPerformance.current?.kind;

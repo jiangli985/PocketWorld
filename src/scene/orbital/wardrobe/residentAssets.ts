@@ -9,12 +9,17 @@ export interface ResidentAssets {
   scene: GLTF['scene'];
   walk: AnimationClip;
   sit: AnimationClip;
-  fitted?: { sofa: AnimationClip; library: LibraryMotion };
+  fitted?: {
+    sofa: AnimationClip;
+    library: LibraryMotion;
+    idle?: { yawn: AnimationClip; look: AnimationClip };
+  };
 }
 
 const files = {
   everyday: ['luna-walk-room.glb', 'luna-seat-contact.bin'],
   ribbon: ['luna-ribbon.glb', 'luna-ribbon-seat.bin'],
+  cardigan: ['luna-cardigan.glb', 'luna-cardigan-seat.bin'],
 } as const;
 const base = import.meta.env.BASE_URL + 'models/resident/';
 const pending = new Map<ResidentOutfit, Promise<ResidentAssets>>();
@@ -41,7 +46,10 @@ export function loadResidentAssets(outfit: ResidentOutfit): Promise<ResidentAsse
     };
     return {
       outfit, scene: gltf.scene, walk: clip('Walk_Grounded_Loop'), sit: clip('ChairSit_Contact'),
-      fitted: outfit === 'ribbon' ? { sofa: clip('Luna_CMU_75_20'), library: readLibraryMotion(gltf.animations) } : undefined,
+      fitted: outfit !== 'everyday' ? {
+        sofa: clip('Luna_CMU_75_20'), library: readLibraryMotion(gltf.animations),
+        idle: outfit === 'cardigan' ? { yawn: clip('Luna_Yawn'), look: clip('Luna_Looking_Around') } : undefined,
+      } : undefined,
     };
   }).catch(error => { pending.delete(outfit); throw error; });
   pending.set(outfit, request);
