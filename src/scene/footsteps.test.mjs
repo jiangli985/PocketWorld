@@ -28,6 +28,7 @@ function load(path, dependencies, globals = {}) {
 const cabinLayout = load('./orbital/cabinLayout.ts', {});
 const cabinStairs = load('./orbital/cabinStairs.ts', { './cabinLayout.ts': cabinLayout });
 const catalog = load('./orbital/library/catalog.ts', {});
+const scheduleModel = load('./orbital/schedule/schedule.ts', {});
 
 function libraryDependencies(residentRig) {
   const authored = load('./orbital/library/pageTurnFrames.ts', {});
@@ -90,6 +91,8 @@ function mount(kind, overrides = {}, idleLibrary) {
     './sofaMotion': load('./orbital/sofaMotion.ts', { three: THREE, './cabinLayout': cabinLayout, './residentRig': residentRig, 'three/examples/jsm/loaders/GLTFLoader.js': {} }),
     './journalLayout': load('./orbital/journalLayout.ts', {}),
     './schedule/bookLayout': load('./orbital/schedule/bookLayout.ts', {}),
+    './schedule/schedule': scheduleModel,
+    './schedule/paperBallLitter': { usePaperBallLitter: () => overrides.paperBalls ?? [] },
     './chairPose': load('./orbital/chairPose.ts', {}),
     './chairMotion': load('./orbital/chairMotion.ts', {}),
     './seatedIdle': load('./orbital/seatedIdle.ts', { three: THREE,
@@ -294,6 +297,49 @@ test('the pedal trash can blocks walking only inside the habitat', () => {
       }
     } finally { viewZ.dispose(); }
   }
+});
+
+test('floor paper balls block walking only inside the habitat', () => {
+  const ball = { id: 'ball-1', seed: 1 };
+  const [x, , z] = scheduleModel.paperBallPosition(ball.seed);
+  for (const sceneId of ['habitat', 'observatory']) {
+    const view = mount('orbital', { sceneId, paperBalls: [ball] });
+    try {
+      view.root.position.set(x - 1.1, 0, z);
+      view.key('KeyD');
+      for (let i = 0; i < 150; i++) view.frame(1 / 60);
+      const endX = view.root.position.x;
+      if (sceneId === 'habitat') {
+        assert.ok(endX > x - 1.1 && endX <= x - 0.33 + 1e-4, `habitat walk stopped at ${endX}`);
+      } else {
+        assert.ok(endX > x + 0.33, `observatory should not collide with habitat paper balls (${endX})`);
+      }
+    } finally { view.dispose(); }
+  }
+});
+
+test('a paper ball stays pickable while its collider blocks walking', () => {
+  const ball = { id: 'paper-1', seed: 3 };
+  const [x, , z] = scheduleModel.paperBallPosition(ball.seed);
+  const hints = [];
+  const view = mount('orbital', { paperBalls: [ball], onHover: (_id, hint) => hints.push(hint) });
+  try {
+    const request = { sceneId: 'habitat', objectId: 'schedule-paper-paper-1', kind: 'select' };
+    view.root.position.set(2.52, 0, 1.10);
+    view.props.interaction.current([x, 0.105, z], request, () => {});
+    let walked = 0;
+    for (let i = 0; i < 1200; i++) {
+      const before = view.root.position.clone();
+      view.frame(1 / 60);
+      if (view.root.position.distanceTo(before) > 0.001) walked = i;
+      if (Math.hypot(view.root.position.x - x, view.root.position.z - z) <= .44) break;
+    }
+    const gap = Math.hypot(view.root.position.x - x, view.root.position.z - z);
+    assert.ok(walked > 0, 'the approach actually walks instead of teleporting');
+    assert.ok(gap <= .44, `Luna must reach pickup range, gap=${gap}`);
+    assert.ok(gap >= .33 - 1e-3, `the ball still keeps Luna outside its body, gap=${gap}`);
+    assert.ok(!hints.some(hint => hint?.includes('前方空间不足')));
+  } finally { view.dispose(); }
 });
 
 test('trash-can.glb bounds fit cleanly inside TRASH_CAN.footprint after scaling and rotation', async () => {

@@ -5,8 +5,8 @@ import type { WorldSceneProps } from '../../../types/world';
 import { ObjectHandle } from '../ObjectHandle';
 import { PAPER_PICKUP_PREFIX, type PaperPickup } from '../cabinActions';
 import { useSchedule } from './ScheduleContext';
-import { discardSchedulePage, tearSchedulePage, turnSchedulePage } from './schedule';
-import { BOOK_POSITION, FloorPaperBall, FlyingPaper, GLASS_POSITION, PostedPaper, paperBallPosition, type PaperFlight } from './SchedulePaper';
+import { discardSchedulePage, paperBallPosition, tearSchedulePage, turnSchedulePage } from './schedule';
+import { BOOK_POSITION, FloorPaperBall, FlyingPaper, GLASS_POSITION, PostedPaper, type PaperFlight } from './SchedulePaper';
 import './schedule.css';
 
 export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean; paperPickup: React.RefObject<PaperPickup | null> }) {
