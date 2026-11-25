@@ -7,7 +7,7 @@ import { createCabinGroupFade, type CabinOpacity } from './cabinCutaway';
 export const CabinOpacityContext = createContext<React.MutableRefObject<CabinOpacity> | null>(null);
 
 export function CabinFadeGroup({ part, name, position, children }: React.PropsWithChildren<{
-  part: keyof CabinOpacity;
+  part: Exclude<keyof CabinOpacity, 'zoomFade'>;
   name?: string;
   position?: [number, number, number];
 }>) {
@@ -21,10 +21,17 @@ export function CabinFadeGroup({ part, name, position, children }: React.PropsWi
   };
   useLayoutEffect(() => fade.restore, [fade]);
   useFrame(() => {
+    const root = group.current;
+    if (!root) return;
     const amount = opacity();
-    if (!group.current || (amount === applied.current && (amount === 0 || amount === 1))) return;
-    fade.set(group.current, amount);
-    applied.current = amount;
+    const wholeDeck = cutaway?.current.zoomFade === part;
+    const materialOpacity = wholeDeck ? 1 : amount;
+    if (materialOpacity !== applied.current || (materialOpacity > 0 && materialOpacity < 1)) {
+      fade.set(root, materialOpacity);
+      applied.current = materialOpacity;
+    }
+    root.userData.cabinZoomOpacity = wholeDeck ? amount : undefined;
+    root.userData.cabinInteractive = amount >= .5;
   });
   return <group ref={group} name={name} position={position} visible={opacity() > 0}>
     {children}

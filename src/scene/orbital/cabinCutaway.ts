@@ -3,7 +3,7 @@ import type { CabinDeck } from './cabinLayout';
 import type { CabinView } from './cabinView';
 
 type DeckOpacity = Record<CabinDeck, number>;
-export type CabinOpacity = DeckOpacity & { resident: number; interior: number };
+export type CabinOpacity = DeckOpacity & { resident: number; interior: number; zoomFade: CabinDeck | null };
 export const QUICK_CABIN_DURATION = .65;
 
 export function cabinZoomIsolation(distanceRatio: number) {

@@ -9,6 +9,7 @@ import { SCENE_ORIGINS, type WorldAction, type WorldObjectState, type WorldScene
 import { roomAudio } from '../audioEngine';
 import { CAMERA_FOV, HOME_TARGET, HOME_ZOOM, OUTFIT_TARGET, outfitCameraPosition, cabinCameraFrame, stairCameraFrames, type CabinView } from './cabinView';
 import { CabinFadeGroup, CabinOpacityContext, CabinUpperDeck } from './CabinUpperDeck';
+import { CabinZoomRenderer } from './CabinZoomRenderer';
 import { cabinDeckOpacity, cabinZoomIsolation, quickCabinFrame, QUICK_CABIN_DURATION, type CabinOpacity } from './cabinCutaway';
 import { BedroomGuard, CabinStaircase } from './CabinStructure';
 import { stairDestination, type CabinResidentView } from './cabinStairs';
@@ -264,6 +265,7 @@ function CameraRig(props: CameraRigProps) {
   }, [props.transition.id, props.focusedObject, props.transition.phase === 'error', props.viewMode, size.width, size.height, cameraView, sideSlot, sideReading]);
   useFrame((_, delta) => {
     const flight = props.flight;
+    props.deckOpacity.current.zoomFade = null;
     flight.boosting = props.boosting && (flight.mode === 'orbit' || flight.mode === 'approach');
     const finishedApproach = stepFlightState(flight, delta, props.reducedMotion);
     roomAudio.setThrusterBoost(flight.boost);
@@ -394,6 +396,10 @@ function CameraRig(props: CameraRigProps) {
         const next = props.reducedMotion ? fade[part] : THREE.MathUtils.damp(opacity[part], fade[part], 11, delta);
         opacity[part] = Math.abs(next - fade[part]) < .008 ? fade[part] : next;
       }
+    }
+    if (inHabitat && !locked && !moving.current && !onStairs && !landed && !deck.settling) {
+      const other = activeDeck === 'lower' ? 'upper' : 'lower';
+      if (opacity[activeDeck] === 1 && opacity[other] > 0 && opacity[other] < 1) opacity.zoomFade = other;
     }
     opacity.resident = 1;
     if (!moving.current) {
@@ -527,6 +533,7 @@ function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpe
     ...cabinDeckOpacity(props.cabinView, props.outfitPreview ? 1 : 0),
     resident: 1,
     interior: props.viewMode === 'cabin' ? 1 : 0,
+    zoomFade: null,
   });
   const residentView = useRef<CabinResidentView>({ deck: 'lower', stairAscent: null, stairFrom: null });
   const sofaTime = useRef<number | null>(null);
@@ -555,6 +562,7 @@ function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpe
     <color attach="background" args={['#080714']} />
     <PerspectiveCamera makeDefault fov={CAMERA_FOV} position={initialCameraPos} near={0.08} far={2000} />
     <CameraRig {...props} flight={flight} residentView={residentView} deckOpacity={deckOpacity} />
+    <CabinZoomRenderer opacity={deckOpacity} />
     <Cosmos reducedMotion={props.reducedMotion} sun={sun} flight={flight} />
     <Environment resolution={128} frames={1}>
       <Lightformer form="rect" intensity={1.55} color="#faf7f2" position={[0, 5, -2]} rotation={[Math.PI / 2, 0, 0]} scale={[10, 8, 1]} />
