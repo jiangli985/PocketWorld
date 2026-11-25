@@ -84,69 +84,76 @@ test('seated overlays alternate with the original gestures and release before th
 const assets = new URL('../../../assets/public/models/resident/', import.meta.url);
 const raw = readFileSync(new URL('luna-sofa-low-sit.glb', assets));
 const { animations: [sofa] } = await new GLTFLoader().parseAsync(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), '');
-test('everyday keeps the hips and planted feet on the sofa, and swings both feet below fixed knees on the chair', async () => {
-  const { gltf: { scene, animations } } = await load(new URL('luna-walk-room.glb', assets));
-  const clip = name => animations.find(clip => clip.name === name);
-  const rig = createResidentRig(scene, clip('Walk_Grounded_Loop'));
-  const data = readFileSync(new URL('luna-seat-contact.bin', assets));
-  const chair = createChairAnimation(scene, clip('ChairSit_Contact'),
-    readSeatContactCache(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)));
-  const sofaClip = sofa;
-  const applySofa = sofaPlayer(rig.mesh, sofaClip);
-  const applyIdle = createSeatedIdlePlayer(rig);
-  const bone = name => scene.getObjectByName('mixamorig' + name);
-  const position = name => bone(name).getWorldPosition(new THREE.Vector3());
-  const feet = ['LeftFoot', 'RightFoot'];
-  try {
-    const sample = (seat, time, release = 0) => {
-      rig.applyPose(0, 0);
-      chair.apply(CHAIR_SIT_SECONDS, Number(seat === 'chair'));
-      if (seat === 'sofa') applySofa(sofaClip.duration);
-      if (time !== undefined) applyIdle({ seat, time, weight: 1, release });
-    };
-    const supports = ['Hips', ...feet, 'LeftToeBase', 'RightToeBase'];
-    sample('sofa');
-    const sofaSupports = supports.map(position);
-    const cheek = position('Head'), wrist = position('LeftHand');
-    const armLength = position('LeftHand').distanceTo(position('LeftForeArm'));
-    for (let i = 0; i <= 48; i++) {
-      sample('sofa', i / 10);
-      supports.forEach((name, index) => assert(position(name).distanceTo(sofaSupports[index]) < 1e-5, name));
-      assert(Math.abs(position('LeftHand').distanceTo(position('LeftForeArm')) - armLength) < 1e-5);
-      if (i === 20) {
-        assert(position('Head').distanceTo(cheek) > .18);
-        assert(position('LeftHand').distanceTo(position('Head')) < .14);
-        assert(position('RightHand').distanceTo(position('LeftForeArm')) < .10);
+const outfits = {
+  everyday: ['luna-walk-room', 'luna-seat-contact'],
+  cardigan: ['luna-cardigan', 'luna-cardigan-seat'],
+};
+for (const [outfit, [model, seatCache]] of Object.entries(outfits)) {
+  test(`${outfit} keeps the hips and planted feet on the sofa, and swings both feet below fixed knees on the chair`, async () => {
+    const { gltf: { scene, animations } } = await load(new URL(model + '.glb', assets));
+    const clip = name => animations.find(clip => clip.name === name);
+    const rig = createResidentRig(scene, clip('Walk_Grounded_Loop'), outfit !== 'everyday');
+    const data = readFileSync(new URL(seatCache + '.bin', assets));
+    const chair = createChairAnimation(scene, clip('ChairSit_Contact'),
+      readSeatContactCache(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)));
+    const sofaClip = clip('Luna_CMU_75_20') ?? sofa;
+    const applySofa = sofaPlayer(rig.mesh, sofaClip);
+    const applyIdle = createSeatedIdlePlayer(rig, outfit);
+    const bone = name => scene.getObjectByName('mixamorig' + name);
+    const position = name => bone(name).getWorldPosition(new THREE.Vector3());
+    const feet = ['LeftFoot', 'RightFoot'];
+    try {
+      const sample = (seat, time, release = 0) => {
+        rig.applyPose(0, 0);
+        chair.apply(CHAIR_SIT_SECONDS, Number(seat === 'chair'));
+        if (seat === 'sofa') applySofa(sofaClip.duration);
+        if (time !== undefined) applyIdle({ seat, time, weight: 1, release });
+      };
+      const supports = ['Hips', ...feet, 'LeftToeBase', 'RightToeBase'];
+      sample('sofa');
+      const sofaSupports = supports.map(position);
+      const cheek = position('Head'), wrist = position('LeftHand');
+      const armLength = position('LeftHand').distanceTo(position('LeftForeArm'));
+      for (let i = 0; i <= 48; i++) {
+        sample('sofa', i / 10);
+        supports.forEach((name, index) => assert(position(name).distanceTo(sofaSupports[index]) < 1e-5, name));
+        assert(Math.abs(position('LeftHand').distanceTo(position('LeftForeArm')) - armLength) < 1e-5);
+        if (i === 20) {
+          assert(position('Head').distanceTo(cheek) > .18);
+          assert(position('LeftHand').distanceTo(position('Head')) < .14);
+          if (outfit === 'cardigan') assert(position('RightHand').y < .64);
+          else assert(position('RightHand').distanceTo(position('LeftForeArm')) < .10);
+        }
       }
-    }
-    sample('sofa', 2, 1);
-    assert(position('LeftHand').distanceTo(wrist) < 1e-5, 'release returns to the seat contact pose');
+      sample('sofa', 2, 1);
+      assert(position('LeftHand').distanceTo(wrist) < 1e-5, 'release returns to the seat contact pose');
 
-    sample('chair');
-    const knees = ['LeftLeg', 'RightLeg'];
-    const kneePositions = knees.map(position);
-    const footPositions = feet.map(position);
-    const chairHips = position('Hips');
-    const range = feet.map(() => ({ min: Infinity, max: -Infinity }));
-    for (let i = 0; i <= 62; i++) {
-      sample('chair', i / 20);
-      assert(position('Hips').distanceTo(chairHips) < 1e-5);
-      knees.forEach((name, j) => assert(position(name).distanceTo(kneePositions[j]) < 1e-5));
-      feet.forEach((name, j) => {
-        const foot = position(name);
-        assert(foot.y > .25 && position(name.replace('Foot', 'ToeBase')).y > .16);
-        range[j].min = Math.min(range[j].min, foot.z);
-        range[j].max = Math.max(range[j].max, foot.z);
-      });
+      sample('chair');
+      const knees = ['LeftLeg', 'RightLeg'];
+      const kneePositions = knees.map(position);
+      const footPositions = feet.map(position);
+      const chairHips = position('Hips');
+      const range = feet.map(() => ({ min: Infinity, max: -Infinity }));
+      for (let i = 0; i <= 62; i++) {
+        sample('chair', i / 20);
+        assert(position('Hips').distanceTo(chairHips) < 1e-5);
+        knees.forEach((name, j) => assert(position(name).distanceTo(kneePositions[j]) < 1e-5));
+        feet.forEach((name, j) => {
+          const foot = position(name);
+          assert(foot.y > .25 && position(name.replace('Foot', 'ToeBase')).y > .16);
+          range[j].min = Math.min(range[j].min, foot.z);
+          range[j].max = Math.max(range[j].max, foot.z);
+        });
+      }
+      assert(range.every(({ min, max }) => max - min > .12));
+      sample('chair', 1.6, 1);
+      feet.forEach((name, j) => assert(position(name).distanceTo(footPositions[j]) < 1e-5));
+    } finally {
+      chair.dispose();
+      rig.dispose();
     }
-    assert(range.every(({ min, max }) => max - min > .12));
-    sample('chair', 1.6, 1);
-    feet.forEach((name, j) => assert(position(name).distanceTo(footPositions[j]) < 1e-5));
-  } finally {
-    chair.dispose();
-    rig.dispose();
-  }
-});
+  });
+}
 
 test(`everyday composes the authored overlays without altering seated contacts`, async () => {
   const { gltf: { scene, animations } } = await load(new URL('luna-walk-room.glb', assets));
@@ -188,4 +195,55 @@ test(`everyday composes the authored overlays without altering seated contacts`,
       assert.ok(maxHeadTurn >= .10 && maxHeadTurn < .58, gesture + ' moves the head within its fitted range');
     }
   } finally { chair.dispose(); rig.dispose(); }
+});
+
+test('the ribbon outfit grounds its sock soles and binds its fitted chair, sofa, book and cabin actions', async () => {
+  const { gltf: { scene, animations } } = await load(new URL('luna-ribbon.glb', assets));
+  const clip = name => animations.find(value => value.name === name);
+  const rig = createResidentRig(scene, clip('Walk_Grounded_Loop'));
+  const raw = readFileSync(new URL('luna-ribbon-seat.bin', assets));
+  const contact = readSeatContactCache(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
+  const chair = createChairAnimation(scene, clip('ChairSit_Contact'), contact);
+  const point = new THREE.Vector3();
+  const height = name => scene.getObjectByName('mixamorig' + name).getWorldPosition(point).y;
+  const sole = scene.getObjectByProperty('isSkinnedMesh', true);
+  try {
+    assert.equal(sole.skeleton.bones.length, 91);
+    const contacts = Object.values(sole.geometry.userData.soleContacts);
+    for (const weight of [0, .45, 1]) for (const phase of [0, .2, .37, .55, .7, .89]) {
+      rig.applyPose(phase, weight);
+      rig.mesh.updateMatrixWorld(true);
+      const feet = contacts.map(vertices => Math.min(...vertices.map(i =>
+        sole.localToWorld(sole.getVertexPosition(i, point)).y)));
+      assert(Math.min(...feet) >= -.003 && Math.min(...feet) < .012, `sock support at ${phase}/${weight}: ${feet}`);
+      if (weight === 0) assert(Math.max(...feet) < .009, 'both feet support the neutral pose');
+    }
+    rig.applyPose(0, 0);
+    const standing = height('Hips');
+    chair.apply(CHAIR_SIT_SECONDS, 1);
+    assert(height('Hips') < standing - .06);
+    assert(height('LeftFoot') > .24 && height('RightFoot') > .24, 'both socked feet clear the floor on the tall chair');
+    chair.apply(0, 0);
+    rig.applyPose(0, 0);
+    const sofa = clip('Luna_CMU_75_20');
+    sofaPlayer(rig.mesh, sofa)(sofa.duration);
+    assert(height('Hips') < standing - .15);
+    for (let row = 0; row < 3; row++) {
+      const pickup = clip('Library_Pickup_' + row);
+      assert(pickup.tracks.some(track => track.name === 'LibraryBook.position'));
+      for (const track of pickup.tracks) assert(scene.getObjectByName(THREE.PropertyBinding.parseTrackName(track.name).nodeName), track.name);
+    }
+    const bytes = readFileSync(new URL('luna-cabin-actions-ribbon.glb', assets));
+    const cabin = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '');
+    const actions = Object.fromEntries(cabin.animations.map(action => [action.name, action]));
+    const play = createCabinActionPlayer(rig.mesh, actions);
+    rig.applyPose(0, 0);
+    play('floorSit', actions.floorSit.duration);
+    assert(height('Hips') < .24);
+    play('floorStand', actions.floorStand.duration);
+    assert(height('Hips') > .65);
+  } finally {
+    chair.dispose();
+    rig.dispose();
+  }
 });

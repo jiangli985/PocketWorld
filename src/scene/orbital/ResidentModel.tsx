@@ -7,6 +7,7 @@ import { createResidentRig } from './residentRig';
 import { applyResidentSkin } from './residentSkin';
 import { createChairAnimation } from './chairAnimation';
 import { createSeatedIdlePlayer } from './seatedIdle';
+import { createSleeveContact } from './wardrobe/sleeveContact';
 import { loadResidentAssets, loadResidentSeatContact, type ResidentAssets } from './wardrobe/residentAssets';
 import type { ResidentOutfit } from './wardrobe/outfit';
 import type { StairGait } from './stairGait';
@@ -31,6 +32,8 @@ export interface ResidentRig {
   applyPose: (phase: number, walkWeight: number) => void;
   applyStairPose: (gait: StairGait, stairX: number, surfaceAt: (z: number, heelRun?: number) => number) => void;
   followMotion: (dt: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => void;
+  fitted?: ResidentAssets['fitted'];
+  updateSleeveContact?: () => void;
   applyArmCorrectives: (enabled: boolean) => void;
   applySeatedIdle?: ReturnType<typeof createSeatedIdlePlayer>;
   applyChairPose?: (time: number, weight: number) => void;
@@ -48,11 +51,13 @@ function LoadedResident({ assets, rig, onMounted, prefetchSeat, chairActive }: {
   useLayoutEffect(() => {
     const group = container.current!;
     const asset = clone(assets.scene);
-    const resident = createResidentRig(asset, assets.walk);
+    const resident = createResidentRig(asset, assets.walk, assets.outfit === 'cardigan');
     const chair = createChairAnimation(asset, assets.sit);
     chairAnimation.current = chair;
+    resident.fitted = assets.fitted;
     resident.applyChairPose = chair.apply;
-    resident.applySeatedIdle = createSeatedIdlePlayer(resident);
+    resident.applySeatedIdle = createSeatedIdlePlayer(resident, assets.outfit);
+    if (assets.outfit === 'cardigan') resident.updateSleeveContact = createSleeveContact(asset);
     resident.mesh.userData.outfit = assets.outfit;
     const restoreSkin = applyResidentSkin(resident.mesh);
     group.add(resident.mesh);

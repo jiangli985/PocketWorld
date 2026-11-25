@@ -1,5 +1,15 @@
 # Luna 动画制作源
 
+## 第二套 · 蝴蝶结外套
+
+[可编辑角色](./Luna-Ribbon.blend)使用用户提供的蝴蝶结外套、短裤与长袜模型，五官参照日常装绘制。贴图已打包。游戏中的角色使用 91 根骨骼，保留独立的手指与头发骨链。运行时保留角色原始 4096 × 4096 底色图，从日常装读取底色倍率、全身底色补光和法线强度，并复用同一套暖桃色肤色着色。服装卡片使用该运行时材质的全身渲染。
+
+`scripts/fit-luna-ribbon.py` 接收已绑定的 `Luna-Ribbon.glb`，用 NumPy 基于两套骨架的局部绑定偏移重定向动作。走路与地毯动作按实际蒙皮校准高度，固定椅按坐垫轮廓生成独立接触缓存。取书及沙发动作随第二套模型载入，生活舱动作独立加载。
+
+```sh
+python scripts/fit-luna-ribbon.py /path/to/Luna-Ribbon.glb --motions assets/public/models/resident --output assets/public/models/resident
+```
+
 ## 生活舱日常动作
 
 地毯的盘腿坐地使用 MotionSmith Take 2 原地版，盘腿起身、捡东西、揉眼睛、托腮思考和向高处取物均使用 Take 1。摘取姿态来自 UE5 Manny 的 30 fps 骨骼动画。脚底和骨盆按 Luna 日常装的实际蒙皮校准。盘腿时，裙装的前幅分别越过左右膝，中间略低，末端向下折落。侧幅绕向膝外侧，后摆在地毯上摊开。入座和起身时沿动作过渡。脸部手势保留原片时序，腕位按 Luna 的脸型缩放。书架目录使用托下巴动作的抬手段并保持姿势。拾物在 1.9 秒把纸团交给右手。拾娃娃复用同一动作，起身后双手托住，放下时反向播放。高处取物在书本接触前交回书柜原动作。
@@ -23,6 +33,12 @@ Luna 上、下楼各取 MotionSmith Take 1 中连续的左右两步。原文件�
 ```bash
 node scripts/bake-luna-stairs.mjs /path/to/MotionSmith_walk_upstairs_take1.glb /path/to/MotionSmith_walk_downstairs_take1.glb
 ```
+
+## 丁香针织开衫绑定
+
+衣柜第三套采用用户提供的 Tripo 文件 `anime girl 3d model.glb`。开衫、胸前蝴蝶结、条纹长袜与蓝色长发沿用原网格和 UV。日常装的虹膜、高光、眼睑、鼻尖、双颊和唇形已按新头部正面与刘海边界重新绘入底色。第三格的预览标识为 `cardigan`。
+
+[Blender 制作源](./Luna-Cardigan.blend)内置贴图、骨架、袖侧修形与动作。[运行模型](../../public/models/resident/luna-cardigan.glb)使用 Luna 的 115 根骨骼。制作源打开时显示自然站姿，上臂外展约 18°。领口主要随胸廓，袖山向锁骨和上臂逐渐过渡，侧腰略收以留出袖口间距。行走时，左右臂按日常装的肩肘轨迹与对侧脚交替摆动，手掌朝向按开衫网格上的指根定位。手臂靠近衣身时才触发对应侧的衣料修形。后腰罗纹和下摆褶边以骨盆为支撑，平滑分配左右腿的影响。两侧袖子和手指独立绑定，发束随头部和发链运动，袜底保存步态支撑点。固定椅的[接触缓存](../../public/models/resident/luna-cardigan-seat.bin)按新网格对坐垫和扶手采样 98 帧。编辑网格或坐姿时须同时更新缓存及 `_CONTACT_ID`。
 
 ## 云朵连帽衫制作源（已下架）
 

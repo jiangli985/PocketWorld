@@ -4,6 +4,49 @@
   "runtimeNetwork": "All models are self-hosted under assets/public/models/.",
   "assets": [
     {
+      "file": "resident/luna-ribbon.glb",
+      "source": "User-supplied bf6b5b5d-a86b-4f38-b940-dc6e2a2a05dd.glb. Face references Luna's everyday outfit.",
+      "used": true,
+      "bytes": 8994796,
+      "sha256": "055e3da63f68a59890673b59cc6568dfc87d83859d1adcc61d97b6426cece3bd",
+      "processing": "91-joint fitted skeleton, retouched face, original 4K albedo and the everyday outfit’s full-atlas fill, skin tint and normal strength, grounded walk, desk chair, sofa and three book pickups. Editable source: assets/models/resident/Luna-Ribbon.blend.",
+      "license": "User supplied the model for this project. No separate model license was provided."
+    },
+    {
+      "file": "resident/luna-ribbon-seat.bin",
+      "source": "PocketWorld ribbon jacket skinned surface and fixed desk chair cushion.",
+      "used": true,
+      "bytes": 167012,
+      "sha256": "66b704e1bdc8706b01650a95ea68797efcdad094d4767d75ef81bee0c6688766",
+      "processing": "98-frame sparse pre-skin cushion corrections for the ribbon shorts and thighs."
+    },
+    {
+      "file": "resident/luna-cabin-actions-ribbon.glb",
+      "source": "PocketWorld everyday cabin actions, derived from the MotionSmith takes registered under resident/luna-cabin-actions-everyday.glb.",
+      "used": true,
+      "bytes": 761452,
+      "sha256": "406c2661b7b363ecc1fa54ee8430db93f369d5b50d9981c9d8982f36383d4fd2",
+      "processing": "Bind-relative retargeting to the ribbon skeleton with sock and floor-contact calibration."
+    },
+    {
+      "file": "resident/luna-cardigan.glb",
+      "source": "User-supplied anime girl 3d model.glb (Tripo, SHA-256 c37b76be9566ab6034357e8c4545e393a181f85154962ad272a45af862fd3eda). Face paint sampled from Luna everyday. Existing Luna motion sources are listed with their respective assets.",
+      "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
+      "used": true,
+      "bytes": 7789564,
+      "sha256": "c476937bdfbaf692b2573e43d9c11c77446f9e42d7d82bfb4649445294b81eb8",
+      "processing": "Transferred everyday facial landmarks onto the cardigan UV atlas. Fitted 115-joint Luna skin with independent sleeves, hand and hair weights, graded collar and shoulder-cap weights, a closer arm stance and a walk retargeted from the everyday shoulder, elbow and palm trajectories, independent contact shapes, continuous rear hem weights, sock sole contacts and nine existing animation clips."
+    },
+    {
+      "file": "resident/luna-cardigan-seat.bin",
+      "source": "Cardigan mesh, fitted Luna chair action and the PocketWorld fixed desk chair.",
+      "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
+      "used": true,
+      "bytes": 215228,
+      "sha256": "795e8e1b100315608ac873d18c9cbd5431fda78dfaa00a55abf20e6d371f6cba",
+      "processing": "98 frames of pre-skin cushion and armrest corrections with a per-vertex contact map."
+    },
+    {
       "file": "furniture/floor-sofa.glb",
       "source": "Original PocketWorld model and woven textures, authored in Blender from the user's visual reference.",
       "used": true,

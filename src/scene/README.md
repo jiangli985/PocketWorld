@@ -8,7 +8,7 @@
 - `orbital/HabitatShell.tsx` 载入两面实体舱壁、拼花地板和固定陈设；`orbital/SpacecraftHull.tsx` 与 `orbital/spacecraftFlight.ts` 负责轨道飞船外壳、开场推近运镜、长按加速绕地与时间倍速，以及 `orbit ↔ cabin` 剖面切入过渡；`orbital/Cosmos.tsx` 渲染完整 360° 宇宙星空、银河、太阳、地球与轨道微粒背景。初始构图与横竖屏取景由 `orbital/cabinView.ts` 计算。
 - `orbital/useWorldController.ts` 管理世界状态、动作适配器和转场生命周期。
 - `orbital/OrbitalScene.tsx` 控制场景首次挂载和家具、设备、玩偶、猫的加载批次。舱外巡航的预取与入舱共用舱体加载缓存。服装 GLB 和座椅接触缓存分别由 `orbital/wardrobe/residentAssets.ts` 管理。启动顺序见 [SPEC.md](../../SPEC.md#4-轻量化与资源约定)。
-- `orbital/wardrobe/` 管理住民装扮选择和模型资源。点击高衣柜或在近处按提示键会走近并拉开柜门。衣柜展示日常装缩略图和穿着状态。旧装扮标识回退到日常装。[模型与坐姿修形](../../assets/models/resident/README.md)
+- `orbital/wardrobe/` 管理住民装扮选择和模型资源。点击高衣柜或在近处按提示键会走近并拉开柜门。衣柜按「日常装」「蝴蝶结外套」「丁香针织开衫」的顺序显示缩略图和穿着状态，确认试穿后保存选择。旧装扮标识回退到日常装。[模型与坐姿修形](../../assets/models/resident/README.md)
 - `orbital/journal/` 管理实体翻页、纸面编辑、逐页日期和天气、存档及迁移。
 - `orbital/library/` 管理书柜存档、文本导入、实体书和取还书动作。
 - `orbital/schedule/` 管理日程迁移、同步、纸页、贴纸、纸团和相关测试。
@@ -35,7 +35,7 @@
 
 ## 舱体模型
 
-[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，浅橡木拼花贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出脚本切分拼花地板和固定陈设，将全景窗收进一层后墙，在一层书桌椅下方生成带编织棉纹理与流苏边的复古牛仔蓝平织地毯（并入 `Rugs` 以支持地面点击行走），并在二层右侧生成带复古灰绿墙裙和浅木框舷窗的整面侧墙。衣柜单独导出为 `Interactable_Wardrobe`，沿这面墙安装。上下两层共用同一套楼板底座与拼花木地板网格，通过高度差堆叠，并与左侧楼梯平台衔接。衣柜门框内沿在柜门关闭时挡住柜内视线。楼梯、开放平台和栏杆由运行时几何生成。
+[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，浅橡木拼花贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出脚本切分拼花地板和固定陈设，将全景窗收进一层后墙，在一层书桌椅下方生成带编织棉纹理与流苏边的复古牛仔蓝平织地毯（并入 `Rugs` 以支持地面点击行走），并在二层右侧生成带复古灰绿墙裙和浅木框舷窗的整面侧墙。衣柜单独导出为 `Interactable_Wardrobe`，沿这面墙安装。导出脚本也生成后墙挂架和两件自然垂挂的衣服，为开衫烘入一张 128 × 128 针织法线贴图，再并入 `Duplex_UpperShell`。上下两层共用同一套楼板底座与拼花木地板网格，通过高度差堆叠，并与左侧楼梯平台衔接。衣柜门框内沿在柜门关闭时挡住柜内视线。楼梯、开放平台和栏杆由运行时几何生成。
 
 ```sh
 blender --background assets/models/cabin/open-cabin.blend --python scripts/export-open-cabin.py

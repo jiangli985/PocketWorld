@@ -1,5 +1,6 @@
 import { MathUtils, Matrix4, Quaternion, Vector3, type Bone } from 'three';
 import type { ResidentRig } from './ResidentModel';
+import type { ResidentOutfit } from './wardrobe/outfit';
 import { CHAIR_LEG_SWING, SEATED_IDLE_FPS, SOFA_CHEEK_REST } from './seatedIdleFrames';
 
 type SeatedIdleKind = 'sofa' | 'chair' | 'floor';
@@ -61,7 +62,13 @@ export function stepSeatedIdle(
   return false;
 }
 
-export function createSeatedIdlePlayer(rig: ResidentRig) {
+const cheekContact: Record<ResidentOutfit, [number, number, number]> = {
+  everyday: [.053, .014, -.045],
+  ribbon: [.053, .014, -.045],
+  cardigan: [.058, .018, -.055],
+};
+
+export function createSeatedIdlePlayer(rig: ResidentRig, outfit: ResidentOutfit) {
   const bone = (name: string) => rig.mesh.getObjectByName('mixamorig' + name) as Bone;
   const spine = [bone('Spine'), bone('Spine1'), bone('Spine2')];
   const neck = bone('Neck'), head = bone('Head');
@@ -82,10 +89,12 @@ export function createSeatedIdlePlayer(rig: ResidentRig) {
   }
   const left = arm('Left'), right = arm('Right');
   const leftHip = bone('LeftUpLeg'), leftKnee = bone('LeftLeg');
+  const rightHip = bone('RightUpLeg'), rightKnee = bone('RightLeg');
+  const freeHandOnLap = outfit === 'cardigan';
   const legs = (['Left', 'Right'] as const).map(side => ({ shin: bone(side + 'Leg'), foot: bone(side + 'Foot') }));
   const point = new Vector3();
   const basis = new Matrix4();
-  const cheek = new Vector3(.053, .014, -.045);
+  const cheek = new Vector3(...cheekContact[outfit]);
   const cheekNormal = new Vector3(.55, -.71, -.44).normalize();
   const cheekTangent = new Vector3(.20, .41, .89);
   cheekTangent.addScaledVector(cheekNormal, -cheekTangent.dot(cheekNormal)).normalize();
@@ -174,10 +183,18 @@ export function createSeatedIdlePlayer(rig: ResidentRig) {
 
     right.upper.getWorldPosition(bend)
       .addScaledVector(roomY, -.15).addScaledVector(roomX, -.14);
-    left.forearm.getWorldPosition(target)
-      .addScaledVector(roomY, -.03).addScaledVector(roomX, -.01);
-    normal.copy(roomY);
-    tangent.copy(roomX).addScaledVector(roomZ, .36).normalize();
+    if (freeHandOnLap) {
+      // The cardigan cuff needs more space than the dress sleeves when the arms cross.
+      rightHip.getWorldPosition(target).lerp(rightKnee.getWorldPosition(point), .46)
+        .addScaledVector(roomY, .076).addScaledVector(roomX, -.024);
+      normal.copy(roomY).negate();
+      tangent.copy(roomZ).addScaledVector(roomX, .20).normalize();
+    } else {
+      left.forearm.getWorldPosition(target)
+        .addScaledVector(roomY, -.03).addScaledVector(roomX, -.01);
+      normal.copy(roomY);
+      tangent.copy(roomX).addScaledVector(roomZ, .36).normalize();
+    }
     solveHand(right, weight);
   }
 
