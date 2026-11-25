@@ -344,7 +344,7 @@
       "licensePage": "https://cosindra.ai/license",
       "used": true,
       "bytes": 1013604,
-      "sha256": "3d5c796fe1a2b789556feb61aa4070e8add2a40c4d9f8c42fcb58e4862af329d",
+      "sha256": "2966d4f116d6e160ac5e2bfab39e55a9931fa3fae06cdd4eac6a5ea652983971",
       "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, fits hand gestures to the face or waist, and exports masked idle rotations and action tracks without meshes or textures."
     },
     {
@@ -356,7 +356,7 @@
       "licensePage": "https://cosindra.ai/license",
       "used": true,
       "bytes": 1013604,
-      "sha256": "46ac846398fcbba9ebbe59091de0c990ef0487bb72ebbd967e39a14762e9fdcd",
+      "sha256": "9f1cd2fc548861643663bbf66717fc01b31390cdb6cb413ecd0815e37fc0f637",
       "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, fits hand gestures to the face or waist, and exports masked idle rotations and action tracks without meshes or textures."
     },
     {
@@ -368,7 +368,7 @@
       "licensePage": "https://cosindra.ai/license",
       "used": true,
       "bytes": 948820,
-      "sha256": "7e479106ac6ac2163ee7403051a26b820ea7d51d107e8ff5ce97a05df1b31d63",
+      "sha256": "63ec3392b1494b203728dcef47569ba667987f70c4334b62c44bcedd1967684a",
       "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, fits hand gestures to the face or waist, and exports masked idle rotations and action tracks without meshes or textures."
     }
   ]

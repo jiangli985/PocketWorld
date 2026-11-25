@@ -268,10 +268,10 @@ async function bake(outfit, file) {
         const left = target.get('LeftHand');
         // Guide the palm onto the side of the waist. Keep the free arm relaxed
         // and carry over the source's shift through the torso and wrist.
-        const width = outfit === 'cloudhoodie' ? .210 : outfit === 'snowflower' ? .192 : .182;
+        const width = outfit === 'cloudhoodie' ? .119 : outfit === 'snowflower' ? .139 : .117;
         const sourceOffset = point(source.get('LeftHand')).sub(point(source.get('Hips')));
-        const goal = waist.add(new Vector3(width + .22 * (sourceOffset.x - .29), .013 + .24 * (sourceOffset.y + .05),
-          .012 + .38 * (sourceOffset.z + .075)));
+        const goal = waist.add(new Vector3(width + .12 * (sourceOffset.x - .29), .013 + .24 * (sourceOffset.y + .05),
+          -.012 + .14 * (sourceOffset.z + .075)));
         const shoulder = target.get('LeftArm'), elbow = target.get('LeftForeArm');
         const arm = point(shoulder);
         const bent = point(elbow);
