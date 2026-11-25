@@ -1,5 +1,15 @@
 # Luna 动画制作源
 
+## 楼梯步态
+
+Luna 上、下楼各取 MotionSmith Take 1 中连续的左右两步。原文件均为 UE5 Manny 骨架、30 fps。帧号从 0 开始，上楼两个步段的边界为 48、64、80，下楼为 57、76、94，分别取脚趾开始离开踏面的帧。导出脚踝推进与抬升、脚掌俯仰、躯干倾斜、双膝屈曲、髋踝相对位置和双侧肩、肘、腕的运动方向。运行时按腿长和踏面尺寸重定向，并在首末级与平台衔接。两个方向都用支撑踝定位骨盆，按原片的前移曲线跨过左右脚换重的瞬间。骨盆至颈部的倾角驱动躯干，头部俯仰单独采样。上楼时，骨盆的抬升曲线限制承重腿伸直时身体的上升速度。下楼时，骨盆的降高曲线控制左右脚换重。前脚掌靠近踏板前缘，后跟越过台阶后逐渐下降，落脚时膝盖保留原片的轻微弯曲。[上楼原片](https://cosindra.ai/motionsmith/motions/walk-upstairs) · [下楼原片](https://cosindra.ai/motionsmith/motions/walk-downstairs)
+
+[步态曲线](./luna-stair-gait.json)约 18.5 KB，随应用打包。原始 GLB 保存在仓库外，来源与文件校验值见[素材清单](../../models.sources.json)。从仓库根目录运行下列命令可重建曲线。
+
+```bash
+node scripts/bake-luna-stairs.mjs /path/to/MotionSmith_walk_upstairs_take1.glb /path/to/MotionSmith_walk_downstairs_take1.glb
+```
+
 ## 云朵连帽衫绑定
 
 [Blender 制作源](./Luna-CloudHoodie.blend)采用用户提供的 Tripo 模型 `1115d436-5d3e-444c-be63-a6141e1f346c.glb`。蓝发、云朵发饰、五官、连帽衫和短裤沿用这份模型。底色图在原 UV 上调整了唇线与眼部高光。袖子与衣身粘连的部分沿腋下拆开，补入两侧布面，以便抬臂取书。下颌尖端已收短并拓圆，主要随头骨运动。贴臂站姿下，衣侧在前臂压到的位置内收，袖子前后两侧的衣料保留蓬度，长袖在肘部上下保留椭圆截面，袖口权重从前臂渐变至手腕，使手腕弯曲时袖口保持开口。制作源包含 115 根骨骼、10 个角色动作和 4 张打包贴图。
@@ -65,6 +75,18 @@ python scripts/pack-luna-chair.py --output <外部目录>
 ### 验证边界
 
 制作脚本检查原生 98 帧的接触面；运行时单测检查时间原点、绑定、独立实例、恢复、骨长与有限坐标。网页动作和导出后网格还需单独验收，不能用原生检查替代浏览器检查。验证结果及截图放在任务 PR，临时模型、报告和录屏不提交。
+
+## 坐姿待机
+
+懒人沙发托腮采用 CMU `13_04` 的左肘弯曲和头部转向（120 Hz，第 1573–2149 帧）。桌前固定椅晃腿采用 CMU `01_06` 坐在高处时的左右膝屈伸（120 Hz，第 985–1357 帧）。两段均从原始记录取坐稳后的片段，并导出为 10 Hz 曲线，托腮的放手段略放慢。网页在既有落座姿势上求解手掌接触和小腿摆角。懒人沙发保留原有骨盆、贴地双脚和坐垫承重。固定椅保留臀部与膝位。三个服装使用各自的下颌接触点，连帽衫的空闲手放在腿上以给袖口留空间。
+
+下载 [13_04.amc](https://mocap.cs.cmu.edu/subjects/13/13_04.amc) 和 [01_06.amc](https://mocap.cs.cmu.edu/subjects/01/01_06.amc) 到仓库外的同一目录，从仓库根目录运行以下命令生成 `src/scene/orbital/seatedIdleFrames.ts`。
+
+```sh
+python3 scripts/extract-luna-seated-idles.py <AMC目录>
+```
+
+动捕由 CMU Graphics Lab 在 NSF EIA-0196217 资助下制作，允许在商业作品中使用及改编。原始或转换后的数据适用数据库条款。 [CMU Motion Capture Database](https://mocap.cs.cmu.edu/)
 
 ## 日常裙装的站姿修形
 

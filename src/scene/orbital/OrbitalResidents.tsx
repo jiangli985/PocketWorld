@@ -1,6 +1,6 @@
 import { SOFA_ENTRY, SOFA_STEPS, loadSofaClip, sofaPlayer } from './sofaMotion';
 import { BEDROOM_LEFT, CABIN_DIVIDER_X, DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, PLUSH_FLOOR_BOUNDS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
-import { STAIR_DISTANCE, atStairEntrance, otherDeck, sampleCabinStairs, stairDestination, stairLanding, type CabinResidentView } from './cabinStairs';
+import { CABIN_STAIRS, STAIR_DISTANCE, STAIR_TREAD_RUN, atStairEntrance, otherDeck, sampleCabinStairs, stairDestination, stairLanding, type CabinResidentView } from './cabinStairs';
 import type { CabinDeck } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
@@ -21,8 +21,10 @@ import { createLibraryPlayer, libraryCoverFlow, libraryMotionSample, loadLibrary
 import { readingStand, shelfOrigin, shelfPoint, shelfYaw } from './library/catalog';
 import { HIP_HEIGHT as HIP, ResidentModel, type ResidentLeg, type ResidentRig } from './ResidentModel';
 import { WALK_SPEED } from './residentRig';
+import { sampleStairGait, stairFootfall, stairTreadSurface, type StairGait } from './stairGait';
 import { createIdlePlayer, createIdleState, loadYawn, loadLookingAround, stepIdle, STANDING_IDLE } from './standingIdle';
 import { CHAIR_SIT_SECONDS, createChairMotion, stepChairMotion } from './chairMotion';
+import { createSeatedIdle, stepSeatedIdle } from './seatedIdle';
 import { SlipperPair } from './Slippers';
 import { PlushDolls } from './PlushDolls';
 import { createPlushBodies, isValidPlushBody, plushObstacleBoxes, resolveMoverAgainstPlush, stepPlushDolls, type PlushBody } from './plushMotion';
@@ -42,6 +44,8 @@ type ResidentsProps = WorldModelProps & {
   enabled: boolean;
   approachEnabled: boolean;
   catMenuOpen: boolean;
+  quickAscent?: React.MutableRefObject<(() => boolean) | null>;
+  onQuickAscentAvailable?: (available: boolean) => void;
   deckView?: React.MutableRefObject<CabinResidentView>;
   upperVisible?: boolean;
   showNearbyHints?: boolean;
@@ -50,7 +54,7 @@ type ResidentsProps = WorldModelProps & {
 };
 type Approach = { point: Point; action: WorldAction; perform: () => void; elapsed: number };
 const RADIUS = RESIDENT_RADIUS;
-const STAIR_SPEED = WALK_SPEED * 1.2;
+const STAIR_SPEED = STAIR_TREAD_RUN / .60;
 const CHAIR_CONTACT = 0.52;
 const CHAIR_REACH = 0.95;
 const PET_REACH = 0.70;
@@ -266,6 +270,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   }, [props.objects.sofa?.active, props.sceneId]);
   const exit = useRef({ from: new THREE.Vector3(), yaw: 0, sit: 0, progress: 0 });
   const chairMotion = useRef(createChairMotion());
+  const seatedIdle = useRef(createSeatedIdle());
   const inspection = useRef({ id: 0, elapsed: 0, finished: false });
   const movement = useMemo(() => ({ forward: new THREE.Vector3(), right: new THREE.Vector3(), step: new THREE.Vector3() }), []);
 
@@ -345,6 +350,33 @@ export function OrbitalResidents(props: ResidentsProps) {
     state.current.external = false;
     current.current.onArrive();
   };
+  const canQuickAscend = () => {
+    const p = current.current, s = state.current, root = resident.current;
+    return !!root && p.sceneId === 'habitat' && p.enabled && !p.focusedObject
+      && s.posture === 'standing' && s.wanted === 'standing' && !s.exiting
+      && !p.objects.chair?.active && !p.objects.sofa?.active
+      && deckFromAuthoredX(root.position.x) === 'lower';
+  };
+  const quickAvailable = useRef(false);
+  useEffect(() => {
+    const handle = props.quickAscent;
+    if (!handle) return;
+    handle.current = () => {
+      if (!canQuickAscend()) return false;
+      const root = resident.current!, s = state.current;
+      const [x, , z] = stairDestination('lower');
+      cancelApproach();
+      s.stairs = null;
+      s.walkTime = 0;
+      walkWeight.current = 0;
+      keys.current.clear();
+      idleInput.current = true;
+      root.position.set(x, 0, z);
+      root.rotation.y = Math.PI / 2;
+      return true;
+    };
+    return () => { handle.current = null; };
+  }, [props.quickAscent]);
   const nextWalkStart = (root: THREE.Group): Point => {
     const stairs = state.current.stairs;
     return stairs ? stairLanding(otherDeck(stairs.from)) : [root.position.x, root.position.z];
@@ -554,15 +586,23 @@ export function OrbitalResidents(props: ResidentsProps) {
     let walking = false;
     let stairSample: ReturnType<typeof sampleCabinStairs> | null = null;
     let stairStep: Point | null = null;
+    let stairGait: StairGait | null = null;
+    let onStairContact = false;
     const sofa = sofaMotion.current;
     const sofaClip = rig.current?.fitted?.sofa ?? sofa.clip;
     if (sofa.rig !== rig.current || (sofaClip && !sofa.apply && rig.current)) {
       sofa.apply = rig.current && sofaClip ? sofaPlayer(rig.current.mesh, sofaClip) : null;
       sofa.rig = rig.current;
     }
+    const seatedIdleEnabled = p.sceneId === 'habitat' && p.enabled && !p.reducedMotion
+      && !document.hidden && !p.focusedObject && !!rig.current;
+    const settledChair = s.posture === 'chair' && chairMotion.current.phase === 'seated';
+    const settledSofa = s.posture === 'sofa' && sofaClip && sofa.time >= SOFA_STEPS + sofaClip.duration;
+    const settledSeat = seatedIdleEnabled ? (settledChair ? 'chair' : settledSofa ? 'sofa' : null) : null;
+    const holdSeat = stepSeatedIdle(seatedIdle.current, dt, settledSeat, s.exiting);
     if (p.sceneId === 'habitat' && s.posture === 'chair') {
       const cm = chairMotion.current;
-      const result = stepChairMotion(cm, dt, s.exiting, p.reducedMotion);
+      const result = stepChairMotion(cm, dt, s.exiting && !holdSeat, p.reducedMotion);
       s.blend = cm.time / CHAIR_SIT_SECONDS;
       s.sit = result.weight;
       const start = chairFront(pose, result.offset), u = ease(cm.align);
@@ -579,7 +619,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     } else if (s.posture === 'sofa' && sofaClip) {
       const previous = sofa.time;
       const speed = sofa.time < SOFA_STEPS ? 1 : p.reducedMotion ? 4 : 1;
-      sofa.time = clamp(previous + dt * speed * (s.exiting ? -1 : 1), 0, SOFA_STEPS + sofaClip.duration);
+      sofa.time = clamp(previous + dt * speed * (holdSeat ? 0 : s.exiting ? -1 : 1), 0, SOFA_STEPS + sofaClip.duration);
       const retreat = Math.min(sofa.time, SOFA_STEPS) * WALK_SPEED;
       root.position.set(SOFA_ENTRY[0] - Math.sin(FLOOR_SOFA.yaw) * retreat, 0,
         SOFA_ENTRY[1] - Math.cos(FLOOR_SOFA.yaw) * retreat);
@@ -635,11 +675,15 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (s.stairs) {
         const stairs = s.stairs;
         const ascending = stairs.from === 'lower';
-        const before = sampleCabinStairs(stairs.distance).position;
-        stairs.distance = clamp(stairs.distance + dt * STAIR_SPEED * (ascending ? 1 : -1), 0, STAIR_DISTANCE);
+        const before = sampleCabinStairs(stairs.distance);
+        stairs.distance = clamp(stairs.distance + dt * (before.tread === null ? WALK_SPEED : STAIR_SPEED) * (ascending ? 1 : -1), 0, STAIR_DISTANCE);
         stairSample = sampleCabinStairs(stairs.distance);
         const [x, , z] = stairSample.position;
-        stairStep = [x - before[0], z - before[2]];
+        stairStep = [x - before.position[0], z - before.position[2]];
+        if (stairSample.tread !== null) {
+          stairGait = sampleStairGait(stairSample.tread, ascending, p.reducedMotion);
+          onStairContact = before.tread !== null && stairGait.footfall !== stairFootfall(before.tread, ascending);
+        }
         walking = Math.hypot(...stairStep) > .00001;
         if (walking) root.rotation.y = angle(root.rotation.y, Math.atan2(...stairStep), 1 - Math.exp(-dt * 14));
         if (stairs.distance === (ascending ? STAIR_DISTANCE : 0)) {
@@ -768,6 +812,11 @@ export function OrbitalResidents(props: ResidentsProps) {
       p.deckView.current.deck = deck;
       p.deckView.current.stairAscent = s.stairs ? stairSample?.ascent ?? null : null;
     }
+    const available = canQuickAscend();
+    if (available !== quickAvailable.current) {
+      quickAvailable.current = available;
+      p.onQuickAscentAvailable?.(available);
+    }
     const [frameDx, frameDz] = stairStep ?? [root.position.x - frameX, root.position.z - frameZ];
     const distance = Math.hypot(frameDx, frameDz);
     if (pending && distance > .0004) pending.elapsed = 0;
@@ -775,8 +824,10 @@ export function OrbitalResidents(props: ResidentsProps) {
     if (stepping) {
       const next = s.walkTime + distance / WALK_SPEED * (s.posture === 'sofa' && !s.exiting ? -1 : 1);
       const halfStep = Math.floor(next * 2);
-      if (halfStep !== Math.floor(s.walkTime * 2))
-        roomAudio.playFootstep({ foot: (halfStep & 1) as 0 | 1, surface: surfaceAt(root.position.x, root.position.z) });
+      if (stairGait ? onStairContact : halfStep !== Math.floor(s.walkTime * 2)) {
+        const foot = stairGait ? Number(stairGait.feet[0].swing) : halfStep & 1;
+        roomAudio.playFootstep({ foot: foot as 0 | 1, surface: surfaceAt(root.position.x, root.position.z), intensity: stairGait?.descent ? .58 : 1 });
+      }
       s.walkTime = (next + 1) % 1;
     }
     const sofaSteps = s.posture === 'sofa' && sofa.time < SOFA_STEPS;
@@ -858,7 +909,8 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
     if (rig.current) {
       const playingChair = p.sceneId === 'habitat' && s.posture === 'chair';
-      rig.current.applyPose(s.walkTime, ease(walkWeight.current));
+      rig.current.applyPose(stairGait?.phase ?? s.walkTime, ease(walkWeight.current) * (1 - (stairGait?.weight ?? 0)));
+      if (stairGait) rig.current.applyStairPose(stairGait, CABIN_STAIRS.x, stairTreadSurface);
       if (!playingChair && flow?.book && librarySample) libraryPlayer.current!.apply(flow.book, librarySample);
       if (!interactionPose && !libraryActive) im.player?.(idle.current, !p.reducedMotion);
       rig.current.applyChairPose?.(
@@ -866,10 +918,11 @@ export function OrbitalResidents(props: ResidentsProps) {
         playingChair ? ease(chairMotion.current.align) : 0,
       );
       if (s.posture === 'sofa' && !sofaSteps) sofa.apply?.(sofa.time - SOFA_STEPS);
+      rig.current.applySeatedIdle?.(seatedIdle.current);
       // Add the offsets after authored animation, only when there is no contact pose to preserve.
       rig.current.followMotion(rawDelta,
         !interactionPose && !libraryActive && !p.focusedObject && !p.reducedMotion && !document.hidden,
-        root.rotation.y, frameDx, frameDz, s.walkTime);
+        root.rotation.y, frameDx, frameDz, stairGait?.phase ?? s.walkTime);
       rig.current.applyArmCorrectives(!interactionPose && !libraryActive);
     }
     if (library && rig.current) library.tick(dt);
