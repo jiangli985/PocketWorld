@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { WorldTransition } from '../../../types/world';
-import { outfitChoices, outfitNames, type ResidentOutfit } from './outfit';
+import { outfitSlots, outfitNames, type ResidentOutfit } from './outfit';
 import everyday from '../../../../assets/models/resident/wardrobe/everyday.webp';
+import cardigan from '../../../../assets/models/resident/wardrobe/cardigan.webp';
 import './wardrobe.css';
 
-const portraits = { everyday };
+const portraits = { everyday, cardigan };
 
 interface Props {
   current: ResidentOutfit;
@@ -36,18 +37,20 @@ export function WardrobeSurface({ current, transition, error, onChoose, onCancel
     </> : (
       <form className="wardrobe-picker" onSubmit={event => { event.preventDefault(); if (selected !== current) onChoose(selected); }}>
         <div className="wardrobe-heading"><h2>衣柜</h2><button type="button" className="wardrobe-close" aria-label="关闭衣柜" onClick={onCancel}>×</button></div>
-        <fieldset><legend>{outfitChoices.length === 1 ? '当前装扮' : '选择一套服装'}</legend><div className="wardrobe-choices">
-          {outfitChoices.map(id => <label key={id} className="wardrobe-option">
-            <input type="radio" name="wardrobe-outfit" value={id} autoFocus={id === current} checked={id === selected} onChange={() => setSelected(id)} />
-            <span className="wardrobe-card">
-              <span className="wardrobe-portrait"><img src={portraits[id]} alt="" /></span>
-              <span className="wardrobe-label">{outfitNames[id]}</span>
-              {id === current && <small>穿着中</small>}
-            </span>
-          </label>)}
+        <fieldset><legend>选择一套服装</legend><div className="wardrobe-choices">
+          {outfitSlots.map((id, index) => id === null
+            ? <span key={index} className="wardrobe-empty">空位</span>
+            : <label key={id} className="wardrobe-option">
+              <input type="radio" name="wardrobe-outfit" value={id} autoFocus={id === current} checked={id === selected} onChange={() => setSelected(id)} />
+              <span className="wardrobe-card">
+                <span className="wardrobe-portrait"><img src={portraits[id]} alt="" /></span>
+                <span className="wardrobe-label">{outfitNames[id]}</span>
+                {id === current && <small>穿着中</small>}
+              </span>
+            </label>)}
         </div></fieldset>
         {error && <p role="alert" className="wardrobe-error">{error}</p>}
-        {outfitChoices.length > 1 && <div className="wardrobe-footer"><button type="submit" disabled={selected === current}>换上这套</button></div>}
+        <div className="wardrobe-footer"><button type="submit" disabled={selected === current}>换上这套</button></div>
       </form>
     )}
   </dialog>;

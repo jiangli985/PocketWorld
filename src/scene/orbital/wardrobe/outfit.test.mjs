@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { initialOutfit, isOutfit, outfitChoices, previewOutfit, readOutfit, rememberOutfit } from './outfit.ts';
+import { initialOutfit, isOutfit, outfitSlots, previewOutfit, readOutfit, rememberOutfit } from './outfit.ts';
 
-test('the wardrobe lists only everyday and opens retired outfit previews in everyday', () => {
-  assert.deepEqual(outfitChoices, ['everyday']);
+test('the wardrobe keeps slot two vacant and opens retired outfit previews in everyday', () => {
+  assert.deepEqual(outfitSlots, ['everyday', null, 'cardigan']);
+  assert.equal(previewOutfit('?outfit=cardigan'), 'cardigan');
   assert.equal(previewOutfit('?outfit=everyday'), 'everyday');
   assert.equal(previewOutfit('?outfit=unknown'), null);
   assert.equal(previewOutfit('?view=cabin'), null);
@@ -37,6 +38,11 @@ test('a retired saved outfit falls back to everyday and remembering it preserves
   window.location.search = '?view=cabin&outfit=snowflower&sun=0.5';
   rememberOutfit('everyday');
   assert.equal(window.location.search, '?view=cabin&outfit=everyday&sun=0.5');
+
+  rememberOutfit('cardigan');
+  assert.equal(window.location.search, '?view=cabin&outfit=cardigan&sun=0.5');
+  window.location.search = '?view=cabin';
+  assert.equal(initialOutfit(), 'cardigan');
 
   window.history.replaceState = () => { throw new Error('restricted history'); };
   rememberOutfit('everyday');

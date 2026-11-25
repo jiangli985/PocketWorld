@@ -4,7 +4,7 @@
   border: 1px solid #d9cdb8;
   border-radius: 14px;
   padding: 0;
-  width: min(280px, calc(100vw - 28px));
+  width: min(570px, calc(100vw - 28px));
   max-height: calc(100dvh - 28px);
   margin: auto;
   box-shadow: 0 20px 80px #18140950;
@@ -18,7 +18,8 @@
 .wardrobe-screen .wardrobe-close { border: 0; background: transparent; color: #605548; width: 44px; height: 44px; font-size: 1.65rem; }
 .wardrobe-picker fieldset { margin: 14px 0 0; padding: 0; border: 0; min-width: 0; }
 .wardrobe-picker legend { padding: 0 0 12px; font-size: .86rem; color: #675b4c; }
-.wardrobe-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: clamp(5px, 2vw, 12px); }
+.wardrobe-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(5px, 2vw, 12px); }
+.wardrobe-empty { display: grid; place-items: center; border: 1px dashed #cfc6b7; border-radius: 9px; color: #756d62; font-size: .85rem; }
 .wardrobe-option { position: relative; cursor: pointer; }
 .wardrobe-option input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .wardrobe-card {
