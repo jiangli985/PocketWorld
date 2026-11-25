@@ -79,6 +79,8 @@ export function createPlushPose(mesh: Object3D) {
         + plushSupportHeight(body.roll, body.pitch, half.x, half.y, half.z), grip.floorZ);
       root.parent!.localToWorld(floor);
       grip.center.lerpVectors(floor, grip.center, lift);
+      // Arc out in front of the bent head, then settle back into the walking cradle.
+      grip.center.add(offset.set(0, 0, .22 * lift * (1 - lift)).applyQuaternion(facing));
     }
     if (!reach) return;
     // Unbend the spine above the keyed pelvis so the face clears the toy and both feet keep

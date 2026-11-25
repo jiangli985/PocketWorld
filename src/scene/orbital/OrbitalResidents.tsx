@@ -1,4 +1,5 @@
 import { createPlushPose, dropSpot, gripPlush, plushBounds, plushLabels, type PlushGrip, type PlushShape } from './plushCarry';
+import { createPaperPose } from './schedule/paperGrip';
 import { RUG_SEAT, RUG_TOP, RUG_YAW, PICKUP_GRIP_TIME, PAPER_PICKUP_REACH, PAPER_PICKUP_PREFIX, advanceCabinPerformance, applyCabinPerformance, createCabinActionPlayer, isPaperPickup, isRugSeat, leaveCabinPerformance, loadCabinActions, newRugPerformance, type CabinPerformance, type PaperPickup } from './cabinActions';
 import { SOFA_ENTRY, SOFA_STEPS, loadSofaClip, sofaPlayer } from './sofaMotion';
 import { DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
@@ -251,6 +252,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   const plushBodies = useRef<PlushBody[]>(props.sceneId === 'habitat' ? createPlushBodies(PLUSH_DOLLS) : []);
   const plushShapes = useMemo(() => new Map<string, PlushShape>(), []);
   const plushGrip = useRef<PlushGrip | null>(null);
+  const paperPose = useRef<{ mesh: THREE.Object3D; apply: ReturnType<typeof createPaperPose> }>();
   const plushPose = useRef<{ mesh: THREE.Object3D; apply: ReturnType<typeof createPlushPose> }>();
   const catalogThink = useRef({ time: 0, weight: 0 });
   const findDoll = (id: string) => plushBodies.current.find(body => body.id === id);
@@ -873,7 +875,7 @@ export function OrbitalResidents(props: ResidentsProps) {
               plushGrip.current = gripPlush(doll, shape);
               cabinPerformance.current = { kind: 'plush', placing: false, leaving: false, time: 0 };
             } else cabinPerformance.current = { kind: 'paper', time: 0, leaving: false, id: id.slice(PAPER_PICKUP_PREFIX.length),
-              point: new THREE.Vector3(request.point[0], request.height, request.point[1]), offset: null, complete: request.perform };
+              point: new THREE.Vector3(request.point[0], request.height, request.point[1]), complete: request.perform };
             cancelApproach();
           }
         } else {
@@ -1078,16 +1080,11 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (performance && cabin.apply && cabin.clips) {
         applyCabinPerformance(performance, cabin.clips, cabin.apply);
         if (performance.kind === 'paper') {
-          if (performance.time >= PICKUP_GRIP_TIME) {
-            const hand = rig.current.mesh.getObjectByName('mixamorigRightHand')!;
-            performance.offset ??= hand.worldToLocal(performance.point.clone());
-            const held = p.paperPickup.current ?? { id: performance.id, position: new THREE.Vector3() };
-            hand.localToWorld(held.position.copy(performance.offset));
-            p.paperPickup.current = held;
-          } else {
-            performance.offset = null;
-            p.paperPickup.current = null;
-          }
+          const mesh = rig.current.mesh;
+          if (paperPose.current?.mesh !== mesh) paperPose.current = { mesh, apply: createPaperPose(mesh) };
+          const held = p.paperPickup.current ?? { id: performance.id, position: new THREE.Vector3() };
+          paperPose.current.apply(performance.point, performance.time, held.position);
+          p.paperPickup.current = performance.time >= PICKUP_GRIP_TIME ? held : null;
         }
       }
       const thought = catalogThink.current;

@@ -10,8 +10,7 @@ import { createResidentRig } from './residentRig.ts';
 
 const model = path => new URL('../../../assets/public/models/' + path, import.meta.url);
 
-test('Luna reaches around the penguin, lifts it clear of her clothes and carries it with both hands', async () => {
-  const placement = PLUSH_DOLLS.find(doll => doll.id === 'plush-penguin');
+for (const placement of PLUSH_DOLLS) test(placement.id + ' stays clear of Luna while both hands support it', async () => {
   const [{ gltf: luna }, { gltf: actions }, { gltf: plush }] = await Promise.all([
     load(model('resident/luna-walk-room.glb')), load(model('resident/luna-cabin-actions-everyday.glb')),
     load(model(placement.path)),
@@ -47,11 +46,11 @@ test('Luna reaches around the penguin, lifts it clear of her clothes and carries
     let strongest = 0;
     for (let k = 1; k < 4; k++) if (weights.getComponent(i, k) > weights.getComponent(i, strongest)) strongest = k;
     const name = skin.skeleton.bones[joints.getComponent(i, strongest)].name;
-    samples.push({ i, hand: name.includes('Hand'), arm: /Hand|Arm/.test(name), side: name.includes('Left') ? 1 : -1 });
+    samples.push({ i, foot: /Foot|Toe/.test(name), hand: name.includes('Hand'), arm: /Hand|Arm/.test(name), side: name.includes('Left') ? 1 : -1 });
   }
   const bounds = new Box3(), point = new Vector3(), outward = new Vector3(), hits = [], ray = new Raycaster();
   try {
-    for (const t of [PICKUP_GRIP_TIME, 2.25, 2.55, 2.72, 3.3, clips.pickUp.duration, 2.55, PICKUP_GRIP_TIME]) {
+    for (const t of [PICKUP_GRIP_TIME, 2.25, 2.45, 2.50, 2.55, 2.60, 2.65, 2.72, 3.3, clips.pickUp.duration, 2.55, PICKUP_GRIP_TIME]) {
       const walking = t === clips.pickUp.duration;
       rig.applyPose(.28, walking ? 1 : 0);
       if (!walking) applyCabinPerformance({ kind: 'plush', time: t }, clips, animate);
@@ -66,9 +65,13 @@ test('Luna reaches around the penguin, lifts it clear of her clothes and carries
         assert.ok(toy.position.distanceTo(ground) < 1e-6, 'floor contact survives deck placement and reversed playback');
       }
       bounds.setFromObject(toy).expandByScalar(.025);
-      const contact = new Set();
-      for (const { i, arm, hand, side } of samples) {
+      const contact = new Set(), soles = [Infinity, Infinity];
+      for (const { i, arm, hand, side, foot } of samples) {
         skin.getVertexPosition(i, point).applyMatrix4(skin.matrixWorld);
+        if (foot) {
+          const index = side === 1 ? 1 : 0;
+          soles[index] = Math.min(soles[index], point.y - deck.position.y);
+        }
         if (!bounds.containsPoint(point)) continue;
         outward.set(arm ? side : 0, 0, arm ? 0 : -1).applyQuaternion(root.quaternion);
         ray.set(point, outward);
@@ -87,6 +90,7 @@ test('Luna reaches around the penguin, lifts it clear of her clothes and carries
           if (hits[0]?.distance < .022) contact.add(side);
         }
       }
+      if (!walking) assert.ok(soles.every(y => Math.abs(y) < .005), 'both soles stay planted at ' + t);
       assert.equal(contact.size, 2, 'both hands remain at the fabric at ' + t);
     }
   } finally { rig.dispose(); }
