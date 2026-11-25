@@ -234,18 +234,6 @@ export function resetCountdown(state: ClockPersistentState, newDurationSec?: num
   };
 }
 
-export function stepCountdownDuration(state: ClockPersistentState, deltaSeconds: number): ClockPersistentState {
-  const base = state.countdownRunning ? state.countdownDurationSec : state.countdownRemainingSec;
-  const next = clampCountdownSeconds(base + deltaSeconds);
-  return {
-    ...state,
-    countdownDurationSec: next,
-    countdownRemainingSec: next,
-    countdownRunning: false,
-    countdownTargetTimestamp: null,
-  };
-}
-
 export function evaluateClockTick(
   state: ClockPersistentState,
   now: Date
