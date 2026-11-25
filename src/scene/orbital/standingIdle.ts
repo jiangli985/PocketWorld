@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { createCabinActionPlayer } from './cabinActions';
 
 export const STANDING_IDLE = {
   delay: 6, firstYawn: [50, 70], repeatYawn: [65, 95],
@@ -12,11 +13,14 @@ export const STANDING_IDLE = {
 const smooth = (value: number) => { const t = THREE.MathUtils.clamp(value, 0, 1); return t * t * (3 - 2 * t); };
 const interval = (range: readonly number[], random: () => number) => range[0] + random() * (range[1] - range[0]);
 
-type ShortGesture = keyof typeof STANDING_IDLE.shortDuration | 'rubEye';
-type ExtraGestures<T> = Partial<Record<'rubEye', T>>;
-const shortOrder: readonly ShortGesture[] = ['listen', 'clasp', 'rubEye'];
-const shortDuration = (kind: ShortGesture, extra: ExtraGestures<number>) =>
-  kind === 'rubEye' ? extra[kind] ?? 0 : STANDING_IDLE.shortDuration[kind];
+type BuiltInGesture = keyof typeof STANDING_IDLE.shortDuration;
+type ExtraGesture = 'rubEye' | 'shiftWeight' | 'stretchNeck';
+type ShortGesture = BuiltInGesture | ExtraGesture;
+type ExtraGestures = Partial<Record<ExtraGesture, { duration: number }>>;
+const shortOrder: readonly ShortGesture[] = ['listen', 'clasp', 'rubEye', 'shiftWeight', 'stretchNeck'];
+const isBuiltIn = (kind: ShortGesture): kind is BuiltInGesture => kind === 'listen' || kind === 'clasp';
+const shortDuration = (kind: ShortGesture, extra: ExtraGestures) =>
+  isBuiltIn(kind) ? STANDING_IDLE.shortDuration[kind] : extra[kind]?.duration ?? 0;
 
 export function createIdleState(random = Math.random) {
   return { elapsed: 0, phase: 0, weight: 0, restWeight: 0, yawnTime: -1, yawnWeight: 0,
@@ -35,7 +39,7 @@ function fadeGesture(state: IdleState, dt: number) {
 }
 
 export function stepIdle(state: IdleState, delta: number, eligible: boolean, duration: number, random = Math.random,
-  lookDuration = 0, restEligible = eligible, extra: ExtraGestures<number> = {}) {
+  lookDuration = 0, restEligible = eligible, extra: ExtraGestures = {}) {
   const dt = THREE.MathUtils.clamp(delta, 0, .05);
   state.restWeight = THREE.MathUtils.clamp(state.restWeight + (restEligible ? dt / STANDING_IDLE.restFade : -dt / STANDING_IDLE.fadeOut), 0, 1);
   if (state.weight > 0 || eligible) state.phase += dt;
@@ -135,7 +139,7 @@ const CLASP = {
 
 /** Called after the resident's base pose. Only upper-body rotations are owned here. */
 export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationClip, lookClip?: THREE.AnimationClip,
-  extra: ExtraGestures<THREE.AnimationClip> = {}) {
+  applyCabinAction?: ReturnType<typeof createCabinActionPlayer>) {
   const bone = (name: string) => root.getObjectByName('mixamorig' + name)!;
   const bind = (motion?: THREE.AnimationClip) => motion?.tracks.map(track => {
     const { nodeName, propertyName } = THREE.PropertyBinding.parseTrackName(track.name);
@@ -146,7 +150,6 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
     return { joint, curve: track.createInterpolant() };
   }) ?? [];
   const yawnChannels = bind(clip), lookChannels = bind(lookClip);
-  const rubEye = bind(extra.rubEye);
   const fittedSleeves = root.userData.outfit === 'cloudhoodie';
   const spine = bone('Spine2'), neck = bone('Neck'), head = bone('Head');
   const arms = (['Right', 'Left'] as const).map(side => {
@@ -221,11 +224,15 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
       }
     }
     if (!animate) return;
-    const short = state.shortTime >= 0 && state.shortKind === 'rubEye';
-    const time = short ? state.shortTime : state.lookTime >= 0 ? state.lookTime : state.yawnTime;
-    const gestureWeight = short ? shortWeight : state.lookTime >= 0 ? state.lookWeight : state.yawnWeight;
+    if (state.shortTime >= 0 && !isBuiltIn(state.shortKind)) {
+      if (shortWeight > 0) applyCabinAction?.(state.shortKind, state.shortTime, shortWeight);
+      return;
+    }
+    const looking = state.lookTime >= 0;
+    const time = looking ? state.lookTime : state.yawnTime;
+    const gestureWeight = looking ? state.lookWeight : state.yawnWeight;
     if (time < 0 || !gestureWeight) return;
-    const channels = short ? rubEye : state.lookTime >= 0 ? lookChannels : yawnChannels;
+    const channels = looking ? lookChannels : yawnChannels;
     for (const { joint, curve } of channels) {
       rotation.fromArray(curve.evaluate(time));
       joint.quaternion.slerp(rotation, gestureWeight);

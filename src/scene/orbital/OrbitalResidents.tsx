@@ -26,7 +26,7 @@ import { WALK_SPEED } from './residentRig';
 import { sampleStairGait, stairFootfall, stairTreadSurface, type StairGait } from './stairGait';
 import { createIdlePlayer, createIdleState, loadYawn, loadLookingAround, stepIdle, STANDING_IDLE } from './standingIdle';
 import { CHAIR_SIT_SECONDS, createChairMotion, stepChairMotion } from './chairMotion';
-import { createSeatedIdle, stepSeatedIdle } from './seatedIdle';
+import { createSeatedIdle, seatedIdleWeight, stepSeatedIdle } from './seatedIdle';
 import { SlipperPair } from './Slippers';
 import { PlushDolls } from './PlushDolls';
 import { createPlushBodies, isValidPlushBody, plushObstacleBoxes, resolveMoverAgainstPlush, stepPlushDolls, type PlushBody } from './plushMotion';
@@ -667,12 +667,18 @@ export function OrbitalResidents(props: ResidentsProps) {
       sofa.apply = rig.current && sofaClip ? sofaPlayer(rig.current.mesh, sofaClip) : null;
       sofa.rig = rig.current;
     }
-    const seatedIdleEnabled = p.sceneId === 'habitat' && p.enabled && !p.reducedMotion
-      && !document.hidden && !p.focusedObject && !!rig.current;
+    const seatIdle = seatedIdle.current;
+    const floor = cabinPerformance.current;
+    const settledFloor = floor?.kind === 'floor' && (floor.phase === 'seated'
+      || (floor.phase === 'rise' && floor.time === 0 && seatIdle.seat === 'floor'));
     const settledChair = s.posture === 'chair' && chairMotion.current.phase === 'seated';
     const settledSofa = s.posture === 'sofa' && sofaClip && sofa.time >= SOFA_STEPS + sofaClip.duration;
-    const settledSeat = seatedIdleEnabled ? (settledChair ? 'chair' : settledSofa ? 'sofa' : null) : null;
-    const holdSeat = stepSeatedIdle(seatedIdle.current, dt, settledSeat, s.exiting);
+    const seat = settledFloor && p.approachEnabled ? 'floor' : settledChair ? 'chair' : settledSofa ? 'sofa' : null;
+    const canIdle = p.sceneId === 'habitat' && !!rig.current && !p.reducedMotion && !document.hidden;
+    const pauseIdle = !p.enabled || !!p.focusedObject;
+    const activeSeat = canIdle && (!pauseIdle || (seatIdle.seat === seat && seatIdle.weight > 0)) ? seat : null;
+    const holdSeat = stepSeatedIdle(seatIdle, dt, activeSeat,
+      s.exiting || (settledFloor && floor.leaving) || pauseIdle, cabin.clips);
     if (!p.approachEnabled && cabinPerformance.current) {
       if (cabinPerformance.current.kind === 'plush' && !cabinPerformance.current.placing) plushGrip.current = null;
       cabinPerformance.current = null;
@@ -685,7 +691,7 @@ export function OrbitalResidents(props: ResidentsProps) {
         const yaw = Math.atan2(grip.floorX - root.position.x, grip.floorZ - root.position.z);
         root.rotation.y = angle(root.rotation.y, yaw, 1 - Math.exp(-dt * 10));
       }
-      if (advanceCabinPerformance(performance, document.hidden ? 0 : dt * (p.reducedMotion ? 4 : 1), cabin.clips)) {
+      if (!holdSeat && advanceCabinPerformance(performance, document.hidden ? 0 : dt * (p.reducedMotion ? 4 : 1), cabin.clips)) {
         cabinPerformance.current = null;
         p.paperPickup.current = null;
         if (performance.kind === 'plush' && plushGrip.current && performance.placing !== performance.leaving) {
@@ -1010,7 +1016,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     const yawnClip = fittedIdle?.yawn ?? im.clip;
     const lookClip = fittedIdle?.look ?? im.lookClip;
     stepIdle(idle.current, rawDelta, standingAtRest && !p.reducedMotion, yawnClip?.duration ?? 0,
-      Math.random, lookClip?.duration ?? 0, standingAtRest, { rubEye: cabin.clips?.rubEye.duration });
+      Math.random, lookClip?.duration ?? 0, standingAtRest, cabin.clips);
     idleInput.current = false;
     if (idle.current.elapsed >= STANDING_IDLE.delay && !lookClip && !im.lookLoading && idle.current.elapsed >= im.lookRetryAt) {
       im.lookLoading = true;
@@ -1026,7 +1032,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
     if (rig.current && im.rig !== rig.current) {
       im.rig = rig.current;
-      im.player = createIdlePlayer(rig.current.mesh, yawnClip ?? undefined, lookClip ?? undefined, cabin.clips);
+      im.player = createIdlePlayer(rig.current.mesh, yawnClip ?? undefined, lookClip ?? undefined, cabin.apply);
     }
     if (rig.current) {
       const playingChair = p.sceneId === 'habitat' && s.posture === 'chair';
@@ -1077,7 +1083,12 @@ export function OrbitalResidents(props: ResidentsProps) {
         plushGrip.current.visible = deckFrame.current?.visible ?? true;
         plushPose.current.apply(root, plushGrip.current, performance?.kind === 'plush' ? performance.time : cabin.clips.pickUp.duration, PICKUP_GRIP_TIME);
       }
-      rig.current.applySeatedIdle?.(seatedIdle.current);
+      if (seatIdle.overlay) {
+        const weight = seatedIdleWeight(seatIdle);
+        if (weight > 0) cabin.apply?.(seatIdle.overlay, seatIdle.time, weight);
+      } else {
+        rig.current.applySeatedIdle?.(seatIdle);
+      }
       // Add the offsets after authored animation, only when there is no contact pose to preserve.
       rig.current.followMotion(rawDelta,
         !interactionPose && !libraryActive && !p.focusedObject && !p.reducedMotion && !document.hidden,

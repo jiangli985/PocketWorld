@@ -8,7 +8,10 @@ export const RUG_TOP = .013;
 export const PAPER_PICKUP_REACH = .44;
 export const PICKUP_GRIP_TIME = 1.9;
 export const PAPER_PICKUP_PREFIX = 'schedule-paper-';
-export const CABIN_ACTIONS = ['floorSit', 'floorStand', 'pickUp', 'rubEye', 'think', 'reachHigh'] as const;
+export const CABIN_IDLE_OFFSETS = ['stretchNeck', 'sofaDoze', 'chairGlance', 'floorGlance'] as const;
+export const CABIN_ACTIONS = [
+  'floorSit', 'floorStand', 'pickUp', 'rubEye', 'think', 'reachHigh', 'shiftWeight', ...CABIN_IDLE_OFFSETS,
+] as const;
 type CabinActionName = typeof CABIN_ACTIONS[number];
 type CabinClips = Record<CabinActionName, AnimationClip>;
 export type PaperPickup = { id: string; position: Vector3 };
@@ -42,12 +45,14 @@ export function createCabinActionPlayer(root: Object3D, clips: CabinClips) {
       throw new Error('Unexpected Luna cabin action track: ' + track.name);
     return { joint, propertyName, sample: track.createInterpolant() };
   })]));
-  const position = new Vector3(), rotation = new Quaternion();
+  const offsets = new Set<string>(CABIN_IDLE_OFFSETS);
+  const position = new Vector3(), rotation = new Quaternion(), neutral = new Quaternion();
   return (name: CabinActionName, time: number, blend = 1) => {
     const t = MathUtils.clamp(time, 0, clips[name].duration);
     for (const { joint, propertyName, sample } of channels.get(name)!) {
       const value = sample.evaluate(t);
       if (propertyName === 'position') joint.position.lerp(position.fromArray(value), blend);
+      else if (offsets.has(name)) joint.quaternion.multiply(rotation.identity().slerp(neutral.fromArray(value), blend));
       else joint.quaternion.slerp(rotation.fromArray(value), blend);
     }
   };

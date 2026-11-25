@@ -312,7 +312,7 @@
     },
     {
       "file": "assets/public/models/resident/luna-cabin-actions-everyday.glb",
-      "source": "Cosindra MotionSmith gallery, six UE5 Manny clips sampled at 30 fps and fitted to Luna.",
+      "source": "Cosindra MotionSmith gallery, eleven UE5 Manny clips fitted to Luna at 15 or 30 fps.",
       "sourcePage": "https://cosindra.ai/motionsmith/motions/sit-floor",
       "sourcePages": {
         "MotionSmith_sit_floor_take2.glb": "https://cosindra.ai/motionsmith/motions/sit-floor",
@@ -320,7 +320,12 @@
         "MotionSmith_pick_up_take1.glb": "https://cosindra.ai/motionsmith/motions/pick-up",
         "MotionSmith_rub_eye_take1.glb": "https://cosindra.ai/motionsmith/motions/rub-eye",
         "MotionSmith_thinking_take1.glb": "https://cosindra.ai/motionsmith/motions/thinking",
-        "MotionSmith_reach_high_take1.glb": "https://cosindra.ai/motionsmith/motions/reach-high"
+        "MotionSmith_reach_high_take1.glb": "https://cosindra.ai/motionsmith/motions/reach-high",
+        "MotionSmith_idle_feminine_take1.glb": "https://cosindra.ai/motionsmith/motions/idle-feminine",
+        "MotionSmith_idle_neck_stretch_take2.glb": "https://cosindra.ai/motionsmith/motions/idle-neck-stretch",
+        "MotionSmith_seated_dozing_idle_take1.glb": "https://cosindra.ai/motionsmith/motions/seated-dozing-idle",
+        "MotionSmith_sit_chair_idle_take5.glb": "https://cosindra.ai/motionsmith/motions/sit-chair-idle",
+        "MotionSmith_sit_floor_idle_take1.glb": "https://cosindra.ai/motionsmith/motions/sit-floor-idle"
       },
       "sourceSha256": {
         "MotionSmith_sit_floor_take2.glb": "9627ea368f5e88dc50ff4b128dc8d911c0272f250f7b56a2b3d30df8b9593ad7",
@@ -328,38 +333,43 @@
         "MotionSmith_pick_up_take1.glb": "4cfe5bec54742ad408ecb13ea0887758a7dbb1fd6fbbf977ede8d7129ac8a411",
         "MotionSmith_rub_eye_take1.glb": "5eb1c241e3ce8955e426467b0f2d74fb0adae0d8a64c614377e8d06a94ce6d05",
         "MotionSmith_thinking_take1.glb": "58f8fddf3880997ad35037d41582bf0fa014a17377b8b1f8f5b9d245b5cc71a8",
-        "MotionSmith_reach_high_take1.glb": "be8fbb3994ebaa2d5fbc08dd2700374bdb222e0809040b75cf311b606336a7a9"
+        "MotionSmith_reach_high_take1.glb": "be8fbb3994ebaa2d5fbc08dd2700374bdb222e0809040b75cf311b606336a7a9",
+        "MotionSmith_idle_feminine_take1.glb": "78ab31313c54ff26de4f5750bca86746d9b1eca93500f4cf38a936984aa09167",
+        "MotionSmith_idle_neck_stretch_take2.glb": "0972a23a29d0c383749d8ab4bf269adda744b0730edf3ba2f8ac105c8c5bfe34",
+        "MotionSmith_seated_dozing_idle_take1.glb": "361e214fee5ddb4fffcc7c5177a5021e5b63b908fbba2c2b5f8fb7d9e84a16e0",
+        "MotionSmith_sit_chair_idle_take5.glb": "c9452ecde98b5f0a0f7055feec5b45368592551f61d232afa8b619f96c0f9214",
+        "MotionSmith_sit_floor_idle_take1.glb": "2fd5791517056e3fddb0a20f74507ef75c96296ea6b70c89fe4d382cf3e12d97"
       },
       "license": "The MotionSmith gallery permits commercial game use without attribution.",
       "licensePage": "https://cosindra.ai/license",
       "used": true,
-      "bytes": 914956,
-      "sha256": "9144d567b83e217aa410c7d6d33b9a8440cb5cb7aaa4ad6154d60af0dc74858d",
-      "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, adjusts the wrist against the face and exports animation tracks without meshes or textures."
+      "bytes": 1013604,
+      "sha256": "3d5c796fe1a2b789556feb61aa4070e8add2a40c4d9f8c42fcb58e4862af329d",
+      "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, fits hand gestures to the face or waist, and exports masked idle rotations and action tracks without meshes or textures."
     },
     {
       "file": "assets/public/models/resident/luna-cabin-actions-snowflower.glb",
-      "source": "Cosindra MotionSmith gallery, six UE5 Manny clips sampled at 30 fps and fitted to Luna.",
+      "source": "Cosindra MotionSmith gallery, eleven UE5 Manny clips fitted to Luna at 15 or 30 fps.",
       "sourcePage": "https://cosindra.ai/motionsmith/motions/sit-floor",
       "sourceManifest": "assets/public/models/resident/luna-cabin-actions-everyday.glb",
       "license": "The MotionSmith gallery permits commercial game use without attribution.",
       "licensePage": "https://cosindra.ai/license",
       "used": true,
-      "bytes": 914956,
-      "sha256": "2528bb3ab49f1a76a43821fb99d420889b6619e9cfe5144b9da136b1e09f8f7a",
-      "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, adjusts the wrist against the face and exports animation tracks without meshes or textures."
+      "bytes": 1013604,
+      "sha256": "46ac846398fcbba9ebbe59091de0c990ef0487bb72ebbd967e39a14762e9fdcd",
+      "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, fits hand gestures to the face or waist, and exports masked idle rotations and action tracks without meshes or textures."
     },
     {
       "file": "assets/public/models/resident/luna-cabin-actions-cloudhoodie.glb",
-      "source": "Cosindra MotionSmith gallery, six UE5 Manny clips sampled at 30 fps and fitted to Luna.",
+      "source": "Cosindra MotionSmith gallery, eleven UE5 Manny clips fitted to Luna at 15 or 30 fps.",
       "sourcePage": "https://cosindra.ai/motionsmith/motions/sit-floor",
       "sourceManifest": "assets/public/models/resident/luna-cabin-actions-everyday.glb",
       "license": "The MotionSmith gallery permits commercial game use without attribution.",
       "licensePage": "https://cosindra.ai/license",
       "used": true,
-      "bytes": 850172,
-      "sha256": "60a8db261704c7fc8c42047cdddc01b6b1b7af54afe85d2d6d61fc699b6b73f9",
-      "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, adjusts the wrist against the face and exports animation tracks without meshes or textures."
+      "bytes": 948820,
+      "sha256": "7e479106ac6ac2163ee7403051a26b820ea7d51d107e8ff5ce97a05df1b31d63",
+      "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, fits hand gestures to the face or waist, and exports masked idle rotations and action tracks without meshes or textures."
     }
   ]
 }

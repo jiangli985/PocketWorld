@@ -1,11 +1,12 @@
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
+import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
 import { load } from '../src/scene/orbital/load-for-validation.mjs';
+import { CABIN_IDLE_OFFSETS } from '../src/scene/orbital/cabinActions.ts';
 import { createResidentRig } from '../src/scene/orbital/residentRig.ts';
 
 const directory = process.argv[2];
-if (!directory) throw new Error('Pass the directory containing the six MotionSmith GLBs.');
+if (!directory) throw new Error('Pass the directory containing the MotionSmith GLBs.');
 
 const takes = {
   floorSit: 'sit_floor_take2',
@@ -14,6 +15,11 @@ const takes = {
   rubEye: 'rub_eye_take1',
   think: 'thinking_take1',
   reachHigh: 'reach_high_take1',
+  shiftWeight: 'idle_feminine_take1',
+  stretchNeck: 'idle_neck_stretch_take2',
+  sofaDoze: 'seated_dozing_idle_take1',
+  chairGlance: 'sit_chair_idle_take5',
+  floorGlance: 'sit_floor_idle_take1',
 };
 const body = new Map([
   ['Hips', 'pelvis'], ['Spine', 'spine_01'], ['Spine1', 'spine_03'], ['Spine2', 'spine_05'],
@@ -37,6 +43,12 @@ for (const [side, suffix] of [['Left', 'l'], ['Right', 'r']]) {
   }
 }
 const upper = /^(?:Spine|Neck|Head)|Shoulder|Arm|Hand/;
+const offsetMask = {
+  stretchNeck: /^(?:Spine2|Neck|Head)$/,
+  sofaDoze: /^(?:Spine|Spine1|Spine2|Neck|Head)$/,
+  chairGlance: /^(?:Neck|Head)$/,
+  floorGlance: /^(?:Spine2|Neck|Head)$/,
+};
 const point = bone => bone.getWorldPosition(new Vector3());
 const rotation = bone => bone.getWorldQuaternion(new Quaternion());
 const direction = (from, to) => point(to).sub(point(from)).normalize();
@@ -190,6 +202,7 @@ async function bake(outfit, file) {
   const fittedLength = legLength(point(target.get('RightUpLeg')), point(target.get('RightLeg')), point(target.get('RightFoot')));
   const clips = [];
   for (const [name, data] of await loadSourceClips()) {
+    rig.applyPose(0, 0);
     const source = new Map([...body].map(([joint, b]) => [joint, data.gltf.scene.getObjectByName(b)]));
     const delta = new Map();
     for (const [key, joint] of source) {
@@ -202,12 +215,31 @@ async function bake(outfit, file) {
     }
     const ratio = fittedLength / legLength(point(source.get('RightUpLeg')), point(source.get('RightLeg')), point(source.get('RightFoot')));
     const duration = data.gltf.animations[0].duration;
-    const frameCount = Math.round(duration * 30) + 1;
-    const upperOnly = ['rubEye', 'think', 'reachHigh'].includes(name);
+    const offsetIdle = CABIN_IDLE_OFFSETS.includes(name);
+    const sampleRate = offsetIdle ? 15 : 30;
+    const frameCount = Math.round(duration * sampleRate) + 1;
+    const timeAt = frame => offsetIdle ? frame * duration / (frameCount - 1) : frame / sampleRate;
+    const upperOnly = offsetIdle || ['rubEye', 'think', 'reachHigh', 'shiftWeight'].includes(name);
+    const sourceBind = new Map(['Head', 'Spine2'].map(key => [key, rotation(source.get(key)).invert()]));
     const seated = name === 'floorSit' || name === 'floorStand';
     data.sample(name === 'floorStand' ? duration : 0);
     const sourceAnchor = point(source.get('Hips'));
-    const sampleBones = [...target].filter(([key]) => !upperOnly || upper.test(key));
+    const sampleBones = [...target].filter(([key]) => !upperOnly
+      || (offsetMask[name] ?? (name === 'shiftWeight' ? /^(?:Spine|Neck|Head|Left(?:Shoulder|Arm|ForeArm|Hand))/ : upper)).test(key));
+    const firstRotation = new Map((offsetIdle ? sampleBones : []).map(([key]) => [key, source.get(key).quaternion.clone().invert()]));
+    const authoredYaw = key => new Euler().setFromQuaternion(
+      rotation(source.get(key)).multiply(sourceBind.get(key)), 'YXZ',
+    ).y;
+    // These authored seated takes mostly hold a gaze. Ease from Luna's seat
+    // pose toward the source's head direction, preserving its smaller motion.
+    const gazeYaw = ['chairGlance', 'floorGlance'].includes(name) ? authoredYaw('Head') - authoredYaw('Spine2') : 0;
+    const bias = new Map((offsetIdle ? sampleBones : []).map(([key, joint]) => {
+      const inverse = rotation(joint).invert();
+      const nod = name === 'sofaDoze' ? { Spine: .045, Spine1: .035, Spine2: .04, Neck: .10, Head: .13 }[key] ?? 0 : 0;
+      const yaw = gazeYaw * (key === 'Head' ? .72 : key === 'Neck' ? .28 : 0);
+      const tilt = new Quaternion().setFromEuler(new Euler(nod, yaw, 0, 'YXZ'));
+      return [key, inverse.clone().multiply(tilt).multiply(inverse.invert())];
+    }));
     const tracks = sampleBones.map(([, joint]) => ({ joint, path: 'rotation', values: [] }));
     if (!upperOnly) tracks.push({ joint: hips, path: 'translation', values: [] });
     if (seated || name === 'pickUp') for (const { joint } of dress) tracks.push({ joint, path: 'rotation', values: [] });
@@ -217,10 +249,43 @@ async function bake(outfit, file) {
     }
     const anchors = [];
     for (let frame = 0; frame < frameCount; frame++) {
-      const t = frame / 30;
+      const t = timeAt(frame);
       rig.applyPose(0, 0);
       data.sample(t);
-      for (const [key, joint] of sampleBones) worldQuaternion(joint, rotation(source.get(key)).multiply(delta.get(key)));
+      for (const [key, joint] of sampleBones) {
+        const alignment = delta.get(key);
+        if (offsetIdle) {
+          const offset = alignment.clone().invert().multiply(firstRotation.get(key))
+            .multiply(source.get(key).quaternion).multiply(alignment);
+          const gain = name === 'stretchNeck' ? .78 : 1;
+          joint.quaternion.copy(bias.get(key)).multiply(new Quaternion().slerp(offset, gain));
+        } else {
+          worldQuaternion(joint, rotation(source.get(key)).multiply(alignment));
+        }
+      }
+      if (name === 'shiftWeight') {
+        const waist = point(target.get('Spine'));
+        const left = target.get('LeftHand');
+        // Guide the palm onto the side of the waist. Keep the free arm relaxed
+        // and carry over the source's shift through the torso and wrist.
+        const width = outfit === 'cloudhoodie' ? .210 : outfit === 'snowflower' ? .192 : .182;
+        const sourceOffset = point(source.get('LeftHand')).sub(point(source.get('Hips')));
+        const goal = waist.add(new Vector3(width + .22 * (sourceOffset.x - .29), .013 + .24 * (sourceOffset.y + .05),
+          .012 + .38 * (sourceOffset.z + .075)));
+        const shoulder = target.get('LeftArm'), elbow = target.get('LeftForeArm');
+        const arm = point(shoulder);
+        const bent = point(elbow);
+        // Let the elbow swing out before drawing the wrist in to the hip.
+        aim(shoulder, shoulder, elbow, bent.sub(arm).add(new Vector3(.12, 0, -.025)));
+        moveEnd(shoulder, elbow, left, goal);
+        const fingers = direction(left, target.get('LeftHandMiddle1'));
+        const across = point(target.get('LeftHandIndex1')).sub(point(target.get('LeftHandPinky1')));
+        const palmNormal = new Vector3(-1, 0, -.12).normalize();
+        const palmForward = new Vector3(-.09, -.4, 1);
+        const hand = basis(palmForward, palmNormal.cross(palmForward))
+          .multiply(basis(fingers, across).invert()).multiply(rotation(left));
+        worldQuaternion(left, rotation(left).slerp(hand, .82));
+      }
       if (!upperOnly) {
         const sourceHips = point(source.get('Hips'));
         const offset = sourceHips.clone().sub(sourceAnchor).multiplyScalar(ratio);
@@ -288,7 +353,7 @@ async function bake(outfit, file) {
       const grip = anchors.reduce((best, row, i) => row[1] < anchors[best][1] ? i : best, 0);
       console.log(outfit, 'pickUp lowest wrist', (grip / 30).toFixed(2), anchors[grip].map(x => x.toFixed(3)));
     }
-    clips.push({ name, times: Array.from({ length: frameCount }, (_, i) => i / 30), tracks });
+    clips.push({ name, times: Array.from({ length: frameCount }, (_, i) => timeAt(i)), tracks });
   }
   rig.dispose();
   return clips;

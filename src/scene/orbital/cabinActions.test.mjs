@@ -67,13 +67,33 @@ test('rub eye remains a standing idle while thinking is reserved for choosing a 
   const idle = createIdleState(() => 0);
   const seen = new Set();
   for (let i = 0; i < 3600; i++) {
-    stepIdle(idle, .05, true, 8, () => 0, 6, true, { rubEye: 3 });
+    stepIdle(idle, .05, true, 8, () => 0, 6, true, { rubEye: { duration: 3 } });
     assert.ok([idle.yawnTime, idle.lookTime, idle.shortTime].filter(time => time >= 0).length <= 1);
     if (idle.shortTime >= 0) seen.add(idle.shortKind);
   }
   assert.deepEqual([...seen], ['listen', 'clasp', 'rubEye']);
   stepIdle(idle, .05, false, 8, () => 0, 6);
   assert.equal(idle.elapsed, 0);
+});
+
+test('the new standing gestures use the same rotation and interruptible fade as the existing idles', () => {
+  const idle = createIdleState(() => 0);
+  const clips = { rubEye: { duration: 3 }, shiftWeight: { duration: 6 }, stretchNeck: { duration: 5 } };
+  const seen = new Set();
+  for (let i = 0; i < 60 * 200; i++) {
+    stepIdle(idle, 1 / 60, true, 0, () => 0, 0, true, clips);
+    if (idle.shortTime > .9) seen.add(idle.shortKind);
+    if (idle.shortKind === 'stretchNeck' && idle.shortWeight === 1) break;
+  }
+  assert.deepEqual([...seen], ['listen', 'clasp', 'rubEye', 'shiftWeight', 'stretchNeck']);
+  const time = idle.shortTime;
+  stepIdle(idle, .05, false, 0, () => 0, 0, false, clips);
+  assert.equal(idle.shortTime, time);
+  assert.equal(idle.elapsed, 0);
+  assert.ok(idle.shortWeight > 0 && idle.shortWeight < 1);
+  for (let i = 0; i < 6; i++) stepIdle(idle, .05, false, 0, () => 0, 0, false, clips);
+  assert.equal(idle.shortTime, -1);
+  assert.equal(idle.shortWeight, 0);
 });
 
 function checkLapCoverage(root) {
@@ -115,7 +135,7 @@ function checkLapCoverage(root) {
 }
 
 for (const [outfit, name] of [['everyday', 'walk-room'], ['snowflower', 'snowflower'], ['cloudhoodie', 'cloudhoodie']]) {
-  test(`six MotionSmith takes bind and keep ${outfit} close to the rug during floor holds`, async () => {
+  test(`MotionSmith takes bind and keep ${outfit} close to the rug during floor holds`, async () => {
     const data = await readFile(model('cabin-actions-' + outfit));
     const { animations } = await new GLTFLoader().parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '');
     assert.deepEqual(animations.map(clip => clip.name), CABIN_ACTIONS);
@@ -137,7 +157,17 @@ for (const [outfit, name] of [['everyday', 'walk-room'], ['snowflower', 'snowflo
       apply('floorSit', clips.floorSit.duration);
       assert.ok(boneY('Hips') < .23, 'seated pelvis stays close to the rug');
       assert.ok(Math.min(boneY('LeftFoot'), boneY('RightFoot')) < .16);
-      if (outfit !== 'cloudhoodie') checkLapCoverage(rig.mesh);
+      if (outfit !== 'cloudhoodie') {
+        checkLapCoverage(rig.mesh);
+        apply('floorGlance', 2.5);
+        checkLapCoverage(rig.mesh);
+      }
+      for (const name of ['shiftWeight', 'stretchNeck']) {
+        rig.applyPose(0, 0);
+        const fixed = ['Hips', 'LeftFoot', 'RightFoot'].map(name => boneY(name));
+        apply(name, 2.5);
+        assert.deepEqual(['Hips', 'LeftFoot', 'RightFoot'].map(name => boneY(name)), fixed);
+      }
       rig.applyPose(0, 0);
       apply('floorStand', clips.floorStand.duration);
       assert.ok(boneY('Hips') > .65);
