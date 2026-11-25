@@ -1,13 +1,11 @@
 """Fit the room performances to the delivered Luna ribbon-jacket glTF bind skeleton."""
 import argparse
 import copy
-import io
 import json
 import struct
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
 
 SCALE = 1.43
 TYPES = {5126: '<f4', 5125: '<u4', 5123: '<u2', 5121: 'u1'}
@@ -202,6 +200,78 @@ class Fitting:
             dest.doc.setdefault('animations', []).append(result)
 
 
+def match_everyday_materials(body, daily):
+    # Copy the room material, then bind this outfit's own painted atlases to it.
+    reference = daily.doc['materials'][0]
+    doc = body.doc
+    textures, images = [], []
+    def use_texture(info):
+        texture = doc['textures'][info['index']]
+        image = doc['images'][texture['source']]
+        if image not in images:
+            images.append(image)
+        bound = {'source': images.index(image), 'sampler': 0}
+        if bound not in textures:
+            textures.append(bound)
+        return {**info, 'index': textures.index(bound)}
+
+    for i, original in enumerate(doc['materials']):
+        material = copy.deepcopy(reference)
+        material['name'] = original['name']
+        pbr = material['pbrMetallicRoughness']
+        source = original['pbrMetallicRoughness']
+        for slot in ('baseColorTexture', 'metallicRoughnessTexture'):
+            if slot in source:
+                pbr[slot] = use_texture(source[slot])
+            else:
+                pbr.pop(slot, None)
+        if 'normalTexture' in original:
+            normal = use_texture(original['normalTexture'])
+            normal['scale'] = reference['normalTexture']['scale']
+            material['normalTexture'] = normal
+        else:
+            material.pop('normalTexture', None)
+        if 'baseColorTexture' in pbr:
+            material['emissiveTexture'] = pbr['baseColorTexture'].copy()
+        else:
+            # The untextured sleeve lining uses its ivory pigment for the same fill.
+            pigment = source['baseColorFactor']
+            pbr['baseColorFactor'] = pigment
+            material.pop('emissiveTexture', None)
+            material['emissiveFactor'] = [v*c for v, c in zip(reference['emissiveFactor'], pigment)]
+        doc['materials'][i] = material
+
+    # Retain the original image bytes, including the full-resolution color map.
+    # Omit the old face-only fill from the download and reindex the remaining views.
+    old_image_views = {im['bufferView'] for im in doc['images']}
+    used_image_views = {im['bufferView'] for im in images}
+    views = doc['bufferViews']
+    binary = body.binary
+    doc['bufferViews'] = []
+    body.binary = bytearray()
+    mapping = {}
+    unused = old_image_views - used_image_views
+    for i, view in enumerate(views):
+        if i in unused:
+            continue
+        start = view.get('byteOffset', 0)
+        mapping[i] = body.view(binary[start:start + view['byteLength']])
+        for option in ('byteStride', 'target'):
+            if option in view:
+                doc['bufferViews'][-1][option] = view[option]
+    for entry in [*images, *doc['accessors']]:
+        entry['bufferView'] = mapping[entry['bufferView']]
+    doc['images'], doc['textures'] = images, textures
+    color_map = reference['pbrMetallicRoughness']['baseColorTexture']['index']
+    sampler = daily.doc['textures'][color_map]['sampler']
+    doc['samplers'] = [copy.deepcopy(daily.doc['samplers'][sampler])]
+    # The source's specular extension was used only by the replaced jacket material.
+    if 'KHR_materials_specular' in doc.get('extensionsUsed', []):
+        doc['extensionsUsed'].remove('KHR_materials_specular')
+        if not doc['extensionsUsed']:
+            del doc['extensionsUsed']
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('model', type=Path)
@@ -209,23 +279,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     body = Glb(args.model)
-    # Repack the original data once, keeping all existing view indices stable.
-    views = body.doc['bufferViews']
-    original = body.binary
-    body.binary = bytearray()
-    body.doc['bufferViews'] = []
-    albedo = body.doc['images'][0]['bufferView']
-    for i, view in enumerate(views):
-        start = view.get('byteOffset', 0)
-        data = original[start:start+view['byteLength']]
-        if i == albedo:
-            image = Image.open(io.BytesIO(data))
-            image.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
-            result = io.BytesIO()
-            image.save(result, 'JPEG', quality=96, subsampling=0, optimize=True)
-            data = result.getvalue()
-        body.view(data)
     daily = Glb(args.motions/'luna-walk-room.glb')
+    match_everyday_materials(body, daily)
     fit = Fitting(body, daily)
     book = {'name': 'LibraryBook'}
     body.doc['scenes'][0]['nodes'].append(len(body.doc['nodes']))

@@ -2,9 +2,9 @@
 
 ## 第二套 · 蝴蝶结外套
 
-[可编辑角色](./Luna-Ribbon.blend)使用用户提供的蝴蝶结外套、短裤与长袜模型，五官参照日常装绘制。贴图已打包。游戏中的角色使用 91 根骨骼，保留独立的手指与头发骨链。底色图缩至 2048 像素，服装卡片使用同一模型的全身渲染。
+[可编辑角色](./Luna-Ribbon.blend)使用用户提供的蝴蝶结外套、短裤与长袜模型，五官参照日常装绘制。贴图已打包。游戏中的角色使用 91 根骨骼，保留独立的手指与头发骨链。运行时保留角色原始 4096 × 4096 底色图，从日常装读取底色倍率、全身底色补光和法线强度，并复用同一套暖桃色肤色着色。服装卡片使用该运行时材质的全身渲染。
 
-`scripts/fit-luna-ribbon.py` 接收已绑定的 `Luna-Ribbon.glb`，用 NumPy 和 Pillow 基于两套骨架的局部绑定偏移重定向动作。走路与地毯动作按实际蒙皮校准高度，固定椅按坐垫轮廓生成独立接触缓存。取书及沙发动作随第二套模型载入，生活舱动作独立加载。
+`scripts/fit-luna-ribbon.py` 接收已绑定的 `Luna-Ribbon.glb`，用 NumPy 基于两套骨架的局部绑定偏移重定向动作。走路与地毯动作按实际蒙皮校准高度，固定椅按坐垫轮廓生成独立接触缓存。取书及沙发动作随第二套模型载入，生活舱动作独立加载。
 
 ```sh
 python scripts/fit-luna-ribbon.py /path/to/Luna-Ribbon.glb --motions assets/public/models/resident --output assets/public/models/resident

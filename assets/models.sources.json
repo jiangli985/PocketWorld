@@ -7,9 +7,9 @@
       "file": "resident/luna-ribbon.glb",
       "source": "User-supplied bf6b5b5d-a86b-4f38-b940-dc6e2a2a05dd.glb. Face references Luna's everyday outfit.",
       "used": true,
-      "bytes": 7755344,
-      "sha256": "b4c8ecc1f861ea8bb584c69b3476f5080459322845b251d81109f90466391808",
-      "processing": "91-joint fitted skeleton, retouched face, resized albedo, grounded walk, desk chair, sofa and three book pickups. Editable source: assets/models/resident/Luna-Ribbon.blend.",
+      "bytes": 8994796,
+      "sha256": "055e3da63f68a59890673b59cc6568dfc87d83859d1adcc61d97b6426cece3bd",
+      "processing": "91-joint fitted skeleton, retouched face, original 4K albedo and the everyday outfit’s full-atlas fill, skin tint and normal strength, grounded walk, desk chair, sofa and three book pickups. Editable source: assets/models/resident/Luna-Ribbon.blend.",
       "license": "User supplied the model for this project. No separate model license was provided."
     },
     {

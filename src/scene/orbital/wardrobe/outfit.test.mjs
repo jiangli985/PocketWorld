@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { initialOutfit, isOutfit, outfitChoices, previewOutfit, readOutfit, rememberOutfit } from './outfit.ts';
 
 test('the wardrobe lists the ribbon jacket second and opens retired outfit previews in everyday', () => {
@@ -43,4 +44,22 @@ test('a retired saved outfit falls back to everyday and remembering it preserves
   window.history.replaceState = () => { throw new Error('restricted history'); };
   rememberOutfit('everyday');
   assert.equal(initialOutfit(), 'everyday');
+});
+
+test('ribbon uses the everyday full-atlas fill, normal strength and skin shader inputs', () => {
+  function look(filename) {
+    const raw = readFileSync(new URL('../../../../assets/public/models/resident/' + filename, import.meta.url));
+    const asset = JSON.parse(raw.subarray(20, 20 + raw.readUInt32LE(12)));
+    const material = asset.materials.find(m => m.normalTexture && m.pbrMetallicRoughness.baseColorTexture);
+    const pbr = material.pbrMetallicRoughness;
+    const color = pbr.baseColorTexture;
+    assert.deepEqual(material.emissiveTexture, color, 'shared color and emission texture enables the room skin shader');
+    return {
+      pigment: pbr.baseColorFactor ?? [1, 1, 1, 1], fill: material.emissiveFactor,
+      normal: material.normalTexture.scale, metallic: pbr.metallicFactor, roughness: pbr.roughnessFactor ?? 1,
+      twoSided: material.doubleSided, extensions: material.extensions ?? {},
+      sampling: asset.samplers[asset.textures[color.index].sampler],
+    };
+  }
+  assert.deepEqual(look('luna-ribbon.glb'), look('luna-walk-room.glb'));
 });
