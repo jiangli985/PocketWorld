@@ -1,4 +1,5 @@
-import { createPlushPose, dropSpot, gripPlush, plushBounds, plushLabels, type PlushGrip } from './plushCarry';
+import { createPlushPose, dropSpot, gripPlush, plushBounds, plushLabels, type PlushGrip, type PlushShape } from './plushCarry';
+import { createPaperPose } from './schedule/paperGrip';
 import { RUG_SEAT, RUG_TOP, RUG_YAW, PICKUP_GRIP_TIME, PAPER_PICKUP_REACH, PAPER_PICKUP_PREFIX, advanceCabinPerformance, applyCabinPerformance, createCabinActionPlayer, isPaperPickup, isRugSeat, leaveCabinPerformance, loadCabinActions, newRugPerformance, type CabinPerformance, type PaperPickup } from './cabinActions';
 import { SOFA_ENTRY, SOFA_STEPS, loadSofaClip, sofaPlayer } from './sofaMotion';
 import { DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
@@ -249,7 +250,9 @@ export function OrbitalResidents(props: ResidentsProps) {
   const deckFrame = useRef<THREE.Group>(null);
   const rig = useRef<ResidentRig | null>(null);
   const plushBodies = useRef<PlushBody[]>(props.sceneId === 'habitat' ? createPlushBodies(PLUSH_DOLLS) : []);
+  const plushShapes = useMemo(() => new Map<string, PlushShape>(), []);
   const plushGrip = useRef<PlushGrip | null>(null);
+  const paperPose = useRef<{ mesh: THREE.Object3D; apply: ReturnType<typeof createPaperPose> }>();
   const plushPose = useRef<{ mesh: THREE.Object3D; apply: ReturnType<typeof createPlushPose> }>();
   const catalogThink = useRef({ time: 0, weight: 0 });
   const findDoll = (id: string) => plushBodies.current.find(body => body.id === id);
@@ -345,6 +348,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     if (p.loadCat !== false) targets.push({ id: 'pet', kind: 'pet', hint: '和团子互动', point: catLocation.current, reach: PET_REACH });
     if (p.sceneId === 'habitat') {
       for (const body of plushBodies.current) {
+        if (!plushShapes.has(body.id)) continue;
         targets.push({ id: body.id, kind: 'inspect', hint: '捡起' + plushLabels[body.id], point: [body.x, body.z], reach: .78 });
       }
       targets.push({ id: 'wardrobe', kind: 'open', hint: '打开衣柜', point: WARDROBE_STAND, reach: .75 });
@@ -446,7 +450,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     const landing = crossing ? stairLanding(to) : start;
     const doll = findDoll(task.action.objectId);
     const local = approachRoute(landing, task.point, boxes, walkBounds(room, landing[0]), fixed,
-      task.action.objectId === 'pet' ? PET_REACH : isPaperPickup(task.action.objectId) ? PAPER_PICKUP_REACH : doll ? .59 : undefined,
+      task.action.objectId === 'pet' ? PET_REACH : isPaperPickup(task.action.objectId) ? PAPER_PICKUP_REACH : doll ? .52 : undefined,
       doll ? RADIUS + doll.radius + .012 : undefined);
     const first = crossing ? route(start, stairLanding(from), boxes, undefined, DECK_WALK_BOUNDS[from]) : [];
     if (local && (!crossing || first.length)) {
@@ -856,9 +860,9 @@ export function OrbitalResidents(props: ResidentsProps) {
         const fixed = id === 'chair' || id === 'sofa' || rug;
         const target = id === 'sofa' ? SOFA_ENTRY : id === 'chair' ? seatEntry : rug ? RUG_SEAT : request?.point;
         const distance = target ? Math.hypot(root.position.x - target[0], root.position.z - target[1]) : 0;
-        const radius = fixed ? .06 : id === 'pet' ? PET_REACH : paper ? PAPER_PICKUP_REACH : doll ? .60 : 1.15;
+        const radius = fixed ? .06 : id === 'pet' ? PET_REACH : paper ? PAPER_PICKUP_REACH : doll ? .53 : 1.15;
         if (request && (rug || paper || doll) && distance <= radius && !cabin.failed) {
-          const yaw = rug ? RUG_YAW : Math.atan2(request.point[0] - root.position.x, request.point[1] - root.position.z) + .08;
+          const yaw = rug ? RUG_YAW : Math.atan2(request.point[0] - root.position.x, request.point[1] - root.position.z) + (doll ? 0 : .08);
           root.rotation.y = angle(root.rotation.y, yaw, 1 - Math.exp(-dt * 14));
           if (cabin.apply && Math.abs(angle(root.rotation.y, yaw, 1) - root.rotation.y) < .045) {
             root.rotation.y = yaw;
@@ -866,10 +870,12 @@ export function OrbitalResidents(props: ResidentsProps) {
               root.position.set(RUG_SEAT[0], RUG_TOP, RUG_SEAT[1]);
               cabinPerformance.current = newRugPerformance();
             } else if (doll) {
-              plushGrip.current = gripPlush(doll);
+              const shape = plushShapes.get(doll.id);
+              if (!shape) { cancelApproach(); return; }
+              plushGrip.current = gripPlush(doll, shape);
               cabinPerformance.current = { kind: 'plush', placing: false, leaving: false, time: 0 };
             } else cabinPerformance.current = { kind: 'paper', time: 0, leaving: false, id: id.slice(PAPER_PICKUP_PREFIX.length),
-              point: new THREE.Vector3(request.point[0], request.height, request.point[1]), offset: null, complete: request.perform };
+              point: new THREE.Vector3(request.point[0], request.height, request.point[1]), complete: request.perform };
             cancelApproach();
           }
         } else {
@@ -1074,16 +1080,11 @@ export function OrbitalResidents(props: ResidentsProps) {
       if (performance && cabin.apply && cabin.clips) {
         applyCabinPerformance(performance, cabin.clips, cabin.apply);
         if (performance.kind === 'paper') {
-          if (performance.time >= PICKUP_GRIP_TIME) {
-            const hand = rig.current.mesh.getObjectByName('mixamorigRightHand')!;
-            performance.offset ??= hand.worldToLocal(performance.point.clone());
-            const held = p.paperPickup.current ?? { id: performance.id, position: new THREE.Vector3() };
-            hand.localToWorld(held.position.copy(performance.offset));
-            p.paperPickup.current = held;
-          } else {
-            performance.offset = null;
-            p.paperPickup.current = null;
-          }
+          const mesh = rig.current.mesh;
+          if (paperPose.current?.mesh !== mesh) paperPose.current = { mesh, apply: createPaperPose(mesh) };
+          const held = p.paperPickup.current ?? { id: performance.id, position: new THREE.Vector3() };
+          paperPose.current.apply(performance.point, performance.time, held.position);
+          p.paperPickup.current = performance.time >= PICKUP_GRIP_TIME ? held : null;
         }
       }
       const thought = catalogThink.current;
@@ -1158,7 +1159,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       </group>
     </group>
     {props.sceneId === 'habitat' && <Suspense fallback={null}><SlipperPair resident={resident} room={slipperRoom.current} reducedMotion={props.reducedMotion} /></Suspense>}
-    {props.sceneId === 'habitat' && props.loadPlush !== false && <PlushDolls bodies={plushBodies} grip={plushGrip} world={props} />}
+    {props.sceneId === 'habitat' && props.loadPlush !== false && <PlushDolls shapes={plushShapes} bodies={plushBodies} grip={plushGrip} world={props} />}
     {props.loadCat !== false && <ObjectHandle id="pet" action="pet" hint="和团子互动" world={props} panorama position={[CAT_HOME[0], CAT_MAT_Y, CAT_HOME[1]]}
       onClick={event => event.stopPropagation()}>
       <Cat resident={resident} value={props.objects.pet?.value ?? 0} command={props.objects.pet?.itemId} reducedMotion={props.reducedMotion}
