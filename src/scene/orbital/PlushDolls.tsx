@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { PLUSH_DOLLS, deckFromAuthoredX, type PlushDollPlacement } from './cabinLayout';
-import { CabinUpperDeck } from './CabinUpperDeck';
+import { CabinFadeGroup, CabinUpperDeck } from './CabinUpperDeck';
 import { AssetBoundary } from './ReusableAsset';
 import { isValidPlushBody, plushFloorY, plushSupportHeight, type PlushBody } from './plushMotion';
 
@@ -83,7 +83,7 @@ export function PlushDolls({ bodies }: { bodies: React.MutableRefObject<PlushBod
       </AssetBoundary>;
       return deckFromAuthoredX(doll.position[0]) === 'upper'
         ? <CabinUpperDeck key={doll.id}>{item}</CabinUpperDeck>
-        : <React.Fragment key={doll.id}>{item}</React.Fragment>;
+        : <CabinFadeGroup key={doll.id} part="lower">{item}</CabinFadeGroup>;
     })}
   </>;
 }

@@ -27,6 +27,8 @@ import { CHAIR_SIT_SECONDS, createChairMotion, stepChairMotion } from './chairMo
 import { createSeatedIdle, stepSeatedIdle } from './seatedIdle';
 import { SlipperPair } from './Slippers';
 import { PlushDolls } from './PlushDolls';
+import { CabinFadeGroup } from './CabinUpperDeck';
+import type { CabinOpacity } from './cabinCutaway';
 import { createPlushBodies, isValidPlushBody, plushObstacleBoxes, resolveMoverAgainstPlush, stepPlushDolls, type PlushBody } from './plushMotion';
 
 type Point = [number, number];
@@ -47,7 +49,7 @@ type ResidentsProps = WorldModelProps & {
   quickTravel?: React.MutableRefObject<((target: CabinDeck) => boolean) | null>;
   onQuickTravelTarget?: (target: CabinDeck | null) => void;
   deckView?: React.MutableRefObject<CabinResidentView>;
-  upperVisible?: boolean;
+  deckOpacity?: React.MutableRefObject<CabinOpacity>;
   showNearbyHints?: boolean;
   sofaTime: React.MutableRefObject<number | null>;
   interaction: React.MutableRefObject<NonNullable<WorldModelProps['onApproach']> | null>;
@@ -802,7 +804,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
     const deck = room.observatory ? 'lower' : deckFromAuthoredX(root.position.x);
     if (deckFrame.current) {
-      deckFrame.current.visible = p.upperVisible !== false || deck === 'lower' || !!stairSample;
+      deckFrame.current.visible = (p.deckOpacity?.current[deck] ?? 1) > 0 || !!stairSample;
       if (stairSample) {
         const [x, y, z] = stairSample.position;
         deckFrame.current.position.set(x - root.position.x, y, z - root.position.z);
@@ -812,6 +814,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     if (p.deckView) {
       p.deckView.current.deck = deck;
       p.deckView.current.stairAscent = s.stairs ? stairSample?.ascent ?? null : null;
+      p.deckView.current.stairFrom = s.stairs?.from ?? null;
     }
     const quickTarget = quickTravelTarget();
     if (quickTarget !== lastQuickTarget.current) {
@@ -958,17 +961,21 @@ export function OrbitalResidents(props: ResidentsProps) {
       && plushBodies.current.every(plush => Math.hypot(x - plush.x, z - plush.z) > plush.radius + .28);
   };
   return <group name={`OrbitalResidents_${props.sceneId}`}>
-    <group ref={deckFrame} name="Resident_DeckPlacement">
-      <group ref={resident} name="OrbitalResident" position={spawn} rotation-y={-.78}>
-        <ResidentModel rig={rig} outfit={props.outfit} onMounted={props.onOutfitMounted} onFailure={props.focusedObject === 'wardrobe' ? undefined : props.library?.fail} />
+    <CabinFadeGroup part="resident">
+      <group ref={deckFrame} name="Resident_DeckPlacement">
+        <group ref={resident} name="OrbitalResident" position={spawn} rotation-y={-.78}>
+          <ResidentModel rig={rig} outfit={props.outfit} onMounted={props.onOutfitMounted} onFailure={props.focusedObject === 'wardrobe' ? undefined : props.library?.fail} />
+        </group>
       </group>
-    </group>
+    </CabinFadeGroup>
     {props.sceneId === 'habitat' && <Suspense fallback={null}><SlipperPair resident={resident} room={slipperRoom.current} reducedMotion={props.reducedMotion} /></Suspense>}
     {props.sceneId === 'habitat' && <PlushDolls bodies={plushBodies} />}
-    <ObjectHandle id="pet" action="pet" hint="和团子互动" world={props} panorama position={[CAT_HOME[0], CAT_MAT_Y, CAT_HOME[1]]}
-      onClick={event => event.stopPropagation()}>
-      <Cat resident={resident} value={props.objects.pet?.value ?? 0} command={props.objects.pet?.itemId} reducedMotion={props.reducedMotion}
-        location={catLocation} canWalk={props.sceneId === 'habitat' ? canCatWalk : undefined} />
-    </ObjectHandle>
+    <CabinFadeGroup part="lower">
+      <ObjectHandle id="pet" action="pet" hint="和团子互动" world={props} panorama position={[CAT_HOME[0], CAT_MAT_Y, CAT_HOME[1]]}
+        onClick={event => event.stopPropagation()}>
+        <Cat resident={resident} value={props.objects.pet?.value ?? 0} command={props.objects.pet?.itemId} reducedMotion={props.reducedMotion}
+          location={catLocation} canWalk={props.sceneId === 'habitat' ? canCatWalk : undefined} />
+      </ObjectHandle>
+    </CabinFadeGroup>
   </group>;
 }

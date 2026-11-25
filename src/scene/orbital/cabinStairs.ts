@@ -59,4 +59,5 @@ export function sampleCabinStairs(distance: number): { position: Position; ascen
 export interface CabinResidentView {
   deck: CabinDeck;
   stairAscent: number | null;
+  stairFrom: CabinDeck | null;
 }

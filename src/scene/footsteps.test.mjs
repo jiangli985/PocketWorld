@@ -76,6 +76,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './Cat': { Cat: 'Cat' },
     './Slippers': { SlipperPair: 'SlipperPair' },
     './PlushDolls': { PlushDolls: 'PlushDolls' },
+    './CabinUpperDeck': { CabinFadeGroup: 'CabinFadeGroup' },
     './plushMotion': load('./orbital/plushMotion.ts', {}),
     './ResidentModel': { HIP_HEIGHT: 0.69, ResidentModel: 'ResidentModel' },
     './residentRig': residentRig,
