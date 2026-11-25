@@ -1,5 +1,5 @@
 import { previewOutfit, readOutfit, type ResidentOutfit } from './wardrobe/outfit';
-import { CLOCK_POSITION, LAMP_POSITION, UPPER_DECK_OFFSET, WARDROBE_STAND } from './cabinLayout';
+import { CLOCK_POSITION, LAMP_POSITION, UPPER_DECK_OFFSET, WARDROBE_STAND, type CabinDeck } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Canvas, events, useFrame, useThree } from '@react-three/fiber';
@@ -71,8 +71,8 @@ interface CabinCameraProps {
   cabinView: CabinView;
   viewRevision: number;
   cutToDeck: boolean;
-  quickAscent: React.MutableRefObject<(() => boolean) | null>;
-  onQuickAscentAvailable: (available: boolean) => void;
+  quickTravel: React.MutableRefObject<((target: CabinDeck) => boolean) | null>;
+  onQuickTravelTarget: (target: CabinDeck | null) => void;
   onCabinViewChange: (view: CabinView) => void;
 }
 type CameraRigProps = OrbitalSceneProps & CabinCameraProps & {
@@ -514,7 +514,7 @@ function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpe
             <OrbitalResidents {...world} outfit={readOutfit(props.sceneObjects.habitat.wardrobe?.itemId)} catMenuOpen={props.catMenuOpen} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} interaction={interaction}
               inspectionId={focusedObject === 'wardrobe' && props.transition.phase === 'active' && props.transition.action?.kind === 'select' ? props.transition.id : undefined}
               onInspectionEnd={props.onReturn} onOutfitMounted={props.onOutfitMounted}
-              deckView={residentView} upperVisible={upperVisible} quickAscent={props.quickAscent} onQuickAscentAvailable={props.onQuickAscentAvailable}
+              deckView={residentView} upperVisible={upperVisible} quickTravel={props.quickTravel} onQuickTravelTarget={props.onQuickTravelTarget}
               showNearbyHints={props.cabinView === 'overview' || props.cabinView === residentView.current.deck}
               approachEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)}
               walkTarget={walkTarget} onArrive={() => setWalkTarget(null)}
@@ -542,17 +542,31 @@ export function OrbitalScene(props: OrbitalSceneProps) {
   const container = useRef<HTMLDivElement>(null);
   const [catMenu, setCatMenu] = useState<WorldAction | null>(null);
   const outfitPreview = useMemo(() => props.viewMode === 'cabin' && !!previewOutfit(window.location.search), []);
-  const quickAscent = useRef<(() => boolean) | null>(null);
-  const [canAscend, setCanAscend] = useState(false);
-  const [blackout, setBlackout] = useState<'black' | 'reveal' | null>(null);
+  const quickTravel = useRef<((target: CabinDeck) => boolean) | null>(null);
+  const [quickTarget, setQuickTarget] = useState<CabinDeck | null>(null);
+  const [blackout, setBlackout] = useState<CabinDeck | 'reveal' | null>(null);
   const [view, setView] = useState<{ mode: CabinView; revision: number; cut: boolean }>({ cut: false, mode: outfitPreview ? 'lower' : 'overview', revision: 0 });
   const selectView = (mode: CabinView, cut = false) => setView(current => ({ mode, cut, revision: current.revision + 1 }));
+  const showFloorViews = props.sceneId === 'habitat' && props.viewMode === 'cabin' && !props.focusedObject && !catMenu
+    && ['idle', 'active', 'error'].includes(props.transition.phase);
+  const canQuickTravel = showFloorViews && !props.gestureActive && !blackout;
   useEffect(() => {
-    if (blackout !== 'black') return;
-    // Leave a fully black frame on screen before moving the resident and selecting the upper camera.
+    if (!canQuickTravel || !quickTarget) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'KeyR' || event.repeat || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return;
+      event.preventDefault();
+      setBlackout(quickTarget);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [canQuickTravel, quickTarget]);
+  useEffect(() => {
+    if (!blackout || blackout === 'reveal') return;
+    // Leave a fully black frame on screen before moving the resident and camera.
     let frame = requestAnimationFrame(() => {
       frame = requestAnimationFrame(() => {
-        if (quickAscent.current?.()) selectView('upper', true);
+        if (quickTravel.current?.(blackout)) selectView(blackout, true);
         // Give the scene a render at the new deck before revealing it.
         frame = requestAnimationFrame(() => setBlackout('reveal'));
       });
@@ -609,21 +623,22 @@ export function OrbitalScene(props: OrbitalSceneProps) {
     <Canvas events={visibleSceneEvents} shadows dpr={[1, 1.6]} gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.0 }}
       onCreated={({ gl }) => { gl.outputColorSpace = THREE.SRGBColorSpace; gl.shadowMap.type = THREE.PCFSoftShadowMap; }}>
       <WorldContent {...props} catMenuOpen={!!catMenu} outfitPreview={outfitPreview}
-        quickAscent={quickAscent} onQuickAscentAvailable={setCanAscend} cutToDeck={view.cut} cabinView={view.mode} viewRevision={view.revision} onCabinViewChange={selectView} onAction={action => {
+        quickTravel={quickTravel} onQuickTravelTarget={setQuickTarget} cutToDeck={view.cut} cabinView={view.mode} viewRevision={view.revision} onCabinViewChange={selectView} onAction={action => {
         if (action.kind === 'pet' && action.objectId === 'pet') setCatMenu(action);
         else props.onAction(action);
       }} />
     </Canvas>
-    {props.sceneId === 'habitat' && props.viewMode === 'cabin' && !props.focusedObject && !catMenu
-      && ['idle', 'active', 'error'].includes(props.transition.phase) && (
+    {showFloorViews && (
       <nav className="orbital-floor-views" aria-label="生活舱视角">
         {CABIN_VIEWS.map(([mode, label]) => <button key={mode} type="button" className="orbital-flight-pill"
           aria-pressed={view.mode === mode} onClick={() => selectView(mode)}>{label}</button>)}
-        {canAscend && <button type="button" className="orbital-flight-pill is-primary"
-          disabled={!!blackout} onClick={() => setBlackout('black')}>快速上楼</button>}
+        {quickTarget && <button type="button" className="orbital-flight-pill is-primary" aria-keyshortcuts="R"
+          disabled={!canQuickTravel} onClick={() => setBlackout(quickTarget)}>
+          {quickTarget === 'upper' ? '快速上楼' : '快速下楼'} · R
+        </button>}
       </nav>
     )}
-    {blackout && createPortal(<div aria-hidden="true" className={`orbital-stair-blackout ${blackout}`}
+    {blackout && createPortal(<div aria-hidden="true" className={`orbital-stair-blackout ${blackout === 'reveal' ? 'reveal' : 'black'}`}
       onAnimationEnd={() => setBlackout(null)} />, document.body)}
     {catMenu && <CatInteraction onChoose={choice => {
       setCatMenu(null);

@@ -194,6 +194,6 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     {audio.isPlaying && <aside className="orbital-now-playing"><span className="orbital-record-dot" /><div><small>NOW PLAYING</small><p>{audio.disc.title}</p></div></aside>}
     {draggingFile && <div className="orbital-drop-message"><span className="orbital-drop-disc" /><p>让这段音乐，留在这里。</p><small>松手制作一张自己的唱片</small></div>}
     <input ref={fileInput} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac" hidden onChange={event => importFiles(event.target.files)} />
-    <span className="sr-only">键盘：舱外视角长按空格或 Shift 加速绕地飞行与时间流逝，E 或回车进入舱室；舱内 F 返回舱外视角，WASD 行走，E、Q、R 依次与身边最近的物品互动，M 静音，Esc 返回。</span>
+    <span className="sr-only">键盘：舱外视角长按空格或 Shift 加速绕地飞行与时间流逝，E 或回车进入舱室；舱内 F 返回舱外视角，WASD 行走，R 快速上下楼，E、Q、T 依次与身边最近的物品互动，M 静音，Esc 返回。</span>
   </main>;
 };

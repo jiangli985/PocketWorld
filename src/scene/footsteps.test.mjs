@@ -576,7 +576,7 @@ test('the static bed blocks walking without offering keyboard interaction, and n
   try {
     const [x, , z] = cabinLayout.BED_POSITION;
     view.root.position.set(x + 1.12, 0, z + .90);
-    for (const key of ['KeyE', 'KeyQ', 'KeyR']) view.key(key);
+    for (const key of ['KeyE', 'KeyQ', 'KeyT']) view.key(key);
     for (let i = 0; i < 240; i++) view.frame(1 / 60);
     assert.deepEqual(actions, []);
     assert.equal(view.root.userData.posture, 'standing');
@@ -634,24 +634,36 @@ test('a floor click uses the staircase before walking to the upper deck, then an
   } finally { view.dispose(); }
 });
 
-test('quick ascent cancels an in-flight approach and leaves the resident standing on the upper deck', () => {
-  const quickAscent = { current: null }, deckView = { current: { deck: 'lower', stairAscent: null } };
-  const view = mount('orbital', { quickAscent, deckView });
+test('quick stair travel cancels an in-flight approach and reaches both landings', () => {
+  const quickTravel = { current: null }, deckView = { current: { deck: 'lower', stairAscent: null } };
+  const targets = [];
+  const view = mount('orbital', { quickTravel, deckView, onQuickTravelTarget: target => targets.push(target) });
   let acted = false;
   try {
     view.props.interaction.current(cabinLayout.CLOCK_POSITION, { sceneId: 'habitat', objectId: 'clock', kind: 'inspect' }, () => { acted = true; });
     for (let i = 0; i < 1000 && (deckView.current.stairAscent ?? 0) < .25; i++) view.frame(1 / 60);
     assert.ok(deckView.current.stairAscent >= .25);
-    assert.equal(quickAscent.current(), true);
+    assert.equal(quickTravel.current('upper'), true);
     for (let i = 0; i < 120; i++) view.frame(1 / 60);
     assert.equal(deckView.current.deck, 'upper');
     assert.equal(deckView.current.stairAscent, null);
     assert.equal(view.root.userData.posture, 'standing');
     assert.ok(view.root.position.distanceTo(new THREE.Vector3(...cabinStairs.stairDestination('lower'))) < .01);
     assert.equal(acted, false);
-    assert.equal(quickAscent.current(), false);
+    assert.equal(quickTravel.current('upper'), false, 'a queued request cannot reverse direction after arrival');
+    assert.equal(quickTravel.current('lower'), true, 'quick descent is available from the upper deck');
+    for (let i = 0; i < 120; i++) view.frame(1 / 60);
+    assert.equal(deckView.current.deck, 'lower');
+    assert.equal(deckView.current.stairAscent, null);
+    assert.ok(view.root.position.distanceTo(new THREE.Vector3(...cabinStairs.stairDestination('upper'))) < .01);
+    assert.equal(acted, false);
+    assert.deepEqual(targets, ['upper', 'lower', 'upper']);
+    view.props.enabled = false;
+    view.frame(1 / 60);
+    assert.equal(targets.at(-1), null);
+    assert.equal(quickTravel.current('upper'), false);
   } finally { view.dispose(); }
-  assert.equal(quickAscent.current, null);
+  assert.equal(quickTravel.current, null);
 });
 
 test('the port edge only starts a stair crossing at the landing', () => {
@@ -672,16 +684,19 @@ test('the port edge only starts a stair crossing at the landing', () => {
   } finally { view.dispose(); }
 });
 
-test('crowded nightstand items map E, Q and R to the three nearest props', () => {
+test('crowded nightstand items map E, Q and T to the three nearest props', () => {
   const performed = [];
   const view = mount('orbital', { onAction: action => performed.push(action.objectId) });
   try {
-    for (const [key, id] of [['KeyE', 'clock'], ['KeyQ', 'plant'], ['KeyR', 'lamp']]) {
+    for (const [key, id] of [['KeyE', 'clock'], ['KeyQ', 'plant'], ['KeyT', 'lamp']]) {
       performed.length = 0;
       view.root.position.set(cabinLayout.NIGHTSTAND_X + .22, 0, cabinLayout.NIGHTSTAND_Z + .70);
       view.key(key);
       assert.deepEqual(performed, [id], `${key} selects ${id}`);
     }
+    performed.length = 0;
+    view.key('KeyR');
+    assert.deepEqual(performed, []);
   } finally { view.dispose(); }
 });
 
@@ -830,7 +845,7 @@ test('the desk front is walkable up to the tabletop and has no drawer interactio
 
     view.root.position.set(0.35, 0, -1.32);
     view.frame(1 / 60);
-    for (const key of ['KeyE', 'KeyQ', 'KeyR']) view.key(key);
+    for (const key of ['KeyE', 'KeyQ', 'KeyT']) view.key(key);
     for (let i = 0; i < 60; i++) view.frame(1 / 60);
     assert.deepEqual(performed, []);
     assert.ok(!hints.some(hint => hint?.includes('抽屉')));
@@ -862,7 +877,7 @@ test('standing at the desk cannot open the computer by keyboard or pointer', () 
   const view = mount('orbital', { onAction: action => performed.push(action), onHover: (_, hint) => hints.push(hint) });
   try {
     view.root.position.set(1.55, 0, -1.34);
-    for (const key of ['KeyE', 'KeyQ', 'KeyR']) view.key(key);
+    for (const key of ['KeyE', 'KeyQ', 'KeyT']) view.key(key);
     const before = view.root.position.clone();
     const accepted = view.props.interaction.current([1.55, 1.5, -2.6], { sceneId: 'habitat', objectId: 'computer', kind: 'inspect' }, () => performed.push('opened'));
     assert.equal(accepted, false);

@@ -4,7 +4,7 @@
 
 ## 职责分布
 
-- `orbital/OrbitalScene.tsx` 组合镜头、灯光、舱室、家具、住民与交互表面。`orbital/cabinView.ts` 负责双层全景和楼层取景，`orbital/cabinStairs.ts` 与 `orbital/CabinStructure.tsx` 共用楼梯尺寸、踏步高度和层间走位。`orbital/stairGait.ts` 按楼梯进度采样上下楼动作，由 `orbital/residentRig.ts` 驱动肩、肘、腕，并将各套服装的脚底对齐踏面。「快速上楼」通过住民控制器清除当前行走目标，黑屏期间将人物移到二层平台并切换机位。
+- `orbital/OrbitalScene.tsx` 组合镜头、灯光、舱室、家具、住民与交互表面。`orbital/cabinView.ts` 负责双层全景和楼层取景，`orbital/cabinStairs.ts` 与 `orbital/CabinStructure.tsx` 共用楼梯尺寸、踏步高度和层间走位。`orbital/stairGait.ts` 按楼梯进度采样上下楼动作，由 `orbital/residentRig.ts` 驱动肩、肘、腕，并将各套服装的脚底对齐踏面。按 `R` 或点击快速上下楼按钮，通过住民控制器清除当前行走目标，在黑屏期间将人物移到目标楼层的平台并切换机位。
 - `orbital/HabitatShell.tsx` 载入两面实体舱壁、拼花地板和固定陈设；`orbital/SpacecraftHull.tsx` 与 `orbital/spacecraftFlight.ts` 负责轨道飞船外壳、开场推近运镜、长按加速绕地与时间倍速，以及 `orbit ↔ cabin` 剖面切入过渡；`orbital/Cosmos.tsx` 渲染完整 360° 宇宙星空、银河、太阳、地球与轨道微粒背景。初始构图与横竖屏取景由 `orbital/cabinView.ts` 计算。
 - `orbital/useWorldController.ts` 管理世界状态、动作适配器和转场生命周期。
 - `orbital/wardrobe/` 管理住民装扮选择和模型资源。点击高衣柜或在近处按提示键会走近并拉开柜门。选装页展示三套实装缩略图，确认后黑屏直到新骨骼挂载，接着播放原地检视。[模型与坐姿修形](../../assets/models/resident/README.md)

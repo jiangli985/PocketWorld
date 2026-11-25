@@ -44,8 +44,8 @@ type ResidentsProps = WorldModelProps & {
   enabled: boolean;
   approachEnabled: boolean;
   catMenuOpen: boolean;
-  quickAscent?: React.MutableRefObject<(() => boolean) | null>;
-  onQuickAscentAvailable?: (available: boolean) => void;
+  quickTravel?: React.MutableRefObject<((target: CabinDeck) => boolean) | null>;
+  onQuickTravelTarget?: (target: CabinDeck | null) => void;
   deckView?: React.MutableRefObject<CabinResidentView>;
   upperVisible?: boolean;
   showNearbyHints?: boolean;
@@ -59,9 +59,9 @@ const CHAIR_CONTACT = 0.52;
 const CHAIR_REACH = 0.95;
 const PET_REACH = 0.70;
 type NearbyAction = { id: string; kind: WorldActionKind; hint: string; point: Point; reach: number };
-// E is the nearest prop; Q/R reach the next-closest ones when furniture crowds the same spot.
-const INTERACT_KEYS = ['KeyE', 'KeyQ', 'KeyR'];
-const INTERACT_LABELS = ['E', 'Q', 'R'];
+// E is the nearest prop; Q/T reach the next-closest ones when furniture crowds the same spot.
+const INTERACT_KEYS = ['KeyE', 'KeyQ', 'KeyT'];
+const INTERACT_LABELS = ['E', 'Q', 'T'];
 const clamp = THREE.MathUtils.clamp;
 const ease = (t: number) => t * t * (3 - 2 * t);
 const angle = (from: number, to: number, t: number) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * t;
@@ -350,21 +350,22 @@ export function OrbitalResidents(props: ResidentsProps) {
     state.current.external = false;
     current.current.onArrive();
   };
-  const canQuickAscend = () => {
+  const quickTravelTarget = (): CabinDeck | null => {
     const p = current.current, s = state.current, root = resident.current;
-    return !!root && p.sceneId === 'habitat' && p.enabled && !p.focusedObject
+    return root && p.sceneId === 'habitat' && p.enabled && !p.focusedObject
       && s.posture === 'standing' && s.wanted === 'standing' && !s.exiting
       && !p.objects.chair?.active && !p.objects.sofa?.active
-      && deckFromAuthoredX(root.position.x) === 'lower';
+      ? otherDeck(s.stairs?.from ?? deckFromAuthoredX(root.position.x))
+      : null;
   };
-  const quickAvailable = useRef(false);
+  const lastQuickTarget = useRef<CabinDeck | null>(null);
   useEffect(() => {
-    const handle = props.quickAscent;
+    const handle = props.quickTravel;
     if (!handle) return;
-    handle.current = () => {
-      if (!canQuickAscend()) return false;
+    handle.current = target => {
+      if (quickTravelTarget() !== target) return false;
       const root = resident.current!, s = state.current;
-      const [x, , z] = stairDestination('lower');
+      const [x, , z] = stairDestination(otherDeck(target));
       cancelApproach();
       s.stairs = null;
       s.walkTime = 0;
@@ -376,7 +377,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       return true;
     };
     return () => { handle.current = null; };
-  }, [props.quickAscent]);
+  }, [props.quickTravel]);
   const nextWalkStart = (root: THREE.Group): Point => {
     const stairs = state.current.stairs;
     return stairs ? stairLanding(otherDeck(stairs.from)) : [root.position.x, root.position.z];
@@ -812,10 +813,10 @@ export function OrbitalResidents(props: ResidentsProps) {
       p.deckView.current.deck = deck;
       p.deckView.current.stairAscent = s.stairs ? stairSample?.ascent ?? null : null;
     }
-    const available = canQuickAscend();
-    if (available !== quickAvailable.current) {
-      quickAvailable.current = available;
-      p.onQuickAscentAvailable?.(available);
+    const quickTarget = quickTravelTarget();
+    if (quickTarget !== lastQuickTarget.current) {
+      lastQuickTarget.current = quickTarget;
+      p.onQuickTravelTarget?.(quickTarget);
     }
     const [frameDx, frameDz] = stairStep ?? [root.position.x - frameX, root.position.z - frameZ];
     const distance = Math.hypot(frameDx, frameDz);
