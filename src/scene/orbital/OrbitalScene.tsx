@@ -66,6 +66,7 @@ interface OrbitalSceneProps extends WorldSceneProps {
   boosting: boolean;
   onViewModeChange: (mode: SpacecraftViewMode) => void;
   onEnterCabin: () => void;
+  onLeaveCabin?: () => void;
 }
 interface CabinCameraProps {
   cabinView: CabinView;
@@ -536,8 +537,6 @@ const visibleSceneEvents: NonNullable<React.ComponentProps<typeof Canvas>['event
   }),
 });
 
-const CABIN_VIEWS: [CabinView, string][] = [['overview', '全景'], ['lower', '一层'], ['upper', '二层']];
-
 export function OrbitalScene(props: OrbitalSceneProps) {
   const container = useRef<HTMLDivElement>(null);
   const [catMenu, setCatMenu] = useState<WorldAction | null>(null);
@@ -547,9 +546,9 @@ export function OrbitalScene(props: OrbitalSceneProps) {
   const [blackout, setBlackout] = useState<CabinDeck | 'reveal' | null>(null);
   const [view, setView] = useState<{ mode: CabinView; revision: number; cut: boolean }>({ cut: false, mode: outfitPreview ? 'lower' : 'overview', revision: 0 });
   const selectView = (mode: CabinView, cut = false) => setView(current => ({ mode, cut, revision: current.revision + 1 }));
-  const showFloorViews = props.sceneId === 'habitat' && props.viewMode === 'cabin' && !props.focusedObject && !catMenu
+  const showCabinControls = props.sceneId === 'habitat' && props.viewMode === 'cabin' && !props.focusedObject && !catMenu
     && ['idle', 'active', 'error'].includes(props.transition.phase);
-  const canQuickTravel = showFloorViews && !props.gestureActive && !blackout;
+  const canQuickTravel = showCabinControls && !props.gestureActive && !blackout;
   useEffect(() => {
     if (!canQuickTravel || !quickTarget) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -628,13 +627,14 @@ export function OrbitalScene(props: OrbitalSceneProps) {
         else props.onAction(action);
       }} />
     </Canvas>
-    {showFloorViews && (
-      <nav className="orbital-floor-views" aria-label="生活舱视角">
-        {CABIN_VIEWS.map(([mode, label]) => <button key={mode} type="button" className="orbital-flight-pill"
-          aria-pressed={view.mode === mode} onClick={() => selectView(mode)}>{label}</button>)}
+    {showCabinControls && (quickTarget || props.onLeaveCabin) && (
+      <nav className="orbital-cabin-controls" aria-label="生活舱导航">
         {quickTarget && <button type="button" className="orbital-flight-pill is-primary" aria-keyshortcuts="R"
           disabled={!canQuickTravel} onClick={() => setBlackout(quickTarget)}>
-          {quickTarget === 'upper' ? '快速上楼' : '快速下楼'} · R
+          {quickTarget === 'upper' ? '快速上楼' : '快速下楼'}<kbd aria-hidden="true">R</kbd>
+        </button>}
+        {props.onLeaveCabin && <button type="button" className="orbital-flight-pill" aria-keyshortcuts="F" onClick={props.onLeaveCabin}>
+          出舱巡航<kbd aria-hidden="true">F</kbd>
         </button>}
       </nav>
     )}

@@ -161,6 +161,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     onDragLeave={event => { event.preventDefault(); inputDepth.current = Math.max(0, inputDepth.current - 1); if (!inputDepth.current) setDraggingFile(false); }}
     onDrop={event => { event.preventDefault(); inputDepth.current = 0; setDraggingFile(false); importFiles(event.dataTransfer.files); }}>
     <OrbitalScene {...world} viewMode={viewMode} boosting={boosting} onViewModeChange={setViewMode} onEnterCabin={enterCabin}
+      onLeaveCabin={showFlightControls && viewMode === 'cabin' ? leaveCabin : undefined}
       books={books} adapters={adapters} onImportMusic={onImportMusic} discs={discs} activeDisc={audio.disc} isMusicPlaying={audio.isPlaying} isMuted={audio.isMuted}
       onSelectDisc={onSelectDisc} onToggleMusic={onToggleMusic} onToggleMute={onToggleMute} activeGame={activeGame} onGameChange={setActiveGame} onFeatureError={onFeatureError} />
     {viewMode === 'cabin' && world.focusedObject === 'wardrobe' && <WardrobeSurface
@@ -173,23 +174,17 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
       <p className="orbital-edition">A LITTLE SPACE TO BE YOURSELF</p>
     </header>
     {world.focusedObject !== 'wardrobe' && <DustPrompt text={status} reducedMotion={world.reducedMotion} />}
-    {showFlightControls && <nav className="orbital-flight-bar" aria-label="飞船巡航控制">
-      {viewMode === 'cabin' ? (
-        <button type="button" className="orbital-flight-pill" onClick={leaveCabin}>出舱巡航 · F</button>
-      ) : (
-        <>
-          <button
-            type="button"
-            className={`orbital-flight-pill${boosting ? ' is-boosting' : ''}`}
-            onPointerDown={event => { event.preventDefault(); activateBoost(true); }}
-            onPointerUp={() => activateBoost(false)}
-            onPointerLeave={() => activateBoost(false)}
-            onPointerCancel={() => activateBoost(false)}
-            aria-pressed={boosting}
-          >{boosting ? '加速巡航中' : '长按加速 · Space'}</button>
-          <button type="button" className="orbital-flight-pill is-primary" onClick={enterCabin}>进入舱室 · E</button>
-        </>
-      )}
+    {showFlightControls && viewMode !== 'cabin' && <nav className="orbital-flight-bar" aria-label="飞船巡航控制">
+      <button
+        type="button"
+        className={`orbital-flight-pill${boosting ? ' is-boosting' : ''}`}
+        onPointerDown={event => { event.preventDefault(); activateBoost(true); }}
+        onPointerUp={() => activateBoost(false)}
+        onPointerLeave={() => activateBoost(false)}
+        onPointerCancel={() => activateBoost(false)}
+        aria-pressed={boosting}
+      >{boosting ? '加速巡航中' : '长按加速 · Space'}</button>
+      <button type="button" className="orbital-flight-pill is-primary" onClick={enterCabin}>进入舱室 · E</button>
     </nav>}
     {audio.isPlaying && <aside className="orbital-now-playing"><span className="orbital-record-dot" /><div><small>NOW PLAYING</small><p>{audio.disc.title}</p></div></aside>}
     {draggingFile && <div className="orbital-drop-message"><span className="orbital-drop-disc" /><p>让这段音乐，留在这里。</p><small>松手制作一张自己的唱片</small></div>}
