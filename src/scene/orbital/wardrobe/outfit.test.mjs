@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { initialOutfit, isOutfit, outfitChoices, previewOutfit, readOutfit, rememberOutfit } from './outfit.ts';
 
-test('the wardrobe lists only everyday and opens retired outfit previews in everyday', () => {
-  assert.deepEqual(outfitChoices, ['everyday']);
+test('the wardrobe lists the ribbon jacket second and opens retired outfit previews in everyday', () => {
+  assert.deepEqual(outfitChoices, ['everyday', 'ribbon']);
+  assert.equal(previewOutfit('?view=cabin&outfit=ribbon'), 'ribbon');
   assert.equal(previewOutfit('?outfit=everyday'), 'everyday');
   assert.equal(previewOutfit('?outfit=unknown'), null);
   assert.equal(previewOutfit('?view=cabin'), null);
@@ -30,8 +31,9 @@ test('a retired saved outfit falls back to everyday and remembering it preserves
     saved.set(key, retired);
     assert.equal(initialOutfit(), 'everyday');
   }
-  rememberOutfit('everyday');
-  assert.equal(saved.get(key), 'everyday');
+  rememberOutfit('ribbon');
+  assert.equal(saved.get(key), 'ribbon');
+  assert.equal(initialOutfit(), 'ribbon');
   assert.equal(window.location.search, '?view=cabin');
 
   window.location.search = '?view=cabin&outfit=snowflower&sun=0.5';

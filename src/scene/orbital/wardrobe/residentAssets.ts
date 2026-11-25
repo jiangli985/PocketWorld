@@ -1,6 +1,7 @@
 import { FileLoader, type AnimationClip } from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { readSeatContactCache, type SeatContactCache } from '../chairAnimation';
+import { readLibraryMotion, type LibraryMotion } from '../library/libraryMotion';
 import type { ResidentOutfit } from './outfit';
 
 export interface ResidentAssets {
@@ -8,10 +9,12 @@ export interface ResidentAssets {
   scene: GLTF['scene'];
   walk: AnimationClip;
   sit: AnimationClip;
+  fitted?: { sofa: AnimationClip; library: LibraryMotion };
 }
 
 const files = {
   everyday: ['luna-walk-room.glb', 'luna-seat-contact.bin'],
+  ribbon: ['luna-ribbon.glb', 'luna-ribbon-seat.bin'],
 } as const;
 const base = import.meta.env.BASE_URL + 'models/resident/';
 const pending = new Map<ResidentOutfit, Promise<ResidentAssets>>();
@@ -38,6 +41,7 @@ export function loadResidentAssets(outfit: ResidentOutfit): Promise<ResidentAsse
     };
     return {
       outfit, scene: gltf.scene, walk: clip('Walk_Grounded_Loop'), sit: clip('ChairSit_Contact'),
+      fitted: outfit === 'ribbon' ? { sofa: clip('Luna_CMU_75_20'), library: readLibraryMotion(gltf.animations) } : undefined,
     };
   }).catch(error => { pending.delete(outfit); throw error; });
   pending.set(outfit, request);

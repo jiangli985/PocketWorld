@@ -1,5 +1,6 @@
 export const outfitNames = {
   everyday: '日常装',
+  ribbon: '蝴蝶结外套',
 } as const;
 export type ResidentOutfit = keyof typeof outfitNames;
 export const outfitChoices = Object.keys(outfitNames) as ResidentOutfit[];

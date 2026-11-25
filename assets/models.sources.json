@@ -4,6 +4,31 @@
   "runtimeNetwork": "All models are self-hosted under assets/public/models/.",
   "assets": [
     {
+      "file": "resident/luna-ribbon.glb",
+      "source": "User-supplied bf6b5b5d-a86b-4f38-b940-dc6e2a2a05dd.glb. Face references Luna's everyday outfit.",
+      "used": true,
+      "bytes": 7755344,
+      "sha256": "b4c8ecc1f861ea8bb584c69b3476f5080459322845b251d81109f90466391808",
+      "processing": "91-joint fitted skeleton, retouched face, resized albedo, grounded walk, desk chair, sofa and three book pickups. Editable source: assets/models/resident/Luna-Ribbon.blend.",
+      "license": "User supplied the model for this project. No separate model license was provided."
+    },
+    {
+      "file": "resident/luna-ribbon-seat.bin",
+      "source": "PocketWorld ribbon jacket skinned surface and fixed desk chair cushion.",
+      "used": true,
+      "bytes": 167012,
+      "sha256": "66b704e1bdc8706b01650a95ea68797efcdad094d4767d75ef81bee0c6688766",
+      "processing": "98-frame sparse pre-skin cushion corrections for the ribbon shorts and thighs."
+    },
+    {
+      "file": "resident/luna-cabin-actions-ribbon.glb",
+      "source": "PocketWorld everyday cabin actions, derived from the MotionSmith takes registered under resident/luna-cabin-actions-everyday.glb.",
+      "used": true,
+      "bytes": 761452,
+      "sha256": "406c2661b7b363ecc1fa54ee8430db93f369d5b50d9981c9d8982f36383d4fd2",
+      "processing": "Bind-relative retargeting to the ribbon skeleton with sock and floor-contact calibration."
+    },
+    {
       "file": "furniture/floor-sofa.glb",
       "source": "Original PocketWorld model and woven textures, authored in Blender from the user's visual reference.",
       "used": true,

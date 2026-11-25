@@ -33,6 +33,7 @@ export interface ResidentRig {
   followMotion: (dt: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => void;
   applyArmCorrectives: (enabled: boolean) => void;
   applySeatedIdle?: ReturnType<typeof createSeatedIdlePlayer>;
+  fitted?: ResidentAssets['fitted'];
   applyChairPose?: (time: number, weight: number) => void;
   dispose: () => void;
 }
@@ -51,6 +52,7 @@ function LoadedResident({ assets, rig, onMounted, prefetchSeat, chairActive }: {
     const resident = createResidentRig(asset, assets.walk);
     const chair = createChairAnimation(asset, assets.sit);
     chairAnimation.current = chair;
+    resident.fitted = assets.fitted;
     resident.applyChairPose = chair.apply;
     resident.applySeatedIdle = createSeatedIdlePlayer(resident);
     resident.mesh.userData.outfit = assets.outfit;

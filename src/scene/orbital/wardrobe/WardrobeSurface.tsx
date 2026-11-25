@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { WorldTransition } from '../../../types/world';
 import { outfitChoices, outfitNames, type ResidentOutfit } from './outfit';
 import everyday from '../../../../assets/models/resident/wardrobe/everyday.webp';
+import ribbon from '../../../../assets/models/resident/wardrobe/ribbon.webp';
 import './wardrobe.css';
 
-const portraits = { everyday };
+const portraits = { everyday, ribbon };
 
 interface Props {
   current: ResidentOutfit;

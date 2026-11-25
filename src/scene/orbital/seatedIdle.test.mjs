@@ -189,3 +189,54 @@ test(`everyday composes the authored overlays without altering seated contacts`,
     }
   } finally { chair.dispose(); rig.dispose(); }
 });
+
+test('the ribbon outfit grounds its sock soles and binds its fitted chair, sofa, book and cabin actions', async () => {
+  const { gltf: { scene, animations } } = await load(new URL('luna-ribbon.glb', assets));
+  const clip = name => animations.find(value => value.name === name);
+  const rig = createResidentRig(scene, clip('Walk_Grounded_Loop'));
+  const raw = readFileSync(new URL('luna-ribbon-seat.bin', assets));
+  const contact = readSeatContactCache(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
+  const chair = createChairAnimation(scene, clip('ChairSit_Contact'), contact);
+  const point = new THREE.Vector3();
+  const height = name => scene.getObjectByName('mixamorig' + name).getWorldPosition(point).y;
+  const sole = scene.getObjectByProperty('isSkinnedMesh', true);
+  try {
+    assert.equal(sole.skeleton.bones.length, 91);
+    const contacts = Object.values(sole.geometry.userData.soleContacts);
+    for (const weight of [0, .45, 1]) for (const phase of [0, .2, .37, .55, .7, .89]) {
+      rig.applyPose(phase, weight);
+      rig.mesh.updateMatrixWorld(true);
+      const feet = contacts.map(vertices => Math.min(...vertices.map(i =>
+        sole.localToWorld(sole.getVertexPosition(i, point)).y)));
+      assert(Math.min(...feet) >= -.003 && Math.min(...feet) < .012, `sock support at ${phase}/${weight}: ${feet}`);
+      if (weight === 0) assert(Math.max(...feet) < .009, 'both feet support the neutral pose');
+    }
+    rig.applyPose(0, 0);
+    const standing = height('Hips');
+    chair.apply(CHAIR_SIT_SECONDS, 1);
+    assert(height('Hips') < standing - .06);
+    assert(height('LeftFoot') > .24 && height('RightFoot') > .24, 'both socked feet clear the floor on the tall chair');
+    chair.apply(0, 0);
+    rig.applyPose(0, 0);
+    const sofa = clip('Luna_CMU_75_20');
+    sofaPlayer(rig.mesh, sofa)(sofa.duration);
+    assert(height('Hips') < standing - .15);
+    for (let row = 0; row < 3; row++) {
+      const pickup = clip('Library_Pickup_' + row);
+      assert(pickup.tracks.some(track => track.name === 'LibraryBook.position'));
+      for (const track of pickup.tracks) assert(scene.getObjectByName(THREE.PropertyBinding.parseTrackName(track.name).nodeName), track.name);
+    }
+    const bytes = readFileSync(new URL('luna-cabin-actions-ribbon.glb', assets));
+    const cabin = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '');
+    const actions = Object.fromEntries(cabin.animations.map(action => [action.name, action]));
+    const play = createCabinActionPlayer(rig.mesh, actions);
+    rig.applyPose(0, 0);
+    play('floorSit', actions.floorSit.duration);
+    assert(height('Hips') < .24);
+    play('floorStand', actions.floorStand.duration);
+    assert(height('Hips') > .65);
+  } finally {
+    chair.dispose();
+    rig.dispose();
+  }
+});

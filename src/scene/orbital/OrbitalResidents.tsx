@@ -263,6 +263,10 @@ export function OrbitalResidents(props: ResidentsProps) {
   const libraryPlayer = useRef<{ motion: LibraryMotion; rig: ResidentRig; apply: ReturnType<typeof createLibraryPlayer> }>();
   useEffect(() => {
     if (!libraryOpen || !libraryAsset) return;
+    if (rig.current?.fitted) {
+      libraryAsset.current = rig.current.fitted.library;
+      return;
+    }
     let live = true;
     libraryAsset.current = undefined;
     void loadLibraryMotion().then(motion => {
@@ -277,7 +281,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   const sofaMotion = useRef({ time: 0, clip: null as THREE.AnimationClip | null,
     apply: null as ReturnType<typeof sofaPlayer> | null, rig: null as ResidentRig | null });
   useEffect(() => {
-    if (!props.objects.sofa?.active || props.sceneId !== 'habitat') return;
+    if (!props.objects.sofa?.active || props.sceneId !== 'habitat' || props.outfit === 'ribbon') return;
     let live = true;
     void loadSofaClip().then(clip => { if (live) sofaMotion.current.clip = clip; }).catch(() => {
       if (live) {
@@ -286,7 +290,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       }
     });
     return () => { live = false; };
-  }, [props.objects.sofa?.active, props.sceneId]);
+  }, [props.objects.sofa?.active, props.sceneId, props.outfit]);
   const exit = useRef({ from: new THREE.Vector3(), yaw: 0, sit: 0, progress: 0 });
   const chairMotion = useRef(createChairMotion());
   const seatedIdle = useRef(createSeatedIdle());
@@ -601,7 +605,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     const readerYaw = Math.PI + shelfYaw(p.sceneId);
     const libraryActive = !!flow && flow.phase !== 'idle';
     const libraryWalking = !!flow && ['approach', 'align', 'recenter'].includes(flow.phase);
-    const motion = libraryActive ? library?.motion.current : undefined;
+    const motion = libraryActive ? (rig.current?.fitted?.library ?? library?.motion.current) : undefined;
     if (motion && rig.current && (libraryPlayer.current?.motion !== motion || libraryPlayer.current.rig !== rig.current)) {
       try {
         libraryPlayer.current = { motion, rig: rig.current, apply: createLibraryPlayer(rig.current.mesh, motion) };
@@ -660,7 +664,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     let stairGait: StairGait | null = null;
     let onStairContact = false;
     const sofa = sofaMotion.current;
-    const sofaClip = sofa.clip;
+    const sofaClip = rig.current?.fitted?.sofa ?? sofa.clip;
     if (sofa.rig !== rig.current || (sofaClip && !sofa.apply && rig.current)) {
       sofa.apply = rig.current && sofaClip ? sofaPlayer(rig.current.mesh, sofaClip) : null;
       sofa.rig = rig.current;

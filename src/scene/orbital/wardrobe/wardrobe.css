@@ -4,7 +4,7 @@
   border: 1px solid #d9cdb8;
   border-radius: 14px;
   padding: 0;
-  width: min(280px, calc(100vw - 28px));
+  width: min(440px, calc(100vw - 28px));
   max-height: calc(100dvh - 28px);
   margin: auto;
   box-shadow: 0 20px 80px #18140950;

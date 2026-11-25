@@ -8,7 +8,7 @@
 - `orbital/HabitatShell.tsx` 载入两面实体舱壁、拼花地板和固定陈设；`orbital/SpacecraftHull.tsx` 与 `orbital/spacecraftFlight.ts` 负责轨道飞船外壳、开场推近运镜、长按加速绕地与时间倍速，以及 `orbit ↔ cabin` 剖面切入过渡；`orbital/Cosmos.tsx` 渲染完整 360° 宇宙星空、银河、太阳、地球与轨道微粒背景。初始构图与横竖屏取景由 `orbital/cabinView.ts` 计算。
 - `orbital/useWorldController.ts` 管理世界状态、动作适配器和转场生命周期。
 - `orbital/OrbitalScene.tsx` 控制场景首次挂载和家具、设备、玩偶、猫的加载批次。舱外巡航的预取与入舱共用舱体加载缓存。服装 GLB 和座椅接触缓存分别由 `orbital/wardrobe/residentAssets.ts` 管理。启动顺序见 [SPEC.md](../../SPEC.md#4-轻量化与资源约定)。
-- `orbital/wardrobe/` 管理住民装扮选择和模型资源。点击高衣柜或在近处按提示键会走近并拉开柜门。衣柜展示日常装缩略图和穿着状态。旧装扮标识回退到日常装。[模型与坐姿修形](../../assets/models/resident/README.md)
+- `orbital/wardrobe/` 管理住民装扮选择和模型资源。点击高衣柜或在近处按提示键会走近并拉开柜门。衣柜按「日常装」「蝴蝶结外套」的顺序显示缩略图和穿着状态，确认试穿后保存选择。旧装扮标识回退到日常装。[模型与坐姿修形](../../assets/models/resident/README.md)
 - `orbital/journal/` 管理实体翻页、纸面编辑、逐页日期和天气、存档及迁移。
 - `orbital/library/` 管理书柜存档、文本导入、实体书和取还书动作。
 - `orbital/schedule/` 管理日程迁移、同步、纸页、贴纸、纸团和相关测试。
