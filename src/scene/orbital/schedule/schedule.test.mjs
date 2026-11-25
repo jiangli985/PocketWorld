@@ -9,7 +9,7 @@ const source = fs.readFileSync(new URL('./schedule.ts', import.meta.url), 'utf8'
 const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const context = { exports: {}, crypto: webcrypto };
 vm.runInNewContext(output, context);
-const { migrateSchedule, openSchedulePage, updateSchedulePage, turnSchedulePage, tearSchedulePage, discardSchedulePage, createSchedulePage, isScheduleNotebook, flattenSchedule, readScheduleNotebook, SCHEDULE_KEY } = context.exports;
+const { migrateSchedule, openSchedulePage, updateSchedulePage, turnSchedulePage, tearSchedulePage, discardSchedulePage, createSchedulePage, isScheduleNotebook, flattenSchedule, readScheduleNotebook, SCHEDULE_KEY, PAPER_BALL_RADIUS, paperBallPosition, paperBallBoxes } = context.exports;
 const entry = (id, time = '09:00') => ({ id, title: `任务 ${id}`, time, completed: false, content: `正文 ${id}` });
 
 test('editing the turned left sheet updates its queued record without switching or overwriting the right sheet', () => {
@@ -208,4 +208,14 @@ test('storage rejects malformed pages and duplicate identities without truncatin
   assert.equal(isScheduleNotebook({ ...state, discarded: [{ id: 'bad', seed: NaN }] }), false);
   assert.equal(isScheduleNotebook({ ...state, syncRemovedIds: ['removed-task'] }), true);
   assert.equal(isScheduleNotebook({ ...state, syncRemovedIds: [123] }), false);
+});
+
+test('paper-ball colliders sit on the same floor spot as the rendered crumples', () => {
+  const seed = 9;
+  const [x, y, z] = paperBallPosition(seed);
+  assert.equal(y, 0.105);
+  assert.deepEqual(JSON.parse(JSON.stringify(paperBallBoxes([{ id: 'ball', seed }]))),
+    [[x - PAPER_BALL_RADIUS, x + PAPER_BALL_RADIUS, z - PAPER_BALL_RADIUS, z + PAPER_BALL_RADIUS]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(paperBallBoxes([{ id: 'ball', seed }], 0.23)[0])), [x - 0.33, x + 0.33, z - 0.33, z + 0.33]);
+  assert.deepEqual(paperBallBoxes([]), []);
 });

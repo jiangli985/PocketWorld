@@ -1,16 +1,13 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { PaperBall, SchedulePage } from './schedule';
+import { paperBallPosition, type PaperBall, type SchedulePage } from './schedule';
 import type { PaperPickup } from '../cabinActions';
 import { SCHEDULE_BOOK_POSITION } from './bookLayout';
 
 export const GLASS_POSITION: [number, number, number] = [0.69, 2.53, -3.13];
 export const BOOK_POSITION: [number, number, number] = [SCHEDULE_BOOK_POSITION[0] + 0.126, SCHEDULE_BOOK_POSITION[1] + 0.033, SCHEDULE_BOOK_POSITION[2] - 0.01];
 const ease = (t: number) => 1 - (1 - t) ** 3;
-export function paperBallPosition(seed: number): [number, number, number] {
-  return [0.25 + Math.sin(seed * 2.4) * 0.65, 0.105, -0.68 + Math.cos(seed * 1.8) * 0.45];
-}
 export function paperGeometry(crumpled = false) {
   const geometry = new THREE.PlaneGeometry(0.56, 0.872, 20, 26).toNonIndexed();
   const attribute = geometry.attributes.position;

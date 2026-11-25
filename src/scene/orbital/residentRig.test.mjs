@@ -63,6 +63,52 @@ test('room uses the authored walk at full weight and does not share bone poses b
   } finally { a.rig.dispose(); b.rig.dispose(); }
 });
 
+test('开衫摆臂随对侧脚交替，肘部微屈且手掌顺着小臂', async () => {
+  const { gltf: cardigan } = await load(new URL('../../../assets/public/models/resident/luna-cardigan.glb', import.meta.url));
+  const rig = createResidentRig(cardigan.scene, cardigan.animations.find(c => c.name === 'Walk_Grounded_Loop'), true);
+  try {
+    const mesh = cardigan.scene.getObjectByProperty('isSkinnedMesh', true);
+    const { skinIndex, skinWeight } = mesh.geometry.attributes;
+    const position = bone => bone.getWorldPosition(new THREE.Vector3());
+    for (const side of ['Left', 'Right']) {
+      const bone = part => mesh.skeleton.getBoneByName('mixamorig' + side + part);
+      // The middle knuckle of the imported right hand is offset from the visible fingers.
+      // Track the deformed palm surface so a sideways bend cannot pass on bone positions alone.
+      const knuckles = new Set([bone('HandMiddle1'), bone('HandMiddle2')]);
+      const patch = [];
+      for (let i = 0; i < skinIndex.count; i++) {
+        let weight = 0;
+        for (let k = 0; k < 4; k++) {
+          if (knuckles.has(mesh.skeleton.bones[skinIndex.getComponent(i, k)])) weight += skinWeight.getComponent(i, k);
+        }
+        if (weight > .25) patch.push({ i, weight });
+      }
+      const mass = patch.reduce((v, p) => v + p.weight, 0);
+      assert.ok(mass > 0);
+      const point = new THREE.Vector3(), forward = [];
+      for (let frame = 0; frame <= 30; frame++) {
+        const phase = frame / 30;
+        rig.applyPose(phase, 1);
+        rig.mesh.updateMatrixWorld(true);
+        const shoulder = position(bone('Arm')), elbow = position(bone('ForeArm')), wrist = position(bone('Hand'));
+        const upper = elbow.clone().sub(shoulder), lower = wrist.clone().sub(elbow);
+        const flex = THREE.MathUtils.radToDeg(upper.angleTo(lower));
+        assert.ok(flex > 12 && flex < 28, side + ' elbow ' + flex);
+        const palm = new THREE.Vector3();
+        for (const { i, weight } of patch) palm.addScaledVector(mesh.localToWorld(mesh.getVertexPosition(i, point)), weight);
+        palm.divideScalar(mass).sub(wrist);
+        assert.ok(palm.angleTo(lower) < THREE.MathUtils.degToRad(12), side + ' palm at ' + phase);
+        const handTravel = wrist.z - shoulder.z;
+        const footTravel = position(bone('Foot')).z - position(bone('UpLeg')).z;
+        if (Math.abs(footTravel) > .12) assert.ok(footTravel * handTravel < 0, side + ' arm and foot swung together');
+        forward.push(handTravel);
+      }
+      assert.ok(Math.min(...forward) < -.05 && Math.max(...forward) > .07);
+      assert.ok(Math.abs(forward[0] - forward.at(-1)) < .0001);
+    }
+  } finally { rig.dispose(); }
+});
+
 test('standing pelvis and neck are upright over the actual sole support area', () => {
   const { asset, rig, mesh } = instance();
   try {
