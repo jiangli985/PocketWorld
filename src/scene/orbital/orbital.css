@@ -1,4 +1,4 @@
-.orbital-app { --cabin-controls-top: max(18px, env(safe-area-inset-top)); position: relative; width: 100%; height: 100%; overflow: hidden; background: #080714; color: #ece6d8; font-family: 'Avenir Next', 'PingFang SC', sans-serif; }
+.orbital-app { --cabin-controls-bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px)); position: relative; width: 100%; height: 100%; overflow: hidden; background: #080714; color: #ece6d8; font-family: 'Avenir Next', 'PingFang SC', sans-serif; }
 .orbital-canvas { position: absolute; inset: 0; touch-action: none; background: #080714; }
 .orbital-canvas canvas { display: block; outline: none; }
 .computer-game-layer { position: absolute; inset: 0; pointer-events: none; touch-action: auto; font-family: system-ui, 'Microsoft YaHei', sans-serif; }
@@ -21,14 +21,13 @@
 .orbital-stair-blackout.reveal { animation: stair-reveal .22s ease-out .08s both; }
 @keyframes stair-reveal { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .orbital-stair-blackout.reveal { animation-duration: 1ms; } }
-.orbital-cabin-controls { position: absolute; top: var(--cabin-controls-top); left: 50%; transform: translateX(-50%); z-index: 4; display: flex; gap: 8px; }
-.orbital-cabin-controls .orbital-flight-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; white-space: nowrap; }
+.orbital-cabin-controls { position: absolute; left: max(38px, calc(env(safe-area-inset-left) + 12px)); bottom: var(--cabin-controls-bottom); z-index: 4; display: flex; gap: 14px; pointer-events: none; }
 .orbital-cabin-controls kbd {
   position: relative; isolation: isolate; display: inline-grid; place-items: center;
   width: 23px; height: 23px; box-sizing: border-box; padding: 0 3px 3px 0; border-radius: 5px;
   background: linear-gradient(135deg, #f3f3f2 12%, #d5d6d5 53%, #bfc1c1 100%);
   box-shadow: inset 0 1px 1px #fff9, inset -1px -1px 2px #92959466, 0 2px 3px #0008;
-  color: #444747; font: 700 11px/1 system-ui, sans-serif; letter-spacing: 0;
+  color: #444747; font: 700 11px/1 system-ui, sans-serif; letter-spacing: 0; text-shadow: none;
 }
 .orbital-cabin-controls kbd::before {
   content: ''; position: absolute; z-index: -1; inset: 1px 4px 4px 1px; border-radius: 4px 4px 6px 4px;
@@ -39,13 +38,21 @@
   transform: translateY(2px);
   box-shadow: inset 0 1px 1px #fff9, inset -1px -1px 2px #92959466, 0 1px 2px #0006;
 }
-.orbital-app:has(.orbital-cabin-controls) .orbital-dust-prompt { top: calc(var(--cabin-controls-top) + 48px); }
 .orbital-flight-pill { min-height: 36px; padding: 7px 14px; border: 1px solid rgba(229, 220, 196, 0.24); border-radius: 999px; background: rgba(11, 12, 26, 0.56); backdrop-filter: blur(8px); color: #ece6d8; font: 500 11px/1.2 'Avenir Next', 'PingFang SC', sans-serif; letter-spacing: 1.4px; cursor: pointer; user-select: none; touch-action: manipulation; transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease; }
 .orbital-flight-pill:hover { background: rgba(24, 24, 46, 0.78); border-color: rgba(229, 220, 196, 0.48); }
 .orbital-flight-pill.is-primary { border-color: rgba(212, 178, 126, 0.48); color: #f6e7c8; }
 .orbital-flight-pill.is-boosting { background: rgba(34, 62, 98, 0.78); border-color: rgba(132, 206, 255, 0.72); color: #e2f4ff; box-shadow: 0 0 18px rgba(102, 188, 255, 0.32); }
 .orbital-flight-pill:focus-visible { outline: 2px solid #e5c690; outline-offset: 2px; }
+.orbital-cabin-controls .orbital-flight-pill {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 4px;
+  border: 0; border-radius: 4px; background: transparent; backdrop-filter: none;
+  color: #f6f0e4; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: auto;
+  text-shadow: 0 1px 2px #080714, 0 0 4px #080714e6, 0 0 1px #080714;
+}
+.orbital-cabin-controls .orbital-flight-pill:hover:not(:disabled) { color: #fff; }
+.orbital-cabin-controls .orbital-flight-pill:disabled { opacity: .55; cursor: default; }
 .orbital-now-playing { position: absolute; left: 42px; bottom: 36px; pointer-events: none; display: flex; align-items: center; gap: 12px; }
+.orbital-app:has(.orbital-cabin-controls) .orbital-now-playing { bottom: calc(var(--cabin-controls-bottom) + 54px); }
 .orbital-now-playing small { font-size: 8px; letter-spacing: 2px; color: #9b9d8b; }
 .orbital-now-playing p { margin: 5px 0 0; font-size: 11px; letter-spacing: 1px; }
 .orbital-record-dot { height: 28px; width: 28px; border-radius: 50%; border: 1px solid #b4aa8b99; background: repeating-radial-gradient(#111a20 0 2px, #57605b 3px, #111a20 4px); position: relative; }
@@ -88,14 +95,12 @@
 .world-book-form input { box-sizing: border-box; width: 100%; border: 0; border-bottom: 1px solid #d0c3a4; background: transparent; padding: 6px 0; color: #505247; font: 15px 'Songti SC', serif; }
 .world-book-form textarea { min-height: 90px; }
 .world-book-form button { align-self: flex-end; }
-@media (max-width: 1140px) {
-  .orbital-app { --cabin-controls-top: max(74px, calc(env(safe-area-inset-top) + 56px)); }
-}
 @media (max-width: 860px) {
   .orbital-dust-prompt { top: max(62px, calc(env(safe-area-inset-top) + 44px)); }
 }
 @media (max-width: 720px) {
-  .orbital-app { --cabin-controls-top: max(55px, calc(env(safe-area-inset-top) + 36px)); }
+  .orbital-app { --cabin-controls-bottom: max(16px, calc(env(safe-area-inset-bottom) + 10px)); }
+  .orbital-cabin-controls { left: max(20px, calc(env(safe-area-inset-left) + 10px)); }
   .orbital-header { top: max(23px, env(safe-area-inset-top)); left: 22px; right: 22px; }
   .orbital-wordmark { font-size: 22px; gap: 10px; }
   .orbital-edition { display: none; }
