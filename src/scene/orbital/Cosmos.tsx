@@ -138,8 +138,9 @@ function createDriftGeometry() {
       const radius = 16 + random() * 28;
       point.set(Math.cos(theta) * radius + 4, -2.5 + random() * 16, Math.sin(theta) * radius);
     }
-    const nearFloor = point.y < 4.5 && Math.abs(point.z) < 6 && ((point.x > CABIN_LEFT - 1.5 && point.x < CABIN_RIGHT + 1.5) || Math.abs(point.x - 14) < 6);
-    if (nearFloor) continue;
+    const inHabitatVolume = point.y < 9.5 && Math.abs(point.z) < 6.5 && point.x > CABIN_LEFT - 1.5 && point.x < CABIN_RIGHT + 6.0;
+    const inObservatoryVolume = point.y < 4.5 && Math.abs(point.z) < 6 && Math.abs(point.x - 14) < 6;
+    if (inHabitatVolume || inObservatoryVolume) continue;
     point.toArray(positions, i * 3);
     const color = DRIFT_COLORS[Math.floor(random() * DRIFT_COLORS.length)];
     const brightness = 0.52 + random() * 0.62;
