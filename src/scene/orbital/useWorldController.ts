@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
-import { initialOutfit, nextOutfit, readOutfit, rememberOutfit } from './wardrobe/outfit';
+import { initialOutfit, isOutfit, rememberOutfit, type ResidentOutfit } from './wardrobe/outfit';
 import { CLOSED_OBJECT, type WorldAction, type WorldActionContext, type WorldFeatureAdapters, type WorldMotion, type WorldObjectState, type WorldSceneId, type WorldTransition } from '../../types/world';
 
 export function nextObjectState(previous: WorldObjectState, action: WorldAction): WorldObjectState {
@@ -37,6 +37,10 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
   live.current = { sceneId, sceneObjects, focusedObject };
   const sequence = useRef(0);
   const pending = useRef<{ abort: AbortController; context: WorldActionContext; timeline?: gsap.core.Timeline; rollback: () => void } | null>(null);
+  const mountingOutfit = useRef<{ outfit: ResidentOutfit; resolve: (ready: boolean) => void } | null>(null);
+  const onOutfitMounted = useCallback((outfit: ResidentOutfit, ready: boolean) => {
+    if (mountingOutfit.current?.outfit === outfit) mountingOutfit.current.resolve(ready);
+  }, []);
   const adapterRef = useRef(adapters);
   adapterRef.current = adapters;
   const reducedMotion = useRef(typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -45,6 +49,8 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
     const current = pending.current;
     if (!current) return;
     pending.current = null;
+    mountingOutfit.current?.resolve(false);
+    mountingOutfit.current = null;
     current.abort.abort();
     current.timeline?.kill();
     current.rollback();
@@ -55,6 +61,15 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
   const onAction = useCallback(async (request: WorldAction) => {
     if (request.sceneId !== live.current.sceneId) return;
     const displayed = live.current;
+    const wardrobe = request.sceneId === 'habitat' && request.objectId === 'wardrobe';
+    const choice = request.payload?.itemId;
+    const outfit = wardrobe && request.kind === 'select' && isOutfit(choice) ? choice : null;
+    if (wardrobe) {
+      if (request.kind === 'open' && displayed.focusedObject === 'wardrobe') return;
+      if (request.kind === 'select' && (!outfit || displayed.focusedObject !== 'wardrobe'
+        || !displayed.sceneObjects.habitat.wardrobe.open || outfit === displayed.sceneObjects.habitat.wardrobe.itemId
+        || pending.current)) return;
+    }
     cancelPending();
     setGestureActive(false);
     setError(null);
@@ -81,16 +96,11 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
     setTransition({ id, phase: 'preparing', action, fromScene: snapshot.sceneId, toScene: destination });
     try {
       await adapterRef.current?.actions?.[action.kind]?.prepare?.(context);
-      const outfit = request.sceneId === 'habitat' && request.objectId === 'wardrobe' && request.kind === 'toggle'
-        ? nextOutfit(readOutfit(visiblePrevious.itemId)) : null;
-      if (outfit) {
-        const { loadResidentAssets } = await import('./wardrobe/residentAssets');
-        try { await loadResidentAssets(outfit); }
-        catch { throw new Error('这套衣服加载失败，请再试一次。'); }
-      }
       if (abort.signal.aborted) return;
+      // ResidentModel owns loading and reports after the new rig has actually mounted.
+      const mounted = outfit && new Promise<boolean>(resolve => { mountingOutfit.current = { outfit, resolve }; });
       const followsVisibleState = ['toggle', 'open', 'sit', 'turn-page'].includes(action.kind);
-      const next = outfit ? { ...visiblePrevious, itemId: outfit } : nextObjectState(followsVisibleState ? visiblePrevious : previous, action);
+      const next = outfit ? { ...visiblePrevious, open: false, itemId: outfit } : nextObjectState(followsVisibleState ? visiblePrevious : previous, action);
       setSceneObjects(current => {
         const updated = { ...current[action.sceneId], [action.objectId]: next };
         const takingSeat = action.kind === 'sit' && next.active;
@@ -104,13 +114,19 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
         if (action.objectId === 'cabinet-item' && next.active) updated.cabinet = { ...(updated.cabinet ?? CLOSED_OBJECT), open: true };
         return { ...current, [action.sceneId]: updated };
       });
-      if (FOCUS_ACTIONS[action.kind] || (action.objectId === 'cabinet' && action.kind === 'open' && next.open)) setFocusedObject(action.objectId);
+      if (FOCUS_ACTIONS[action.kind] || ((wardrobe || action.objectId === 'cabinet') && action.kind === 'open' && next.open)) setFocusedObject(action.objectId);
       if (action.kind === 'travel' || action.kind === 'sit' || (action.kind === 'close' && snapshot.focusedObject === action.objectId)) setFocusedObject(null);
       motion.current.progress = 0;
       motion.current.sceneProgress = 0;
       setTransition({ id, phase: action.kind === 'travel' ? 'leaving' : 'entering', action, fromScene: snapshot.sceneId, toScene: destination });
       const finish = async () => {
         try {
+          if (mounted) {
+            const ready = await mounted;
+            if (abort.signal.aborted) return;
+            mountingOutfit.current = null;
+            if (!ready) throw new Error('这套衣服加载失败，请再试一次。');
+          }
           await adapterRef.current?.actions?.[action.kind]?.commit?.(context);
           if (abort.signal.aborted) return;
           if (outfit) rememberOutfit(outfit);
@@ -125,7 +141,7 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
           setTransition({ id, phase: 'error', action: null, fromScene: snapshot.sceneId, toScene: snapshot.sceneId });
         }
       };
-      const duration = reducedMotion.current ? 0.12 : action.kind === 'travel' ? 1.8 : 0.9;
+      const duration = outfit ? .95 : reducedMotion.current ? 0.12 : action.kind === 'travel' ? 1.8 : 0.9;
       transaction.timeline = gsap.timeline({ onComplete: () => { void finish(); } });
       transaction.timeline.to(motion.current, { progress: 1, sceneProgress: 1, duration, ease: 'power2.inOut' });
       if (action.kind === 'travel') transaction.timeline.call(() => {
@@ -143,6 +159,7 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
   const onReturn = useCallback(() => {
     cancelPending();
     const current = live.current;
+    if (current.focusedObject === 'wardrobe') setError(null);
     if (current.focusedObject) setSceneObjects(all => ({ ...all, [current.sceneId]: { ...all[current.sceneId], [current.focusedObject!]: { ...(all[current.sceneId][current.focusedObject!] ?? CLOSED_OBJECT), open: false, active: false } } }));
     setFocusedObject(null);
     setGestureActive(false);
@@ -158,5 +175,5 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
   }, [cancelPending]);
 
   const onHover = useCallback((id: string | null, hint = '') => setHover(id ? { id, hint } : null), []);
-  return { sceneId, sceneObjects, objects: sceneObjects[sceneId], focusedObject, transition, motion, onAction, onReturn, onHover, hover, gestureActive, onGesture: setGestureActive, error, setError, reducedMotion: reducedMotion.current };
+  return { sceneId, sceneObjects, objects: sceneObjects[sceneId], focusedObject, transition, motion, onAction, onReturn, onHover, hover, onOutfitMounted, gestureActive, onGesture: setGestureActive, error, setError, reducedMotion: reducedMotion.current };
 }

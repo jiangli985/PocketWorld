@@ -6,9 +6,10 @@ import * as THREE from 'three';
 import { createResidentRig } from './residentRig';
 import { applyResidentSkin } from './residentSkin';
 import { createChairAnimation } from './chairAnimation';
-import { createSleeveContact } from './wardrobe/sleeveContact';
-import { loadResidentAssets, type ResidentAssets } from './wardrobe/residentAssets';
+import { createSeatedIdlePlayer } from './seatedIdle';
+import { loadResidentAssets, loadResidentSeatContact, type ResidentAssets } from './wardrobe/residentAssets';
 import type { ResidentOutfit } from './wardrobe/outfit';
+import type { StairGait } from './stairGait';
 
 export { HIP_HEIGHT } from './residentRig';
 export interface ResidentLeg {
@@ -28,36 +29,60 @@ export interface ResidentRig {
   legs: ResidentLeg[]; arms: ResidentArm[]; torso: THREE.Bone; neck: THREE.Bone; head?: THREE.Bone;
   skirtFront: THREE.Bone; skirtBack: THREE.Bone; mesh: THREE.Group;
   applyPose: (phase: number, walkWeight: number) => void;
+  applyStairPose: (gait: StairGait, stairX: number, surfaceAt: (z: number, heelRun?: number) => number) => void;
   followMotion: (dt: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => void;
-  fitted?: ResidentAssets['fitted'];
-  updateSleeveContact?: () => void;
   applyArmCorrectives: (enabled: boolean) => void;
+  applySeatedIdle?: ReturnType<typeof createSeatedIdlePlayer>;
   applyChairPose?: (time: number, weight: number) => void;
   dispose: () => void;
 }
 
-function LoadedResident({ assets, rig }: { assets: ResidentAssets; rig: MutableRefObject<ResidentRig | null> }) {
+type OutfitMounted = (outfit: ResidentOutfit, ready: boolean) => void;
+
+function LoadedResident({ assets, rig, onMounted, prefetchSeat, chairActive }: {
+  assets: ResidentAssets; rig: MutableRefObject<ResidentRig | null>; onMounted?: OutfitMounted;
+  prefetchSeat: boolean; chairActive: boolean;
+}) {
   const container = useRef<THREE.Group>(null);
+  const chairAnimation = useRef<ReturnType<typeof createChairAnimation> | null>(null);
   useLayoutEffect(() => {
     const group = container.current!;
     const asset = clone(assets.scene);
-    const resident = createResidentRig(asset, assets.walk, !!assets.fitted);
-    const chair = createChairAnimation(asset, assets.sit, assets.contact);
-    resident.fitted = assets.fitted;
+    const resident = createResidentRig(asset, assets.walk);
+    const chair = createChairAnimation(asset, assets.sit);
+    chairAnimation.current = chair;
     resident.applyChairPose = chair.apply;
-    if (assets.outfit === 'cloudhoodie') resident.updateSleeveContact = createSleeveContact(asset);
+    resident.applySeatedIdle = createSeatedIdlePlayer(resident);
     resident.mesh.userData.outfit = assets.outfit;
-    const restoreSkin = assets.outfit === 'everyday' ? applyResidentSkin(resident.mesh) : undefined;
+    const restoreSkin = applyResidentSkin(resident.mesh);
     group.add(resident.mesh);
     rig.current = resident;
+    onMounted?.(assets.outfit, true);
     return () => {
       if (rig.current === resident) rig.current = null;
       group.remove(resident.mesh);
-      restoreSkin?.();
+      restoreSkin();
+      chairAnimation.current = null;
       chair.dispose();
       resident.dispose();
     };
-  }, [assets, rig]);
+  }, [assets, rig, onMounted]);
+  useEffect(() => {
+    const chair = chairAnimation.current;
+    if (!chair || (!prefetchSeat && !chairActive)) return;
+    let active = true;
+    let frame = 0;
+    const load = () => {
+      void loadResidentSeatContact(assets.outfit).then(contact => {
+        if (active && chairAnimation.current === chair) chair.setContact(contact);
+      }).catch(error => {
+        if (active && chairAnimation.current === chair) console.warn('Luna seat contact unavailable', error);
+      });
+    };
+    if (chairActive) load();
+    else frame = requestAnimationFrame(() => { frame = requestAnimationFrame(load); });
+    return () => { active = false; cancelAnimationFrame(frame); };
+  }, [assets, rig, onMounted, prefetchSeat, chairActive]);
   return <group ref={container} />;
 }
 
@@ -80,8 +105,9 @@ class ResidentBoundary extends React.Component<{ children: React.ReactNode; onFa
   }
 }
 
-export function ResidentModel({ rig, outfit = 'everyday', onFailure, ...props }: ThreeElements['group'] & {
-  rig: MutableRefObject<ResidentRig | null>; outfit?: ResidentOutfit; onFailure?: () => void;
+export function ResidentModel({ rig, outfit = 'everyday', onFailure, onMounted, prefetchSeat = true, chairActive = false, ...props }: ThreeElements['group'] & {
+  rig: MutableRefObject<ResidentRig | null>; outfit?: ResidentOutfit; onFailure?: () => void; onMounted?: OutfitMounted;
+  prefetchSeat?: boolean; chairActive?: boolean;
 }) {
   const [assets, setAssets] = useState<ResidentAssets | null>(null);
   const [failed, setFailed] = useState(false);
@@ -94,12 +120,12 @@ export function ResidentModel({ rig, outfit = 'everyday', onFailure, ...props }:
     void loadResidentAssets(outfit).then(value => {
       if (active) setAssets(value);
     }).catch(() => {
-      if (active) { setFailed(true); failureCallback.current?.(); }
+      if (active) { setFailed(true); onMounted?.(outfit, false); failureCallback.current?.(); }
     });
     return () => { active = false; };
-  }, [outfit, attempt]);
+  }, [outfit, attempt, onMounted]);
   return <group {...props}>
-    {assets && <ResidentBoundary key={assets.outfit} onFailure={onFailure}><LoadedResident assets={assets} rig={rig} /></ResidentBoundary>}
+    {assets && <ResidentBoundary key={assets.outfit} onFailure={() => { onMounted?.(assets.outfit, false); onFailure?.(); }}><LoadedResident assets={assets} rig={rig} onMounted={onMounted} prefetchSeat={prefetchSeat} chairActive={chairActive} /></ResidentBoundary>}
     {failed ? <group onPointerDown={event => { event.stopPropagation(); setAttempt(value => value + 1); }}><ModelStatus failed /></group>
       : !assets && <ModelStatus />}
   </group>;

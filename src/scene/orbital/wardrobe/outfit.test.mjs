@@ -1,8 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { initialOutfit, rememberOutfit, nextOutfit } from './outfit.ts';
+import { initialOutfit, isOutfit, outfitChoices, previewOutfit, readOutfit, rememberOutfit } from './outfit.ts';
 
-test('the wardrobe remembers the choice on both the cabin and a shared outfit preview', t => {
+test('the wardrobe lists only everyday and opens retired outfit previews in everyday', () => {
+  assert.deepEqual(outfitChoices, ['everyday']);
+  assert.equal(previewOutfit('?outfit=everyday'), 'everyday');
+  assert.equal(previewOutfit('?outfit=unknown'), null);
+  assert.equal(previewOutfit('?view=cabin'), null);
+  for (const retired of ['snowflower', 'cloudhoodie']) {
+    assert.equal(isOutfit(retired), false);
+    assert.equal(readOutfit(retired), 'everyday');
+    assert.equal(previewOutfit('?view=cabin&outfit=' + retired), 'everyday');
+  }
+});
+
+test('a retired saved outfit falls back to everyday and remembering it preserves the preview context', t => {
+  const key = 'pocketworld:wardrobe:outfit';
   const saved = new Map();
   const window = {
     location: new URL('http://localhost/?view=cabin'),
@@ -13,26 +26,19 @@ test('the wardrobe remembers the choice on both the cabin and a shared outfit pr
   globalThis.window = window;
   t.after(() => { if (original === undefined) delete globalThis.window; else globalThis.window = original; });
 
-  assert.equal(initialOutfit(), 'everyday');
-  rememberOutfit('snowflower');
-  assert.equal(initialOutfit(), 'snowflower');
+  for (const retired of ['snowflower', 'cloudhoodie']) {
+    saved.set(key, retired);
+    assert.equal(initialOutfit(), 'everyday');
+  }
+  rememberOutfit('everyday');
+  assert.equal(saved.get(key), 'everyday');
   assert.equal(window.location.search, '?view=cabin');
 
-  window.location.search = '?view=cabin&outfit=everyday&sun=0.5';
-  assert.equal(initialOutfit(), 'everyday');
-  rememberOutfit('snowflower');
-  assert.equal(window.location.search, '?view=cabin&outfit=snowflower&sun=0.5');
-  assert.equal(saved.get('pocketworld:wardrobe:outfit'), 'snowflower');
+  window.location.search = '?view=cabin&outfit=snowflower&sun=0.5';
+  rememberOutfit('everyday');
+  assert.equal(window.location.search, '?view=cabin&outfit=everyday&sun=0.5');
 
-  assert.equal(nextOutfit('snowflower'), 'cloudhoodie');
-  rememberOutfit('cloudhoodie');
-  assert.equal(window.location.search, '?view=cabin&outfit=cloudhoodie&sun=0.5');
-  window.location.search = '?view=cabin';
-  assert.equal(initialOutfit(), 'cloudhoodie');
-  assert.equal(nextOutfit('cloudhoodie'), 'everyday');
-
-  window.location.search = '?view=cabin&outfit=cloudhoodie';
   window.history.replaceState = () => { throw new Error('restricted history'); };
   rememberOutfit('everyday');
-  assert.equal(saved.get('pocketworld:wardrobe:outfit'), 'everyday');
+  assert.equal(initialOutfit(), 'everyday');
 });

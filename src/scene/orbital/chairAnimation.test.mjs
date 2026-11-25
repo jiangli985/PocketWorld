@@ -19,9 +19,9 @@ const {CHAIR_FPS,CHAIR_SIT_FRAMES,CHAIR_SIT_SECONDS}=local('./chairMotion');
 const data=readFileSync(new URL('../../../assets/public/models/resident/luna-seat-contact.bin',import.meta.url));
 const buffer=data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength),cache=readSeatContactCache(buffer);
 const {gltf}=await load(new URL('../../../assets/public/models/resident/luna-walk-room.glb',import.meta.url));
-function instance(){
+function instance(contact = cache){
  const asset=clone(gltf.scene),rig=createResidentRig(asset,gltf.animations.find(c=>c.name==='Walk_Grounded_Loop'));
- const chair=createChairAnimation(asset,gltf.animations.find(c=>c.name==='ChairSit_Contact'),cache);
+ const chair=createChairAnimation(asset,gltf.animations.find(c=>c.name==='ChairSit_Contact'),contact ?? undefined);
  const root=new THREE.Group();root.add(rig.mesh);root.position.z=.54;
  const sample=(t,w=1)=>{rig.applyPose(0,0);chair.apply(t,w);root.updateMatrixWorld(true);asset.traverse(o=>{if(o.isSkinnedMesh)o.skeleton.update();});};
  return {asset,rig,chair,root,sample,dispose:()=>{chair.dispose();rig.dispose();}};
@@ -48,6 +48,26 @@ test('seat deformation is instance-local and releases the original geometry and 
  assert(a.asset.getObjectByName('mixamorigHips').position.length()<1);
  a.dispose();b.dispose();
 });
+test('late seat corrections preserve the current sit and apply on the next one', () => {
+  const delayed = instance(null), ready = instance();
+  const mesh = delayed.asset.getObjectByProperty('isSkinnedMesh', true);
+  const original = mesh.geometry;
+  delayed.sample(CHAIR_SIT_SECONDS);
+  ready.sample(CHAIR_SIT_SECONDS);
+  const hips = asset => asset.getObjectByName('mixamorigHips').position;
+  assert.deepEqual(hips(delayed.asset), hips(ready.asset));
+  delayed.chair.setContact(cache);
+  delayed.sample(CHAIR_SIT_SECONDS);
+  assert.equal(mesh.geometry, original);
+  delayed.sample(0, 0);
+  assert.notEqual(mesh.geometry, original);
+  delayed.sample(CHAIR_SIT_SECONDS);
+  const reference = ready.asset.getObjectByProperty('isSkinnedMesh', true);
+  assert.deepEqual(mesh.geometry.attributes.position.array, reference.geometry.attributes.position.array);
+  delayed.dispose();
+  ready.dispose();
+});
+
 test('authored sitting preserves limb lengths and finite skinning',()=>{
  const a=instance(),position=o=>o.getWorldPosition(new THREE.Vector3());
  const lengths=[];
@@ -160,77 +180,4 @@ test('palms face the armrests with aligned forearms and little axial wrist twist
   } finally {
     actor.dispose();
   }
-});
-
-
-test('雪花裙装使用自己的接触索引，坐起只变形接触网格，站姿两只袜脚着地', async () => {
-  const root = new URL('../../../assets/public/models/resident/', import.meta.url);
-  const { gltf } = await load(new URL('luna-snowflower.glb', root));
-  const data = readFileSync(new URL('luna-snowflower-seat.bin', root));
-  const contact = readSeatContactCache(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
-  const asset = clone(gltf.scene);
-  const clip = name => gltf.animations.find(value => value.name === name);
-  const rig = createResidentRig(asset, clip('Walk_Grounded_Loop'), true);
-  const surfaces = [];
-  asset.traverse(node => { if (node.isSkinnedMesh) surfaces.push(node); });
-  const sock = surfaces.find(node => node.material.name === 'Snowflower | socks');
-  const face = surfaces.find(node => node.material.name === 'Luna | Snowflower Face');
-  const faceGeometry = face.geometry;
-  const body = surfaces.find(node => node.geometry.getAttribute('_contact_id').array.some(v => v >= 0));
-  const rest = body.geometry.getAttribute('position').array;
-  const mapped = new Set(body.geometry.getAttribute('_contact_id').array);
-  mapped.delete(-1);
-  assert.equal(mapped.size, contact.count);
-  assert.equal(Math.max(...mapped), contact.count - 1);
-  const seat = createChairAnimation(asset, clip('ChairSit_Contact'), contact);
-  try {
-    rig.applyPose(0, 0);
-    rig.mesh.updateMatrixWorld(true);
-    const sole = [Infinity, Infinity], point = new THREE.Vector3();
-    for (let i = 0; i < sock.geometry.getAttribute('position').count; i++) {
-      sock.localToWorld(sock.getVertexPosition(i, point));
-      const side = point.x < 0 ? 0 : 1;
-      sole[side] = Math.min(sole[side], point.y);
-    }
-    sole.forEach(height => assert.ok(Math.abs(height) < .003, '袜底站姿离地 ' + height));
-    seat.apply(97 / 30, 1);
-    const posed = body.geometry.getAttribute('position').array;
-    assert.ok(posed.some((v, i) => Math.abs(v - rest[i]) > .002));
-    assert.equal(face.geometry, faceGeometry);
-    seat.apply(0, 0);
-    assert.deepEqual(posed, rest);
-  } finally { seat.dispose(); rig.dispose(); }
-});
-
-test('云朵连帽衫的坐姿缓存匹配新网格，包脚袜在站定和步态混合中贴地', async () => {
-  const root = new URL('../../../assets/public/models/resident/', import.meta.url);
-  const { gltf } = await load(new URL('luna-cloudhoodie.glb', root));
-  const bytes = readFileSync(new URL('luna-cloudhoodie-seat.bin', root));
-  const contact = readSeatContactCache(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
-  const rig = createResidentRig(clone(gltf.scene), gltf.animations.find(a => a.name === 'Walk_Grounded_Loop'), true);
-  const surfaces = [];
-  rig.mesh.traverse(node => { if (node.isSkinnedMesh) surfaces.push(node); });
-  const sock = surfaces.find(node => node.geometry.userData.soleContacts);
-  const body = surfaces.find(node => node !== sock);
-  const ids = new Set(body.geometry.attributes._contact_id.array);
-  ids.delete(-1);
-  assert.equal(ids.size, contact.count);
-  assert.equal(Math.min(...ids), 0);
-  assert.equal(Math.max(...ids), contact.count - 1);
-  assert.equal(contact.frames, CHAIR_SIT_FRAMES);
-  const soles = Object.values(sock.geometry.userData.soleContacts);
-  const point = new THREE.Vector3();
-  try {
-    for (const weight of [0, .25, .5, .75, 1]) {
-      for (let frame = 0; frame < 60; frame++) {
-        rig.applyPose(frame / 60, weight);
-        rig.mesh.updateMatrixWorld(true);
-        const heights = soles.map(indices => Math.min(...indices.map(index =>
-          sock.localToWorld(sock.getVertexPosition(index, point)).y)));
-        assert.ok(heights.every(y => y > -.0015), '袜底穿地 ' + JSON.stringify({ frame, weight, heights }));
-        if (weight === 0) assert.ok(heights.every(y => y < .003));
-        if (weight === 1) assert.ok(Math.min(...heights) < .004, '支撑脚悬空 ' + JSON.stringify({ frame, heights }));
-      }
-    }
-  } finally { rig.dispose(); }
 });

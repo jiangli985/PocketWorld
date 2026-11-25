@@ -1,7 +1,6 @@
-// Room-local metres. The starboard side and window stay fixed as the port side widens.
+// Authored room coordinates. The upper deck reuses the original port-side coordinates.
 export const CABIN_LEFT = -6.57;
 export const CABIN_RIGHT = 4.24;
-export const CABIN_CENTER_X = (CABIN_LEFT + CABIN_RIGHT) / 2;
 
 export const CAT_HOME = [3.02, 2.38] as const;
 export const CAT_YAW = -.75;
@@ -13,11 +12,34 @@ export const HABITAT_SPAWN: [number, number] = [2.52, 1.10];
 export const RESIDENT_RADIUS = 0.23;
 export const WALK_BOUNDS = { left: CABIN_LEFT + .25 + RESIDENT_RADIUS, right: 3.76, back: -2.96, front: 2.96 };
 
+export const CABIN_DIVIDER_X = -1.86;
+// Widen the bedroom on the landing side in authored coordinates, keeping each
+// deck's walking space separate and both exterior walls flush in world space.
+export const BEDROOM_LEFT = CABIN_LEFT - 1.26;
+export const UPPER_DECK_OFFSET: [number, number, number] = [CABIN_DIVIDER_X - BEDROOM_LEFT, 3.82, 0];
+// Matches the finished return-wall trim in scripts/export-open-cabin.py.
+export const BEDROOM_WALL_FRONT = 3.19;
+export const BEDROOM_WALL_OUTSET = .135;
+export type CabinDeck = 'lower' | 'upper';
+
+export const DECK_WALK_BOUNDS = {
+  lower: { ...WALK_BOUNDS, left: CABIN_DIVIDER_X + RESIDENT_RADIUS + .035 },
+  upper: { ...WALK_BOUNDS, left: BEDROOM_LEFT + .25 + RESIDENT_RADIUS, right: CABIN_DIVIDER_X - RESIDENT_RADIUS - .035 },
+};
+
+export function deckFromAuthoredX(x: number): CabinDeck {
+  return x < CABIN_DIVIDER_X ? 'upper' : 'lower';
+}
+
+export function authoredCabinPoint(point: [number, number, number], deck: CabinDeck): [number, number, number] {
+  return deck === 'upper' ? [point[0] - UPPER_DECK_OFFSET[0], point[1] - UPPER_DECK_OFFSET[1], point[2]] : point;
+}
+
 export const BED_POSITION: [number, number, number] = [-4.05, 0, -1.897];
 
-// The wardrobe occupies the west half of the combined Wardrobe_Nightstand mesh.
-export const WARDROBE_FOOTPRINT: [number, number, number, number] = [-6.47, -4.97, -3.18, -2.29];
-export const WARDROBE_STAND: [number, number] = [-5.72, -1.90];
+// The wardrobe doors face inward from the right wall of the bedroom.
+export const WARDROBE_FOOTPRINT: [number, number, number, number] = [-2.81, -1.94, 0, 1.50];
+export const WARDROBE_STAND: [number, number] = [-3.18, .75];
 
 // Armless floor sofa at the open corner in front of the bedside rug.
 export const FLOOR_SOFA = {
@@ -70,7 +92,7 @@ export const PLUSH_DOLLS: readonly PlushDollPlacement[] = [
     id: 'plush-bear',
     name: 'Furniture_PlushBear',
     path: 'furniture/plush-bear.glb',
-    position: [-5.58, 0, -1.48],
+    position: [-5.77, 0, -2.28],
     yaw: 0.40,
     height: 0.55,
     radius: 0.23,
@@ -88,7 +110,7 @@ export const PLUSH_DOLLS: readonly PlushDollPlacement[] = [
   },
 ];
 
-// The table top is a fixed part of the authored cabin mesh.
+// Bedside props share the nightstand's authored upper-deck placement.
 export const NIGHTSTAND_X = -2.52;
 export const NIGHTSTAND_Z = -2.825;
 export const COMPUTER_STAND: [number, number] = [1.55, -1.36];

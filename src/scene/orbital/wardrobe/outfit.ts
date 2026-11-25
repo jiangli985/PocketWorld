@@ -1,25 +1,22 @@
-const outfits = {
-  everyday: { next: 'snowflower', hint: '换上雪花裙装' },
-  snowflower: { next: 'cloudhoodie', hint: '换上云朵连帽衫' },
-  cloudhoodie: { next: 'everyday', hint: '换回日常装' },
+export const outfitNames = {
+  everyday: '日常装',
 } as const;
-export type ResidentOutfit = keyof typeof outfits;
+export type ResidentOutfit = keyof typeof outfitNames;
+export const outfitChoices = Object.keys(outfitNames) as ResidentOutfit[];
 
 export function readOutfit(value?: string | null): ResidentOutfit {
   return isOutfit(value) ? value : 'everyday';
 }
 
-function isOutfit(value?: string | null): value is ResidentOutfit {
-  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(outfits, value);
+export function isOutfit(value?: string | null): value is ResidentOutfit {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(outfitNames, value);
 }
-
-export const nextOutfit = (current: ResidentOutfit) => outfits[current].next;
-export const outfitHint = (current: ResidentOutfit = 'everyday') => outfits[current].hint;
 
 const STORAGE_KEY = 'pocketworld:wardrobe:outfit';
 
 export function previewOutfit(search: string): ResidentOutfit | null {
   const value = new URLSearchParams(search).get('outfit');
+  if (value === 'snowflower' || value === 'cloudhoodie') return 'everyday';
   return isOutfit(value) ? value : null;
 }
 

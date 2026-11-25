@@ -4,7 +4,7 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { AssetBoundary } from './ReusableAsset';
 import type { SunState } from './Cosmos';
-import type { SpacecraftFlightState } from './spacecraftFlight';
+import { SHIP_TARGET, type SpacecraftFlightState } from './spacecraftFlight';
 
 interface MaterialSlot {
   material: THREE.MeshStandardMaterial;
@@ -29,7 +29,6 @@ interface SpacecraftHullProps {
 }
 
 const HULL_MODEL_URL = `${import.meta.env.BASE_URL}models/cabin/spacecraft-hull.glb`;
-useGLTF.preload(HULL_MODEL_URL);
 
 function classifyMaterial(name: string): MaterialSlot['kind'] {
   if (name.includes('CabinWarmGlow')) return 'window';
@@ -146,15 +145,19 @@ function SpacecraftHullMesh({ flight, sun, reducedMotion, onEnterCabin, onReady 
     const bobY = Math.sin(t * 0.85) * 0.095 * hoverWeight;
     const surgeX = boost * 0.26 * hoverWeight;
     const vibe = boost > 0.05 ? Math.sin(t * 42) * 0.012 * boost * hoverWeight : 0;
-    group.position.set(surgeX, bobY + vibe, 0);
+    // Subtle outward architectural expansion around the duplex hull center as the shell opens into the interior cutaway
+    const cutawayScale = 1 + (1 - opacity) * 0.045;
+    const expandOffset = 1 - cutawayScale;
+    group.position.set(
+      surgeX + SHIP_TARGET.x * expandOffset,
+      bobY + vibe + SHIP_TARGET.y * expandOffset,
+      SHIP_TARGET.z * expandOffset,
+    );
     group.rotation.set(
       Math.sin(t * 0.52) * 0.014 * hoverWeight,
       Math.sin(t * 0.37) * 0.010 * hoverWeight,
       boost * 0.032 * hoverWeight,
     );
-
-    // Subtle outward architectural expansion as the shell opens into the interior cutaway
-    const cutawayScale = 1 + (1 - opacity) * 0.045;
     group.scale.setScalar(cutawayScale);
 
     // Animate twin engine exhaust plumes smoothly with boost + lively flicker

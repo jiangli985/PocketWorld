@@ -11,7 +11,7 @@ import { SCHEDULE_BOOK_POSITION, SCHEDULE_BOOK_SCALE, SCHEDULE_BOOK_YAW } from '
 
 function FurnitureComputer({ world }: { world: WorldModelProps }) {
   const state = world.objects.computer ?? CLOSED_OBJECT;
-  return <ObjectHandle id="computer" action="inspect" hint="打开电脑 · 游戏与终端" world={world} position={[1.55, 1.12, -2.6]}>
+  return <ObjectHandle id="computer" action="inspect" panorama hint="坐稳电脑椅后使用电脑" world={world} position={[1.55, 1.12, -2.6]}>
     <SuppliedAsset name="computer.fitted" size={CRT_SIZE} fit="contact" position={[0, 0, -.07]} fallback={<group scale={[CRT_SCALE, CRT_SCALE, 1]}>
     <SoftBox dims={[0.55, 0.065, 0.42]} position={[0, 0.0325, 0.01]} color="#c2c0aa" radius={0.045} />
     <Cylinder radius={0.12} height={0.09} position={[0, 0.1, -0.04]} color="#aeae9b" />
@@ -24,7 +24,7 @@ function FurnitureComputer({ world }: { world: WorldModelProps }) {
     {Array.from({ length: 8 }, (_, i) => <SoftBox key={i} dims={[0.003, 0.012, 0.22]} position={[0.576, 0.39 + i * 0.035, -0.11]} color="#a9aa97" radius={0.001} />)}
 </group>} />
     <group position={[0, 0.045, 0.50]} rotation={[0.06, 0, 0]}>
-      <SoftBox dims={[0.80, 0.06, 0.36]} position={[0, 0.004, -0.012]} color="#d1cdb5" radius={0.022} />
+      <SoftBox dims={[0.80, 0.06, 0.36]} position={[0, 0.004, -0.012]} color="#eceae4" radius={0.022} />
       <ReactiveKeyboard reducedMotion={world.reducedMotion} active={world.focusedObject === 'computer'} />
     </group>
     <Tube points={[[0.2, 0.03, 0.59], [0.36, 0.025, 0.47], [0.33, 0.025, 0.25], [0.1, 0.08, -0.24]]} radius={0.008} color={C.ink} />

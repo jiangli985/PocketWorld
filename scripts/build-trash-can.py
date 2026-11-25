@@ -413,9 +413,9 @@ def generate_textures():
     glaze_wave = 0.5 * np.sin(yy * math.tau * 3.0 + np.cos(xx * math.tau * 2.0) * 0.4) + 0.5 * np.cos(xx * math.tau * 4.0)
 
     porc = np.ones((sz, sz, 4), dtype=np.float32)
-    porc[..., 0] = 0.945 + 0.008 * glaze_wave + 0.005 * grain - 0.14 * speckle
-    porc[..., 1] = 0.880 + 0.008 * glaze_wave + 0.005 * grain - 0.15 * speckle
-    porc[..., 2] = 0.790 + 0.007 * glaze_wave + 0.004 * grain - 0.15 * speckle
+    porc[..., 0] = 0.945 + 0.008 * glaze_wave + 0.005 * grain - 0.12 * speckle
+    porc[..., 1] = 0.928 + 0.008 * glaze_wave + 0.005 * grain - 0.12 * speckle
+    porc[..., 2] = 0.895 + 0.007 * glaze_wave + 0.004 * grain - 0.11 * speckle
     textures["porcelain_albedo"] = create_packed_image("Tex_BinPorcelain_Albedo", porc, "sRGB")
 
     porc_r = np.ones((sz, sz, 4), dtype=np.float32)
@@ -423,7 +423,7 @@ def generate_textures():
     porc_r[..., 0] = porc_r[..., 1] = porc_r[..., 2] = np.clip(pr, 0.46, 0.76)
     textures["porcelain_rough"] = create_packed_image("Tex_BinPorcelain_Rough", porc_r, "Non-Color")
 
-    # 2. Rich Warm Honey-Oak Bentwood Lid (matching open-cabin Honey oak & parquet warmth)
+    # 2. Warm Mid-Walnut Bentwood Lid (matching desk legs & chair frame)
     wx = (xx - 0.5) * 2.0
     wy = (yy - 0.5) * 2.0
     warp = 0.11 * np.sin(wy * 4.8 + 0.4) + 0.055 * np.cos(wx * 3.8 - wy * 2.6)
@@ -434,25 +434,24 @@ def generate_textures():
     pore = np.clip(grain * 0.5 + 0.5, 0.0, 1.0)
 
     oak = np.ones((sz, sz, 4), dtype=np.float32)
-    # Warm golden-caramel honey oak (sRGB ~ #9f6737 to #c58c55) — no pink shift under AgX
-    oak[..., 0] = 0.620 + 0.125 * rings_sharp + 0.026 * fine_fiber - 0.032 * pore
-    oak[..., 1] = 0.398 + 0.105 * rings_sharp + 0.020 * fine_fiber - 0.026 * pore
-    oak[..., 2] = 0.215 + 0.072 * rings_sharp + 0.014 * fine_fiber - 0.018 * pore
+    oak[..., 0] = 0.505 + 0.105 * rings_sharp + 0.022 * fine_fiber - 0.026 * pore
+    oak[..., 1] = 0.352 + 0.082 * rings_sharp + 0.017 * fine_fiber - 0.021 * pore
+    oak[..., 2] = 0.245 + 0.058 * rings_sharp + 0.012 * fine_fiber - 0.015 * pore
     textures["oak_albedo"] = create_packed_image("Tex_BinHoneyOak_Albedo", oak, "sRGB")
 
     oak_r = np.ones((sz, sz, 4), dtype=np.float32)
-    or_v = 0.60 - 0.07 * rings_sharp + 0.05 * pore
-    oak_r[..., 0] = oak_r[..., 1] = oak_r[..., 2] = np.clip(or_v, 0.48, 0.76)
+    or_v = 0.58 - 0.07 * rings_sharp + 0.05 * pore
+    oak_r[..., 0] = oak_r[..., 1] = oak_r[..., 2] = np.clip(or_v, 0.46, 0.74)
     textures["oak_rough"] = create_packed_image("Tex_BinHoneyOak_Rough", oak_r, "Non-Color")
 
-    # 3. Satin Brushed Brass (fine horizontal brush streaks, warm vintage gold)
+    # 3. Satin Brushed Antique Brass (warm vintage gold)
     brush_line = rng.normal(0.0, 0.65, (sz, 1))
     brush_line = (brush_line + np.roll(brush_line, 1, 0) + np.roll(brush_line, -1, 0)) / 3.0
     brush_2d = np.repeat(brush_line, sz, axis=1) * 0.7 + grain * 0.3
     brass = np.ones((sz, sz, 4), dtype=np.float32)
-    brass[..., 0] = 0.835 + 0.020 * brush_2d
-    brass[..., 1] = 0.668 + 0.018 * brush_2d
-    brass[..., 2] = 0.365 + 0.012 * brush_2d
+    brass[..., 0] = 0.845 + 0.018 * brush_2d
+    brass[..., 1] = 0.715 + 0.016 * brush_2d
+    brass[..., 2] = 0.440 + 0.012 * brush_2d
     textures["brass_albedo"] = create_packed_image("Tex_BinBrass_Albedo", brass, "sRGB")
 
     brass_r = np.ones((sz, sz, 4), dtype=np.float32)
@@ -462,15 +461,15 @@ def generate_textures():
     brass_r[..., 0] = brass_r[..., 1] = brass_r[..., 2] = np.clip(br, 0.44, 0.66)
     textures["brass_rough"] = create_packed_image("Tex_BinBrass_Rough", brass_r, "Non-Color")
 
-    # 4. Warm Apricot-Terracotta Ceramic Accent Band (matches open-cabin Apricot limewash)
+    # 4. Vintage Moss-Sage Ceramic Accent Band (matches Floor 1 painted bookcase)
     sz_s = 128
     yy_s, xx_s = np.mgrid[0:sz_s, 0:sz_s] / float(sz_s)
     wave_s = 0.5 * np.sin(yy_s * math.tau * 2.0) + 0.5 * np.cos(xx_s * math.tau * 3.0)
     speck_s = (rng.random((sz_s, sz_s)) > 0.985).astype(np.float32) * 0.6
     apri = np.ones((sz_s, sz_s, 4), dtype=np.float32)
-    apri[..., 0] = 0.815 + 0.010 * wave_s - 0.08 * speck_s
-    apri[..., 1] = 0.540 + 0.008 * wave_s - 0.08 * speck_s
-    apri[..., 2] = 0.395 + 0.007 * wave_s - 0.07 * speck_s
+    apri[..., 0] = 0.440 + 0.010 * wave_s - 0.05 * speck_s
+    apri[..., 1] = 0.562 + 0.010 * wave_s - 0.05 * speck_s
+    apri[..., 2] = 0.502 + 0.008 * wave_s - 0.05 * speck_s
     textures["apricot_albedo"] = create_packed_image("Tex_BinApricot_Albedo", apri, "sRGB")
 
     return textures

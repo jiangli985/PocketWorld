@@ -213,6 +213,28 @@ test('leaving during insertion cancels the transfer and ignores its stale comple
   } finally { view.dispose(); }
 });
 
+test('rejected seated-access checks leave both cartridges on the rack without delayed insertion', () => {
+  const view = mount({ focusedObject: null });
+  const requests = [], actions = [];
+  try {
+    view.props.onApproach = (_point, action) => { requests.push(action.objectId); return false; };
+    view.props.onAction = action => actions.push(action);
+    view.render();
+    for (const game of ['mario', 'shooter']) {
+      view.find(node => node.props?.id === `game-cartridge-${game}`).props.onSelect();
+      view.render();
+      assert.equal(view.find(node => node.type?.name === 'TransferObject'), undefined);
+    }
+    assert.deepEqual(requests, ['computer', 'computer']);
+    assert.deepEqual(actions, []);
+    view.props.focusedObject = 'computer';
+    view.props.transition = { ...view.props.transition, id: 1 };
+    view.render();
+    assert.equal(view.find(node => node.type?.name === 'TransferObject'), undefined, 'rejected selections cannot insert after sitting later');
+    assert.deepEqual(view.changes, []);
+  } finally { view.dispose(); }
+});
+
 test('one cartridge selection from the room waits for the computer, then inserts the chosen game', () => {
   const view = mount({ focusedObject: null });
   try {
@@ -235,7 +257,7 @@ test('one cartridge selection from the room waits for the computer, then inserts
     view.render();
     assert.equal(pickup().props.enabled, true, 'allow direct selection from the room');
     pickup().props.onSelect();
-    assert.equal(transfer(), undefined, 'leave the cartridge on the desk while walking');
+    assert.equal(transfer(), undefined, 'leave the cartridge on the rack until seated access is granted');
     arrive();
     view.render();
     assert.equal(transfer(), undefined, 'wait for world props to reach the Canvas');
