@@ -51,6 +51,9 @@ type ResidentsProps = WorldModelProps & {
   deckView?: React.MutableRefObject<CabinResidentView>;
   upperVisible?: boolean;
   showNearbyHints?: boolean;
+  prefetchSeat?: boolean;
+  loadPlush?: boolean;
+  loadCat?: boolean;
   sofaTime: React.MutableRefObject<number | null>;
   paperPickup: React.MutableRefObject<PaperPickup | null>;
   interaction: React.MutableRefObject<NonNullable<WorldModelProps['onApproach']> | null>;
@@ -325,9 +328,9 @@ export function OrbitalResidents(props: ResidentsProps) {
       { id: 'cabinet', kind: 'open', hint: '打开柜门', point: [cabinetX, cabinetZ], reach: 0.55 },
       { id: 'lamp', kind: 'toggle', hint: '开关灯', point: p.sceneId === 'habitat' ? [NIGHTSTAND_X - .11, NIGHTSTAND_Z + .77] : [-1.42, -2.55], reach: 0.46 },
       { id: 'plant', kind: 'water', hint: '给盆栽浇水', point: p.sceneId === 'habitat' ? [NIGHTSTAND_X + .32, NIGHTSTAND_Z + .78] : [2.75, 1.85], reach: 0.55 },
-      { id: 'pet', kind: 'pet', hint: '和团子互动', point: catLocation.current, reach: PET_REACH },
       { id: 'chair', kind: 'sit', hint: '坐下', point: [pose.x, pose.z], reach: CHAIR_REACH },
     ];
+    if (p.loadCat !== false) targets.push({ id: 'pet', kind: 'pet', hint: '和团子互动', point: catLocation.current, reach: PET_REACH });
     if (p.sceneId === 'habitat') {
       for (const body of plushBodies.current) {
         targets.push({ id: body.id, kind: 'inspect', hint: '捡起' + plushLabels[body.id], point: [body.x, body.z], reach: .78 });
@@ -1135,15 +1138,18 @@ export function OrbitalResidents(props: ResidentsProps) {
   return <group name={`OrbitalResidents_${props.sceneId}`}>
     <group ref={deckFrame} name="Resident_DeckPlacement">
       <group ref={resident} name="OrbitalResident" position={spawn} rotation-y={-.78}>
-        <ResidentModel rig={rig} outfit={props.outfit} onMounted={props.onOutfitMounted} onFailure={props.focusedObject === 'wardrobe' ? undefined : props.library?.fail} />
+        <ResidentModel rig={rig} outfit={props.outfit} onMounted={props.onOutfitMounted}
+          onFailure={props.focusedObject === 'wardrobe' ? undefined : props.library?.fail}
+          prefetchSeat={props.sceneId === 'habitat' && props.prefetchSeat !== false}
+          chairActive={props.sceneId === 'habitat' && !!props.objects.chair?.active} />
       </group>
     </group>
     {props.sceneId === 'habitat' && <Suspense fallback={null}><SlipperPair resident={resident} room={slipperRoom.current} reducedMotion={props.reducedMotion} /></Suspense>}
-    {props.sceneId === 'habitat' && <PlushDolls bodies={plushBodies} grip={plushGrip} world={props} />}
-    <ObjectHandle id="pet" action="pet" hint="和团子互动" world={props} panorama position={[CAT_HOME[0], CAT_MAT_Y, CAT_HOME[1]]}
+    {props.sceneId === 'habitat' && props.loadPlush !== false && <PlushDolls bodies={plushBodies} grip={plushGrip} world={props} />}
+    {props.loadCat !== false && <ObjectHandle id="pet" action="pet" hint="和团子互动" world={props} panorama position={[CAT_HOME[0], CAT_MAT_Y, CAT_HOME[1]]}
       onClick={event => event.stopPropagation()}>
       <Cat resident={resident} value={props.objects.pet?.value ?? 0} command={props.objects.pet?.itemId} reducedMotion={props.reducedMotion}
         location={catLocation} canWalk={props.sceneId === 'habitat' ? canCatWalk : undefined} />
-    </ObjectHandle>
+    </ObjectHandle>}
   </group>;
 }

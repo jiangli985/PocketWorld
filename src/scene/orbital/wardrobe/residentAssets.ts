@@ -9,7 +9,6 @@ export interface ResidentAssets {
   scene: GLTF['scene'];
   walk: AnimationClip;
   sit: AnimationClip;
-  contact: SeatContactCache;
   fitted?: {
     sofa: AnimationClip;
     library: LibraryMotion;
@@ -22,17 +21,24 @@ const files = {
   cloudhoodie: ['luna-cloudhoodie.glb', 'luna-cloudhoodie-seat.bin'],
   snowflower: ['luna-snowflower.glb', 'luna-snowflower-seat.bin'],
 } as const;
+const base = import.meta.env.BASE_URL + 'models/resident/';
 const pending = new Map<ResidentOutfit, Promise<ResidentAssets>>();
+const pendingContacts = new Map<ResidentOutfit, Promise<SeatContactCache>>();
+
+export function loadResidentSeatContact(outfit: ResidentOutfit): Promise<SeatContactCache> {
+  const cached = pendingContacts.get(outfit);
+  if (cached) return cached;
+  const request = new FileLoader().setResponseType('arraybuffer').loadAsync(base + files[outfit][1])
+    .then(buffer => readSeatContactCache(buffer as ArrayBuffer))
+    .catch(error => { pendingContacts.delete(outfit); throw error; });
+  pendingContacts.set(outfit, request);
+  return request;
+}
 
 export function loadResidentAssets(outfit: ResidentOutfit): Promise<ResidentAssets> {
   const cached = pending.get(outfit);
   if (cached) return cached;
-  const base = import.meta.env.BASE_URL + 'models/resident/';
-  const [model, cache] = files[outfit];
-  const request = Promise.all([
-    new GLTFLoader().loadAsync(base + model),
-    new FileLoader().setResponseType('arraybuffer').loadAsync(base + cache),
-  ]).then(([gltf, buffer]) => {
+  const request = new GLTFLoader().loadAsync(base + files[outfit][0]).then(gltf => {
     const clip = (name: string) => {
       const match = gltf.animations.find(animation => animation.name === name);
       if (!match) throw new Error('人物动作缺失：' + name);
@@ -40,7 +46,6 @@ export function loadResidentAssets(outfit: ResidentOutfit): Promise<ResidentAsse
     };
     return {
       outfit, scene: gltf.scene, walk: clip('Walk_Grounded_Loop'), sit: clip('ChairSit_Contact'),
-      contact: readSeatContactCache(buffer as ArrayBuffer),
       fitted: outfit !== 'everyday' ? {
         sofa: clip('Luna_CMU_75_20'), library: readLibraryMotion(gltf.animations),
         idle: outfit === 'cloudhoodie' ? { yawn: clip('Luna_Yawn'), look: clip('Luna_Looking_Around') } : undefined,

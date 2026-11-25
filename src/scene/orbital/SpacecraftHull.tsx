@@ -29,7 +29,6 @@ interface SpacecraftHullProps {
 }
 
 const HULL_MODEL_URL = `${import.meta.env.BASE_URL}models/cabin/spacecraft-hull.glb`;
-useGLTF.preload(HULL_MODEL_URL);
 
 function classifyMaterial(name: string): MaterialSlot['kind'] {
   if (name.includes('CabinWarmGlow')) return 'window';
