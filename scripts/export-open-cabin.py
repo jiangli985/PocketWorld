@@ -4,6 +4,7 @@ from math import cos, pi, sin, tau
 
 import bmesh
 import bpy
+import numpy as np
 from mathutils import Matrix
 
 
@@ -173,11 +174,11 @@ def bedroom_walls():
     def box(name, center, size, material, radius=0):
         parts.append(bedroom_box(name, center, size, material, radius))
 
-    limewash = finish("Bedroom | ivory limewash", "ebe3cf")
-    sage = finish("Bedroom | sage painted timber", "879581")
-    sage_seams = finish("Bedroom | recessed sage seams", "727f6b")
-    maple = finish("Bedroom | matte maple", "bd8a55", .57)
-    window_green = finish("Bedroom | window inset", "527166", .62)
+    limewash = finish("Bedroom | ivory limewash", "f4efe5")
+    sage = finish("Bedroom | sage painted timber", "7e9684")
+    sage_seams = finish("Bedroom | recessed sage seams", "667d6c")
+    maple = finish("Bedroom | pale oak", "d6b68e", .57)
+    window_green = finish("Bedroom | eucalyptus window inset", "4f6d60", .60)
     ivory = bpy.data.materials["Porcelain | cut edges"]
 
     inner_x, outer_x = DIVIDER_X - .015, UPPER_RIGHT_X
@@ -228,9 +229,9 @@ def bedroom_walls():
         box("Window transom", (wall_x, y, window_z), (.067, .035, aperture_width), window_green, .008)
 
     # One shelf and one small original print dress the rear wall above the bed.
-    book_green = finish("Bedroom | muted book cloth", "6e857a")
-    book_clay = finish("Bedroom | terracotta book cloth", "b77962")
-    paper = finish("Bedroom | warm paper", "e6d5b5")
+    book_green = finish("Bedroom | sage book cloth", "6b8a7d")
+    book_clay = finish("Bedroom | coral book cloth", "d98b82")
+    paper = finish("Bedroom | warm paper", "f4eee3")
     shelf_y = 2.17
     box("Maple bed shelf", (-4.05, shelf_y, -3.055), (1.53, .074, .29), maple, .016)
     for x in (-4.55, -3.56):
@@ -252,6 +253,125 @@ def bedroom_walls():
         mesh = bpy.data.meshes.new(name)
         mesh.from_pydata([(print_x + x, 3.138, print_y + y) for x, y in points], [], [tuple(range(len(points)))])
         parts.append(link_mesh(name, mesh, tint))
+    return parts
+
+
+def create_lower_sea_salt_rug():
+    """Author a crisp low-profile sea-salt woven cotton rug with braided border & cream fringe on Floor 1."""
+    # Woven cotton albedo texture (512x512): sea-salt field + ice-mist stripe + ivory outer border.
+    sz = 512
+    yy, xx = np.mgrid[0:sz, 0:sz].astype(np.float32) / float(sz)
+    # Fine orthogonal cotton basketweave grain
+    warp = np.sin(xx * tau * 96.0) * 0.5 + 0.5
+    weft = np.sin(yy * tau * 84.0) * 0.5 + 0.5
+    weave = (warp * 0.52 + weft * 0.48 - 0.5) * 0.042
+    slub = np.sin(xx * tau * 17.0 + np.sin(yy * tau * 9.0) * 0.6) * 0.012
+    # Distance to nearest rug edge in UV space [0..0.5]
+    edge = np.minimum(np.minimum(xx, 1.0 - xx), np.minimum(yy, 1.0 - yy))
+    # Subtle soft geometric diamond/stripe motif inside the sea-salt field
+    stripe_band = ((edge >= 0.072) & (edge < 0.106)).astype(np.float32)
+    outer_border = (edge < 0.056).astype(np.float32)
+    pin_line = ((edge >= 0.056) & (edge < 0.064)).astype(np.float32)
+    # Delicate diagonal herringbone weave modulation inside the main field
+    chevron = np.sin((xx * 26.0 + np.abs((yy * 18.0) % 2.0 - 1.0) * 2.0) * tau) * 0.014
+
+    base_r = np.full((sz, sz), 0.305, dtype=np.float32) + chevron
+    base_g = np.full((sz, sz), 0.432, dtype=np.float32) + chevron * 0.9
+    base_b = np.full((sz, sz), 0.542, dtype=np.float32) + chevron * 0.78
+
+    # Warm honey-mustard woven inner framing band (#D4AC65)
+    base_r = base_r * (1.0 - stripe_band) + 0.832 * stripe_band
+    base_g = base_g * (1.0 - stripe_band) + 0.675 * stripe_band
+    base_b = base_b * (1.0 - stripe_band) + 0.396 * stripe_band
+    # Thin deep indigo pinstripe (#2F465C)
+    base_r = base_r * (1.0 - pin_line) + 0.185 * pin_line
+    base_g = base_g * (1.0 - pin_line) + 0.275 * pin_line
+    base_b = base_b * (1.0 - pin_line) + 0.362 * pin_line
+    # Warm cream-ivory woven outer border (#F0EAE0)
+    base_r = base_r * (1.0 - outer_border) + 0.942 * outer_border
+    base_g = base_g * (1.0 - outer_border) + 0.916 * outer_border
+    base_b = base_b * (1.0 - outer_border) + 0.876 * outer_border
+
+    rgba = np.ones((sz, sz, 4), dtype=np.float32)
+    rgba[..., 0] = np.clip(base_r + weave + slub, 0.0, 1.0)
+    rgba[..., 1] = np.clip(base_g + weave + slub * 0.9, 0.0, 1.0)
+    rgba[..., 2] = np.clip(base_b + weave + slub * 0.8, 0.0, 1.0)
+
+    img = bpy.data.images.new("SeaSalt_Rug_Weave", width=sz, height=sz, alpha=False)
+    img.colorspace_settings.name = "sRGB"
+    img.pixels.foreach_set(rgba.ravel())
+    img.pack()
+
+    rug_mat = bpy.data.materials.new("Rug | sea-salt cotton weave")
+    rug_mat.use_nodes = True
+    nt = rug_mat.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    bsdf.inputs["Roughness"].default_value = 0.92
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = img
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+
+    fringe_mat = finish("Rug | ivory cotton fringe", "efeae1", roughness=0.94)
+
+    # Rounded-rectangle flatweave body: Three.js X in [-1.01, +2.31], Z in [-1.21, +1.65]
+    # Blender coords: X = Three.js X, Y = -Three.js Z, Z = Three.js Y
+    cx, cy = 0.65, -0.22
+    hx, hy = 1.66, 1.43
+    corner = 0.22
+    arc_steps = 6
+    ring = []
+    corners = [
+        (hx - corner, hy - corner, 0.0),
+        (-hx + corner, hy - corner, pi * 0.5),
+        (-hx + corner, -hy + corner, pi),
+        (hx - corner, -hy + corner, pi * 1.5),
+    ]
+    for ox, oy, a0 in corners:
+        for s in range(arc_steps + 1):
+            ang = a0 + (pi * 0.5) * (s / arc_steps)
+            ring.append((ox + corner * cos(ang), oy + corner * sin(ang)))
+
+    bm = bmesh.new()
+    n = len(ring)
+    # Outer skirt rests cleanly just above Floor_Parquet (0.0005 m) and ramps gently to 0.0045 m top
+    bot_verts = [bm.verts.new((cx + px, cy + py, 0.0005)) for px, py in ring]
+    top_verts = [bm.verts.new((cx + px * 0.988, cy + py * 0.988, 0.0045)) for px, py in ring]
+    center_v = bm.verts.new((cx, cy, 0.0048))
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((bot_verts[i], bot_verts[j], top_verts[j], top_verts[i]))
+        bm.faces.new((top_verts[i], top_verts[j], center_v))
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    # Match the existing UV layer name ("UVMap") on open-cabin.blend rugs so join_as merges UVs cleanly.
+    uv_layer = bm.loops.layers.uv.new("UVMap")
+    for face in bm.faces:
+        face.smooth = False
+        for loop in face.loops:
+            co = loop.vert.co
+            u = max(0.0, min(1.0, (co.x - (cx - hx)) / (2.0 * hx)))
+            v = max(0.0, min(1.0, (co.y - (cy - hy)) / (2.0 * hy)))
+            loop[uv_layer].uv = (u, v)
+
+    mesh = bpy.data.meshes.new("Lower_SeaSalt_Rug")
+    bm.to_mesh(mesh)
+    bm.free()
+    rug_obj = link_mesh("Lower_SeaSalt_Rug", mesh, rug_mat)
+
+    # Subtle woven ivory cotton fringe along the left (-X) and right (+X) straight edges
+    parts = [rug_obj]
+    tassel_count = 26
+    y_span = (hy - corner - 0.05) * 2.0
+    for side in (-1, 1):
+        edge_x = cx + side * (hx + 0.032)
+        for idx in range(tassel_count):
+            ty = cy - y_span * 0.5 + y_span * (idx + 0.5) / tassel_count
+            parts.append(bedroom_box(
+                f"Rug fringe {side}_{idx}",
+                (edge_x, 0.0018, -ty),
+                (0.068, 0.0026, 0.022),
+                fringe_mat,
+                0.0008,
+            ))
     return parts
 
 
@@ -296,6 +416,7 @@ lower_parquet = cut_x(copy_mesh(parquet), DIVIDER_X, False, cap=False)
 bpy.data.objects.remove(parquet, do_unlink=True)
 rugs = collections["06"]
 lower_rugs = [obj for obj in rugs if obj.location.x >= DIVIDER_X]
+lower_rugs.extend(create_lower_sea_salt_rug())
 upper_rugs = [obj for obj in rugs if obj.location.x < DIVIDER_X]
 wardrobe_prefixes = ("Wardrobe", "Sliding panel", "Recessed brass pull", "Pull inset")
 wardrobe = [obj for obj in collections["03"] if obj.name.startswith(wardrobe_prefixes)]
@@ -351,10 +472,11 @@ for y in (.115, 2.945):
                                    (.073, .055, 1.265), oak, .003))
 frame_parts.append(bedroom_box("Fixed door meeting strip", (-2.706, 1.52, .748),
                                (.026, 2.81, .046), oak, .002))
+shelf_maple = bpy.data.materials.get("Pale maple edging") or oak
 for height in (.50, 1.27, 2.04):
-    frame_parts.append(bedroom_box("Linen shelf", (-2.36, height, .75), (.61, .035, 1.34), oak, .008))
+    frame_parts.append(bedroom_box("Linen shelf", (-2.36, height, .75), (.61, .035, 1.34), shelf_maple, .008))
 linen = [finish("Linen | " + name, color, .96) for name, color in
-         (("mist", "a3b6c7"), ("cream", "e9dfce"), ("heather", "b2a4bb"))]
+         (("sage", "8aa392"), ("cream", "f3ede3"), ("terracotta", "d69288"))]
 for level, height in enumerate((.50, 1.27, 2.04)):
     for layer in range(3 - level % 2):
         frame_parts.append(bedroom_box("Folded linen", (-2.39, height + .062 + layer * .089,

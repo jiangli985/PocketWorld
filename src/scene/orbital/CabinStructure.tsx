@@ -6,9 +6,10 @@ import { CABIN_STAIRS, STAIR_RISE, STAIR_RUN, STAIR_TREAD_RUN, STAIR_UPPER_PLATF
 import { timber } from './Materials';
 import { SoftBox, surface } from './Primitives';
 
-const WOOD = '#b27c4e';
-const DARK_WOOD = '#75503a';
-const BRASS = '#996f47';
+const TREAD_WOOD = '#73503c';
+const RISER_CREAM = '#ece6da';
+const IRON_FRAME = '#333d46';
+const HANDRAIL = '#624231';
 const [, upperY] = UPPER_DECK_OFFSET;
 const GUARD_HEIGHT = .76;
 
@@ -18,10 +19,10 @@ function Guard({ from, to }: { from: [number, number]; to: [number, number] }) {
   const spans = Math.ceil(length / .68);
   return <>
     <SoftBox dims={[.064, .055, length + .04]} position={[(from[0] + to[0]) / 2, GUARD_HEIGHT, (from[1] + to[1]) / 2]}
-      rotation-y={Math.atan2(dx, dz)} color={DARK_WOOD} radius={.018} />
+      rotation-y={Math.atan2(dx, dz)} color={HANDRAIL} radius={.018} />
     {Array.from({ length: spans + 1 }, (_, index) => {
       const t = index / spans;
-      return <SoftBox key={index} dims={[.035, GUARD_HEIGHT, .035]} radius={.008} metalness={.55} color={BRASS}
+      return <SoftBox key={index} dims={[.035, GUARD_HEIGHT, .035]} radius={.008} metalness={.52} roughness={.42} color={IRON_FRAME}
         position={[from[0] + dx * t, GUARD_HEIGHT / 2, from[1] + dz * t]} />;
     })}
   </>;
@@ -42,7 +43,7 @@ export function BedroomGuard() {
 export function CabinStaircase({ onCross, residentView }: { onCross: () => void; residentView: React.MutableRefObject<CabinResidentView> }) {
   const nearRail = useRef<Group>(null);
   // The follow camera is outside this rail. Fade only its own materials so foot contacts stay visible.
-  const railMaterials = useMemo(() => [timber(DARK_WOOD).clone(), surface(BRASS, .65, .55).clone()], []);
+  const railMaterials = useMemo(() => [timber(HANDRAIL).clone(), surface(IRON_FRAME, .42, .52).clone()], []);
   useEffect(() => () => { railMaterials.forEach(material => material.dispose()); }, [railMaterials]);
   useFrame(({ camera }, delta) => {
     if (!nearRail.current) return;
@@ -74,22 +75,22 @@ export function CabinStaircase({ onCross, residentView }: { onCross: () => void;
     if (event.delta <= 5) onCross();
   };
   return <group name="Cabin_Staircase" onClick={click} onPointerDown={event => event.stopPropagation()}>
-    <SoftBox name="Stair_Lower_Landing" dims={[platformWidth, .21, width]} color={WOOD} radius={.026}
+    <SoftBox name="Stair_Lower_Landing" dims={[platformWidth, .21, width]} color={TREAD_WOOD} radius={.026}
       position={[platformCenter, -.105 - threshold, lowerZ]} />
-    <SoftBox name="Stair_Upper_Landing" dims={[platformWidth, .23, width]} color={WOOD} radius={.026}
+    <SoftBox name="Stair_Upper_Landing" dims={[platformWidth, .23, width]} color={TREAD_WOOD} radius={.026}
       position={[platformCenter, upperY - .115 - threshold, STAIR_UPPER_PLATFORM_BACK + width / 2]} />
     <group position-y={upperY}>
       <Guard from={[guardX, upperZ]} to={[guardX, STAIR_UPPER_PLATFORM_BACK]} />
       <Guard from={[guardX, STAIR_UPPER_PLATFORM_BACK]} to={[CABIN_DIVIDER_X + .035, STAIR_UPPER_PLATFORM_BACK]} />
     </group>
-    {[guardX, insideX].map(side => <SoftBox key={side} dims={[.12, .23, flightLength]} radius={.026} color={DARK_WOOD}
+    {[guardX, insideX].map(side => <SoftBox key={side} dims={[.12, .23, flightLength]} radius={.026} color={IRON_FRAME} metalness={.42} roughness={.48}
       position={[side, upperY / 2 - .15, centerZ]} rotation-x={flightAngle} />)}
     {Array.from({ length: steps }, (_, index) => {
       const y = (index + 1) * STAIR_RISE;
       const z = lowerZ - (index + .5) * STAIR_TREAD_RUN;
       return <group key={index} name={`Stair_Tread_${index + 1}`}>
-        <SoftBox dims={[width - .04, .07, STAIR_TREAD_RUN + .024]} radius={.014} color={WOOD} position={[x, y - .035, z]} />
-        <SoftBox dims={[width - .11, STAIR_RISE, .044]} radius={.01} color={DARK_WOOD}
+        <SoftBox dims={[width - .04, .07, STAIR_TREAD_RUN + .024]} radius={.014} color={TREAD_WOOD} position={[x, y - .035, z]} />
+        <SoftBox dims={[width - .11, STAIR_RISE, .044]} radius={.01} color={RISER_CREAM}
           position={[x, y - .07 - STAIR_RISE / 2, z + STAIR_TREAD_RUN / 2 - .035]} />
       </group>;
     })}
@@ -99,10 +100,10 @@ export function CabinStaircase({ onCross, residentView }: { onCross: () => void;
       const outside = side === guardX;
       return <group key={side} ref={outside ? nearRail : undefined}>
         <SoftBox dims={[.065, .052, flightLength * (1 - 2 * inset) + .06]} position={[side, upperY / 2 + GUARD_HEIGHT, centerZ]}
-          rotation-x={flightAngle} radius={.018} color={DARK_WOOD} material={outside ? railMaterials[0] : undefined} />
+          rotation-x={flightAngle} radius={.018} color={HANDRAIL} material={outside ? railMaterials[0] : undefined} />
         {Array.from({ length: 7 }, (_, index) => {
           const t = inset + index * (1 - 2 * inset) / 6;
-          return <SoftBox key={index} dims={[.035, GUARD_HEIGHT, .035]} radius={.008} metalness={.55} color={BRASS}
+          return <SoftBox key={index} dims={[.035, GUARD_HEIGHT, .035]} radius={.008} metalness={.52} roughness={.42} color={IRON_FRAME}
             position={[side, t * upperY + GUARD_HEIGHT / 2, lowerZ - STAIR_RUN * t]} material={outside ? railMaterials[1] : undefined} />;
         })}
       </group>;
