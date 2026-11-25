@@ -1,3 +1,4 @@
+import * as paperGrip from './orbital/schedule/paperGrip.ts';
 import * as plushCarry from './orbital/plushCarry.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -79,6 +80,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './Cat': { Cat: 'Cat' },
     './Slippers': { SlipperPair: 'SlipperPair' },
     './PlushDolls': { PlushDolls: 'PlushDolls' },
+    './schedule/paperGrip': paperGrip,
     './plushCarry': plushCarry,
     './plushMotion': load('./orbital/plushMotion.ts', {}),
     './ResidentModel': { HIP_HEIGHT: 0.69, ResidentModel: 'ResidentModel' },
