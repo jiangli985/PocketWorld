@@ -7,7 +7,6 @@ import { createResidentRig } from './residentRig';
 import { applyResidentSkin } from './residentSkin';
 import { createChairAnimation } from './chairAnimation';
 import { createSeatedIdlePlayer } from './seatedIdle';
-import { createSleeveContact } from './wardrobe/sleeveContact';
 import { loadResidentAssets, loadResidentSeatContact, type ResidentAssets } from './wardrobe/residentAssets';
 import type { ResidentOutfit } from './wardrobe/outfit';
 import type { StairGait } from './stairGait';
@@ -32,8 +31,6 @@ export interface ResidentRig {
   applyPose: (phase: number, walkWeight: number) => void;
   applyStairPose: (gait: StairGait, stairX: number, surfaceAt: (z: number, heelRun?: number) => number) => void;
   followMotion: (dt: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => void;
-  fitted?: ResidentAssets['fitted'];
-  updateSleeveContact?: () => void;
   applyArmCorrectives: (enabled: boolean) => void;
   applySeatedIdle?: ReturnType<typeof createSeatedIdlePlayer>;
   applyChairPose?: (time: number, weight: number) => void;
@@ -51,22 +48,20 @@ function LoadedResident({ assets, rig, onMounted, prefetchSeat, chairActive }: {
   useLayoutEffect(() => {
     const group = container.current!;
     const asset = clone(assets.scene);
-    const resident = createResidentRig(asset, assets.walk, !!assets.fitted);
+    const resident = createResidentRig(asset, assets.walk);
     const chair = createChairAnimation(asset, assets.sit);
     chairAnimation.current = chair;
-    resident.fitted = assets.fitted;
     resident.applyChairPose = chair.apply;
-    resident.applySeatedIdle = createSeatedIdlePlayer(resident, assets.outfit);
-    if (assets.outfit === 'cloudhoodie') resident.updateSleeveContact = createSleeveContact(asset);
+    resident.applySeatedIdle = createSeatedIdlePlayer(resident);
     resident.mesh.userData.outfit = assets.outfit;
-    const restoreSkin = assets.outfit === 'everyday' ? applyResidentSkin(resident.mesh) : undefined;
+    const restoreSkin = applyResidentSkin(resident.mesh);
     group.add(resident.mesh);
     rig.current = resident;
     onMounted?.(assets.outfit, true);
     return () => {
       if (rig.current === resident) rig.current = null;
       group.remove(resident.mesh);
-      restoreSkin?.();
+      restoreSkin();
       chairAnimation.current = null;
       chair.dispose();
       resident.dispose();

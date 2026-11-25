@@ -392,8 +392,6 @@ function pack(clips) {
   return Buffer.concat([header, padded, binHeader, ...buffers]);
 }
 
-for (const [outfit, file] of [['everyday', 'luna-walk-room.glb'], ['snowflower', 'luna-snowflower.glb'], ['cloudhoodie', 'luna-cloudhoodie.glb']]) {
-  const output = new URL('../assets/public/models/resident/luna-cabin-actions-' + outfit + '.glb', import.meta.url);
-  const clips = await bake(outfit, file);
-  await writeFile(output, pack(clips));
-}
+const output = new URL('../assets/public/models/resident/luna-cabin-actions-everyday.glb', import.meta.url);
+const clips = await bake('everyday', 'luna-walk-room.glb');
+await writeFile(output, pack(clips));

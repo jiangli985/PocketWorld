@@ -593,7 +593,6 @@ test('the static bed blocks walking without offering keyboard interaction, and n
 
     for (const [px, pz, id] of [
       [cabinLayout.NIGHTSTAND_X - .11, cabinLayout.NIGHTSTAND_Z + .77, 'lamp'],
-      [cabinLayout.NIGHTSTAND_X + .32, cabinLayout.NIGHTSTAND_Z + .78, 'plant'],
       [cabinLayout.NIGHTSTAND_X + .22, cabinLayout.NIGHTSTAND_Z + .64, 'clock'],
     ]) {
       view.root.position.set(px, 0, pz);
@@ -680,12 +679,16 @@ test('crowded nightstand items map E, Q and R to the three nearest props', () =>
   const performed = [];
   const view = mount('orbital', { onAction: action => performed.push(action.objectId) });
   try {
-    for (const [key, id] of [['KeyE', 'clock'], ['KeyQ', 'plant'], ['KeyR', 'lamp']]) {
+    for (const [key, id] of [['KeyE', 'clock'], ['KeyQ', 'lamp']]) {
       performed.length = 0;
       view.root.position.set(cabinLayout.NIGHTSTAND_X + .22, 0, cabinLayout.NIGHTSTAND_Z + .70);
       view.key(key);
       assert.deepEqual(performed, [id], `${key} selects ${id}`);
     }
+    performed.length = 0;
+    view.root.position.set(cabinLayout.NIGHTSTAND_X + .22, 0, cabinLayout.NIGHTSTAND_Z + .70);
+    view.key('KeyR');
+    assert.deepEqual(performed, [], 'R selects nothing without the plant interaction');
   } finally { view.dispose(); }
 });
 

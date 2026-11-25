@@ -134,46 +134,42 @@ function checkLapCoverage(root) {
   }
 }
 
-for (const [outfit, name] of [['everyday', 'walk-room'], ['snowflower', 'snowflower'], ['cloudhoodie', 'cloudhoodie']]) {
-  test(`MotionSmith takes bind and keep ${outfit} close to the rug during floor holds`, async () => {
-    const data = await readFile(model('cabin-actions-' + outfit));
-    const { animations } = await new GLTFLoader().parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '');
-    assert.deepEqual(animations.map(clip => clip.name), CABIN_ACTIONS);
-    const { gltf } = await load(model(name));
-    const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'), outfit !== 'everyday');
-    try {
-      const clips = Object.fromEntries(animations.map(clip => [clip.name, clip]));
-      const apply = createCabinActionPlayer(rig.mesh, clips);
-      const point = new Vector3();
-      const boneY = name => rig.mesh.getObjectByName('mixamorig' + name).getWorldPosition(point).y;
-      for (const clip of animations) {
-        assert.ok(clip.duration > 2.9 && clip.duration < 6.1);
-        assert.ok(clip.tracks.every(track => track.values.every(Number.isFinite)));
-        rig.applyPose(0, 0);
-        apply(clip.name, clip.duration * .5);
-        assert.ok(Number.isFinite(boneY('Hips')));
-      }
+test(`MotionSmith takes bind and keep everyday close to the rug during floor holds`, async () => {
+  const data = await readFile(model('cabin-actions-everyday'));
+  const { animations } = await new GLTFLoader().parseAsync(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), '');
+  assert.deepEqual(animations.map(clip => clip.name), CABIN_ACTIONS);
+  const { gltf } = await load(model('walk-room'));
+  const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'));
+  try {
+    const clips = Object.fromEntries(animations.map(clip => [clip.name, clip]));
+    const apply = createCabinActionPlayer(rig.mesh, clips);
+    const point = new Vector3();
+    const boneY = name => rig.mesh.getObjectByName('mixamorig' + name).getWorldPosition(point).y;
+    for (const clip of animations) {
+      assert.ok(clip.duration > 2.9 && clip.duration < 6.1);
+      assert.ok(clip.tracks.every(track => track.values.every(Number.isFinite)));
       rig.applyPose(0, 0);
-      apply('floorSit', clips.floorSit.duration);
-      assert.ok(boneY('Hips') < .23, 'seated pelvis stays close to the rug');
-      assert.ok(Math.min(boneY('LeftFoot'), boneY('RightFoot')) < .16);
-      if (outfit !== 'cloudhoodie') {
-        checkLapCoverage(rig.mesh);
-        apply('floorGlance', 2.5);
-        checkLapCoverage(rig.mesh);
-      }
-      for (const name of ['shiftWeight', 'stretchNeck']) {
-        rig.applyPose(0, 0);
-        const fixed = ['Hips', 'LeftFoot', 'RightFoot'].map(name => boneY(name));
-        apply(name, 2.5);
-        assert.deepEqual(['Hips', 'LeftFoot', 'RightFoot'].map(name => boneY(name)), fixed);
-      }
+      apply(clip.name, clip.duration * .5);
+      assert.ok(Number.isFinite(boneY('Hips')));
+    }
+    rig.applyPose(0, 0);
+    apply('floorSit', clips.floorSit.duration);
+    assert.ok(boneY('Hips') < .23, 'seated pelvis stays close to the rug');
+    assert.ok(Math.min(boneY('LeftFoot'), boneY('RightFoot')) < .16);
+    checkLapCoverage(rig.mesh);
+    apply('floorGlance', 2.5);
+    checkLapCoverage(rig.mesh);
+    for (const name of ['shiftWeight', 'stretchNeck']) {
       rig.applyPose(0, 0);
-      apply('floorStand', clips.floorStand.duration);
-      assert.ok(boneY('Hips') > .65);
-      rig.applyPose(0, 0);
-      apply('pickUp', 1.90);
-      assert.ok(boneY('RightHand') < .25);
-    } finally { rig.dispose(); }
-  });
-}
+      const fixed = ['Hips', 'LeftFoot', 'RightFoot'].map(name => boneY(name));
+      apply(name, 2.5);
+      assert.deepEqual(['Hips', 'LeftFoot', 'RightFoot'].map(name => boneY(name)), fixed);
+    }
+    rig.applyPose(0, 0);
+    apply('floorStand', clips.floorStand.duration);
+    assert.ok(boneY('Hips') > .65);
+    rig.applyPose(0, 0);
+    apply('pickUp', 1.90);
+    assert.ok(boneY('RightHand') < .25);
+  } finally { rig.dispose(); }
+});

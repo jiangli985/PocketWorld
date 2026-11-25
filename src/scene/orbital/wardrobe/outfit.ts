@@ -1,7 +1,5 @@
 export const outfitNames = {
   everyday: '日常装',
-  snowflower: '雪花裙装',
-  cloudhoodie: '云朵连帽衫',
 } as const;
 export type ResidentOutfit = keyof typeof outfitNames;
 export const outfitChoices = Object.keys(outfitNames) as ResidentOutfit[];
@@ -18,6 +16,7 @@ const STORAGE_KEY = 'pocketworld:wardrobe:outfit';
 
 export function previewOutfit(search: string): ResidentOutfit | null {
   const value = new URLSearchParams(search).get('outfit');
+  if (value === 'snowflower' || value === 'cloudhoodie') return 'everyday';
   return isOutfit(value) ? value : null;
 }
 
