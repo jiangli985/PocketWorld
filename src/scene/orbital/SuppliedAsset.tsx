@@ -14,6 +14,7 @@ interface Props {
   partBounds?: boolean;
   fit?: 'contain' | 'contact';
   fallback?: React.ReactNode;
+  loadingFallback?: React.ReactNode;
 }
 
 class Boundary extends Component<{ children: React.ReactNode; fallback: React.ReactNode }, { failed: boolean }> {
@@ -42,5 +43,5 @@ function Loaded({ name, size, position, rotation, part, partBounds, fit: fitMode
 /** Local loading/error fallback keeps the original object functional while loading. */
 export function SuppliedAsset(props: Props) {
   const fallback = props.fallback ?? null;
-  return <Boundary key={`${props.name}/${props.part ?? ''}`} fallback={fallback}><Suspense fallback={fallback}><Loaded {...props} /></Suspense></Boundary>;
+  return <Boundary key={`${props.name}/${props.part ?? ''}`} fallback={fallback}><Suspense fallback={props.loadingFallback === undefined ? fallback : props.loadingFallback}><Loaded {...props} /></Suspense></Boundary>;
 }

@@ -53,7 +53,7 @@ export function useLibrary(options: { sceneId: WorldSceneId; reducedMotion: bool
     const s = flow.current;
     if (s.phase !== 'idle') {
       if (action.objectId === 'book-01') { if (action.kind === 'turn-page') return; if (action.payload?.itemId) choose(action.payload.itemId); return; }
-      if (['wake', 'stand'].includes(action.kind) && s.phase === 'approach') { live.current.onAction(action); return; }
+      if (action.kind === 'stand' && s.phase === 'approach') { live.current.onAction(action); return; }
       if (s.phase === 'form') return;
       s.pending = action; s.exit = true;
       if (s.phase === 'reading') update({ phase: 'close', pending: action, exit: true });

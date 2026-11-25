@@ -1,11 +1,15 @@
-import React, { Suspense, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react';
-import { Html, useGLTF } from '@react-three/drei';
-import { useLoader, type ThreeElements } from '@react-three/fiber';
+import React, { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react';
+import { Html } from '@react-three/drei';
+import { type ThreeElements } from '@react-three/fiber';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as THREE from 'three';
 import { createResidentRig } from './residentRig';
 import { applyResidentSkin } from './residentSkin';
-import { createChairAnimation, readSeatContactCache } from './chairAnimation';
+import { createChairAnimation } from './chairAnimation';
+import { createSeatedIdlePlayer } from './seatedIdle';
+import { loadResidentAssets, loadResidentSeatContact, type ResidentAssets } from './wardrobe/residentAssets';
+import type { ResidentOutfit } from './wardrobe/outfit';
+import type { StairGait } from './stairGait';
 
 export { HIP_HEIGHT } from './residentRig';
 export interface ResidentLeg {
@@ -22,46 +26,63 @@ export interface ResidentArm {
   setFingers?: (curl: number, thumbOppose?: number) => void;
 }
 export interface ResidentRig {
-  neutralPose: { joint: THREE.Bone; pose: { position: THREE.Vector3; quaternion: THREE.Quaternion; scale: THREE.Vector3 } }[];
   legs: ResidentLeg[]; arms: ResidentArm[]; torso: THREE.Bone; neck: THREE.Bone; head?: THREE.Bone;
   skirtFront: THREE.Bone; skirtBack: THREE.Bone; mesh: THREE.Group;
   applyPose: (phase: number, walkWeight: number) => void;
+  applyStairPose: (gait: StairGait, stairX: number, surfaceAt: (z: number, heelRun?: number) => number) => void;
   followMotion: (dt: number, enabled: boolean, yaw: number, dx: number, dz: number, phase: number) => void;
+  applyArmCorrectives: (enabled: boolean) => void;
+  applySeatedIdle?: ReturnType<typeof createSeatedIdlePlayer>;
   applyChairPose?: (time: number, weight: number) => void;
   dispose: () => void;
 }
 
-const MODEL = `${import.meta.env.BASE_URL}models/resident/luna-walk-room.glb`;
-const CONTACT = `${import.meta.env.BASE_URL}models/resident/luna-seat-contact.bin`;
+type OutfitMounted = (outfit: ResidentOutfit, ready: boolean) => void;
 
-function LoadedResident({ rig }: { rig: MutableRefObject<ResidentRig | null> }) {
-  const { scene, animations } = useGLTF(MODEL);
-  const contact = useLoader(THREE.FileLoader, CONTACT, loader => loader.setResponseType('arraybuffer')) as ArrayBuffer;
+function LoadedResident({ assets, rig, onMounted, prefetchSeat, chairActive }: {
+  assets: ResidentAssets; rig: MutableRefObject<ResidentRig | null>; onMounted?: OutfitMounted;
+  prefetchSeat: boolean; chairActive: boolean;
+}) {
   const container = useRef<THREE.Group>(null);
-  const resident = useMemo(() => {
-    const walk = animations.find(clip => clip.name === 'Walk_Grounded_Loop');
-    if (!walk) throw new Error('Luna walk animation missing');
-    const sit = animations.find(clip => clip.name === 'ChairSit_Contact');
-    if (!sit) throw new Error('Luna contact-corrected sit animation missing');
-    const asset = clone(scene), result = createResidentRig(asset, walk);
-    const chair = createChairAnimation(asset, sit, readSeatContactCache(contact));
-    const dispose = result.dispose;
-    result.applyChairPose = chair.apply;
-    result.dispose = () => { chair.dispose(); dispose(); };
-    return result;
-  }, [scene, animations, contact]);
+  const chairAnimation = useRef<ReturnType<typeof createChairAnimation> | null>(null);
   useLayoutEffect(() => {
     const group = container.current!;
+    const asset = clone(assets.scene);
+    const resident = createResidentRig(asset, assets.walk);
+    const chair = createChairAnimation(asset, assets.sit);
+    chairAnimation.current = chair;
+    resident.applyChairPose = chair.apply;
+    resident.applySeatedIdle = createSeatedIdlePlayer(resident);
+    resident.mesh.userData.outfit = assets.outfit;
     const restoreSkin = applyResidentSkin(resident.mesh);
     group.add(resident.mesh);
     rig.current = resident;
+    onMounted?.(assets.outfit, true);
     return () => {
-      rig.current = null;
+      if (rig.current === resident) rig.current = null;
       group.remove(resident.mesh);
       restoreSkin();
+      chairAnimation.current = null;
+      chair.dispose();
       resident.dispose();
     };
-  }, [resident, rig]);
+  }, [assets, rig, onMounted]);
+  useEffect(() => {
+    const chair = chairAnimation.current;
+    if (!chair || (!prefetchSeat && !chairActive)) return;
+    let active = true;
+    let frame = 0;
+    const load = () => {
+      void loadResidentSeatContact(assets.outfit).then(contact => {
+        if (active && chairAnimation.current === chair) chair.setContact(contact);
+      }).catch(error => {
+        if (active && chairAnimation.current === chair) console.warn('Luna seat contact unavailable', error);
+      });
+    };
+    if (chairActive) load();
+    else frame = requestAnimationFrame(() => { frame = requestAnimationFrame(load); });
+    return () => { active = false; cancelAnimationFrame(frame); };
+  }, [assets, rig, onMounted, prefetchSeat, chairActive]);
   return <group ref={container} />;
 }
 
@@ -80,14 +101,32 @@ class ResidentBoundary extends React.Component<{ children: React.ReactNode; onFa
   componentDidCatch() { this.props.onFailure?.(); }
   render() {
     if (!this.state.failed) return this.props.children;
-    return <group onPointerDown={event => { event.stopPropagation(); useGLTF.clear(MODEL); useLoader.clear(THREE.FileLoader, CONTACT); this.setState({ failed: false }); }}><ModelStatus failed /></group>;
+    return <group onPointerDown={event => { event.stopPropagation(); this.setState({ failed: false }); }}><ModelStatus failed /></group>;
   }
 }
 
-export function ResidentModel({ rig, onFailure, ...props }: ThreeElements['group'] & { rig: MutableRefObject<ResidentRig | null>; onFailure?: () => void }) {
+export function ResidentModel({ rig, outfit = 'everyday', onFailure, onMounted, prefetchSeat = true, chairActive = false, ...props }: ThreeElements['group'] & {
+  rig: MutableRefObject<ResidentRig | null>; outfit?: ResidentOutfit; onFailure?: () => void; onMounted?: OutfitMounted;
+  prefetchSeat?: boolean; chairActive?: boolean;
+}) {
+  const [assets, setAssets] = useState<ResidentAssets | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const failureCallback = useRef(onFailure);
+  failureCallback.current = onFailure;
+  useEffect(() => {
+    let active = true;
+    setFailed(false);
+    void loadResidentAssets(outfit).then(value => {
+      if (active) setAssets(value);
+    }).catch(() => {
+      if (active) { setFailed(true); onMounted?.(outfit, false); failureCallback.current?.(); }
+    });
+    return () => { active = false; };
+  }, [outfit, attempt, onMounted]);
   return <group {...props}>
-    <ResidentBoundary onFailure={onFailure}><Suspense fallback={<ModelStatus />}><LoadedResident rig={rig} /></Suspense></ResidentBoundary>
+    {assets && <ResidentBoundary key={assets.outfit} onFailure={() => { onMounted?.(assets.outfit, false); onFailure?.(); }}><LoadedResident assets={assets} rig={rig} onMounted={onMounted} prefetchSeat={prefetchSeat} chairActive={chairActive} /></ResidentBoundary>}
+    {failed ? <group onPointerDown={event => { event.stopPropagation(); setAttempt(value => value + 1); }}><ModelStatus failed /></group>
+      : !assets && <ModelStatus />}
   </group>;
 }
-
-useGLTF.preload(MODEL);

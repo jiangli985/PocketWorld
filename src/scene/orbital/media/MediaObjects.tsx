@@ -1,4 +1,3 @@
-import { SuppliedAsset } from '../SuppliedAsset';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
@@ -10,27 +9,24 @@ import { SoftBox } from '../Primitives';
 import { CRT_SCALE, CRT_SCREEN } from './computerLayout';
 import { ComputerScreen } from './ComputerScreen';
 import { CartridgePickup } from './CartridgePickup';
+import { CartridgeDockModel, CartridgeStandModel, GameCartridgeModel, PauseToggleLever } from './CartridgeHardware';
 import { RecordPlayer } from './RecordPlayer';
-import { CARTRIDGE_HEIGHT, CARTRIDGE_SLOT as SLOT, cartridgePosition, cartridgeTransferPoint } from './cartridge-motion';
+import {
+  CARTRIDGE_PAUSE_POS,
+  CARTRIDGE_SLOT as SLOT,
+  CARTRIDGE_STAND_LEAN,
+  cartridgePosition,
+  cartridgeTransferPitch,
+  cartridgeTransferPoint,
+} from './cartridge-motion';
 import { COMPUTER_STAND } from '../cabinLayout';
 
 type Point = [number, number, number];
 const gameModules = import.meta.glob<{ default: React.ComponentType<GameCartridgeProps> }>('../../../games/*/index.tsx');
 const gameNames: Record<GameId, string> = { mario: '奶娃滑雪大冒险', shooter: '团团魔法录' };
-const gameColors: Record<GameId, string> = { mario: '#cb795a', shooter: '#8b72b3' };
 
 function Label({ children, position, width = 180 }: { children: React.ReactNode; position: Point; width?: number }) {
   return <Html center position={position} distanceFactor={4} style={{ pointerEvents: 'none', width, textAlign: 'center', color: '#f3e6c9', font: '12px monospace', textShadow: '0 1px 3px #242723', userSelect: 'none', overflowWrap: 'anywhere' }}><span>{children}</span></Html>;
-}
-
-function Cartridge({ game }: { game: GameId }) {
-  return <group>
-    <SuppliedAsset name="cartridge" size={[.22, .075, CARTRIDGE_HEIGHT]} fit="contact" rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -.0375]} fallback={<>    <SoftBox dims={[0.22, CARTRIDGE_HEIGHT, 0.075]} color={gameColors[game]} radius={0.016} />
-    <SoftBox dims={[0.16, 0.11, 0.008]} position={[0, 0.025, 0.043]} color="#ece0bd" radius={0.005} />
-    <SoftBox dims={[0.13, 0.024, 0.012]} position={[0, -0.115, 0]} color="#bba269" radius={0.003} />
-</>} />
-    <mesh position={[0, 0.027, 0.05]}><circleGeometry args={[0.032, game === 'mario' ? 8 : 3]} /><meshStandardMaterial color={gameColors[game]} /></mesh>
-  </group>;
 }
 
 interface Transfer { key: number; from: Point; to: Point; game?: GameId; eject?: boolean; returnOnly?: boolean }
@@ -43,9 +39,12 @@ function TransferObject({ transfer, reduced, onDone }: { transfer: Transfer; red
     elapsed.current += delta;
     const t = Math.min(1, elapsed.current / (reduced ? 0.08 : 0.8));
     group.current.position.set(...cartridgeTransferPoint(transfer.from, transfer.to, t));
+    group.current.rotation.x = cartridgeTransferPitch(transfer.from, transfer.to, t);
     if (t === 1) { finished.current = true; onDone(); }
   });
-  return <group ref={group} position={transfer.from}>{transfer.game ? <Cartridge game={transfer.game} /> : null}</group>;
+  return <group ref={group} position={transfer.from} rotation={[cartridgeTransferPitch(transfer.from, transfer.to, 0), 0, 0]}>
+    {transfer.game ? <GameCartridgeModel game={transfer.game} /> : null}
+  </group>;
 }
 
 class ScreenBoundary extends React.Component<{ children: React.ReactNode; onError: () => void }, { failed: boolean }> {
@@ -229,8 +228,10 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
 
   return <group name="MediaObjects">
     <RecordPlayer {...props} />
+    <CartridgeStandModel />
+    <CartridgeDockModel active={!!props.activeGame} paused={paused} pickup={!!pickup} nearSlot={nearSlot} />
 
-    {(['mario', 'shooter'] as const).map(game => <CartridgePickup key={game} id={`game-cartridge-${game}`} world={world} position={cartridgePosition(game)}
+    {(['mario', 'shooter'] as const).map(game => <CartridgePickup key={game} id={`game-cartridge-${game}`} hint={`点击插入《${gameNames[game]}》卡带`} world={world} position={cartridgePosition(game)}
       enabled={cartridgesEnabled}
       onGrab={() => {
         if (pickupRef.current || transferRef.current || latest.current.activeGame) return false;
@@ -242,22 +243,21 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
         if (insert) begin({ game, from, to: SLOT });
         else if (from.some((value, axis) => value !== cartridgePosition(game)[axis])) begin({ game, from, to: cartridgePosition(game), returnOnly: true });
       }}>
-      {props.activeGame !== game && transfer?.game !== game && <Cartridge game={game} />}
+      {props.activeGame !== game && transfer?.game !== game && <group rotation={[pickup === game ? 0 : CARTRIDGE_STAND_LEAN, 0, 0]}><GameCartridgeModel game={game} /></group>}
     </CartridgePickup>)}
     <ObjectHandle id="game-slot" action="eject" hint={props.activeGame || transfer?.game ? '拔出卡带，退出游戏' : '空卡槽 · 离开电脑'} world={world} drag="y" position={SLOT}>
-      <SoftBox dims={[0.41, 0.13, 0.17]} position={[0, -0.08, 0]} color="#b6ac94" />
-      <SoftBox dims={[0.25, 0.012, 0.085]} position={[0, -0.008, 0]} color={pickup ? nearSlot ? '#a9dba3' : '#d7b46e' : '#303d38'} />
-      {props.activeGame && !transfer?.game && <Cartridge game={props.activeGame} />}
+      <mesh position={[0, -0.095, 0]}><boxGeometry args={[0.36, 0.12, 0.22]} /><meshBasicMaterial visible={false} /></mesh>
+      {props.activeGame && !transfer?.game && <GameCartridgeModel game={props.activeGame} />}
     </ObjectHandle>
     {pickup && <Label position={[SLOT[0], 1.84, SLOT[2]]} width={220}>{nearSlot ? '松手插入卡带' : '拖到此处卡槽 · 松手插入'}</Label>}
-    <ObjectHandle id="game-pause" action="toggle" hint={paused ? '扳动拨杆，继续游戏' : '扳动拨杆，暂停游戏'} world={world} position={[2.57, 1.15, -2.05]}>
-      <SoftBox dims={[0.1, 0.05, 0.1]} color="#485d54" />
-      <SoftBox dims={[0.025, 0.095, 0.025]} position={[0, 0.04, 0]} rotation={[paused ? -0.4 : 0.4, 0, 0]} color="#cfb976" />
+    <ObjectHandle id="game-pause" action="toggle" hint={paused ? '扳动拨杆，继续游戏' : '扳动拨杆，暂停游戏'} world={world} position={CARTRIDGE_PAUSE_POS}>
+      <mesh position={[0, 0.025, 0]}><boxGeometry args={[0.12, 0.08, 0.12]} /><meshBasicMaterial visible={false} /></mesh>
+      <PauseToggleLever paused={paused} />
     </ObjectHandle>
     <ObjectHandle id="computer-exit" action="close" hint="握住电脑侧把手，离开电脑" world={world} position={[2.25, 1.47, -2.32]}>
-      <SoftBox dims={[0.045, 0.21, 0.08]} color="#8c8e77" />
+      <SoftBox dims={[0.045, 0.21, 0.08]} color="#c99852" />
     </ObjectHandle>
-    <ObjectHandle id="computer" action="inspect" hint="靠近屏幕，选择一张游戏卡带" world={world} position={CRT_SCREEN}>
+    <ObjectHandle id="computer" action="inspect" panorama hint="坐稳电脑椅后使用电脑" world={world} position={CRT_SCREEN}>
       <mesh scale={CRT_SCALE}><planeGeometry args={[0.92, 0.69]} /><meshBasicMaterial visible={false} /></mesh>
     </ObjectHandle>
     {/* The DOM display must not paint over a physical cartridge moving in front of the CRT. */}

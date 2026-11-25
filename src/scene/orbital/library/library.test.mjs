@@ -17,7 +17,55 @@ test('十八个标准书位具有独立受支撑空间，不越过层板和柜�
   const m = fixture(); assert.equal(m.BOOK_SLOTS.length, 18); assert.equal(new Set(m.BOOK_SLOTS.map(s => s.id)).size, 18);
   for (const s of m.BOOK_SLOTS) { assert.ok(Math.abs(s.position[0]) + m.BOOK_SIZE.thickness / 2 < .51); assert.ok(s.position[1] + m.BOOK_SIZE.height / 2 < [ .9025, 1.1925, 1.51 ][s.row]); }
 });
-test('三本原创内容至少六页，页码间与书籍间正文各异', () => { const m = fixture(), pages = m.BUILTIN_BOOKS.flatMap(b => m.paginate(b.text, 330, 16, () => 16)); assert.ok(pages.length >= 18); assert.equal(new Set(pages.map(p => p.text)).size, pages.length); });
+test('三本内置书各至少六页，页码间与书籍间正文各异', () => {
+  const m = fixture(), books = m.BUILTIN_BOOKS.map(b => m.paginate(b.text, 330, 16, () => 16)), pages = books.flat();
+  assert.ok(books.every(pages => pages.length >= 6));
+  assert.equal(new Set(pages.map(p => p.text)).size, pages.length);
+});
+test('最后一片叶子内置完整中文正文，保留三本书的身份和书位', () => {
+  const m = fixture(), books = m.BUILTIN_BOOKS, book = books[0];
+  assert.equal(books.length, 3);
+  assert.equal(books.map(b => b.id).join(), 'book-01,book-02,book-03');
+  assert.equal(books.map(b => b.title).join(), '最后一片叶子,窗外的地球,微光旅行札记');
+  assert.equal(book.author, '欧·亨利 · 中文自译');
+  assert.equal(book.slotId, 's1-1');
+  assert.equal(book.source, 'builtin');
+  assert.ok(book.text.startsWith('华盛顿广场以西'));
+  assert.ok(book.text.includes('画那不勒斯湾'));
+  assert.ok(book.text.includes('一架被挪过地方的梯子'));
+  assert.ok(book.text.endsWith('在最后一片叶子落下的那个夜晚，他把它画在了那里。”'));
+  assert.equal(book.text.split('\n\n').length, 55);
+  for (const width of [180, 330, 600]) {
+    const pages = m.paginate(book.text, width, 16, () => 16);
+    assert.equal(pages.map(page => page.text).join(''), book.text);
+    assert.equal(pages.at(-1).end, book.text.length);
+  }
+});
+test('已有存档更新内置正文，只重置被换书的书签，读取不覆盖存储', async () => {
+  const m = fixture(), data = m.freshLibrary();
+  Object.assign(data.books[0], { title: '轨道上的日常', author: 'PocketWorld · 原创', text: '旧版内置正文'.repeat(40), anchor: 120 });
+  data.books[1].anchor = 60; data.books[2].anchor = 90;
+  data.books.push({ ...m.makeUserBook(data, '轨道上的日常', '访客', '自添书正文，不应因同名而被替换。'), anchor: 5 });
+  data.revision = 8;
+  const saved = JSON.stringify(data); m.storage.setItem(m.LIBRARY_KEY, saved);
+  const next = m.readLibrary(m.storage);
+  assert.equal(JSON.stringify(next.books[0]), JSON.stringify(m.BUILTIN_BOOKS[0]));
+  assert.equal(JSON.stringify(next.books.slice(1)), JSON.stringify(data.books.slice(1)));
+  assert.equal(next.revision, 8);
+  assert.equal(m.storage.getItem(m.LIBRARY_KEY), saved);
+  const persisted = await m.mutateLibrary(value => ({ ...value, books: value.books.map(book => book.id === 'book-01' ? { ...book, anchor: 300 } : book) }));
+  assert.equal(persisted.revision, 9);
+  assert.equal(m.readLibrary(m.storage).books[0].anchor, 300);
+  assert.equal(JSON.stringify(m.readLibrary(m.storage)), JSON.stringify(persisted));
+});
+test('内置书仅署名变化时更新元数据但保留阅读锚点', () => {
+  const m = fixture(), data = m.freshLibrary();
+  data.books[0].author = '旧署名'; data.books[0].anchor = 300;
+  m.storage.setItem(m.LIBRARY_KEY, JSON.stringify(data));
+  const next = m.readLibrary(m.storage);
+  assert.equal(next.books[0].author, m.BUILTIN_BOOKS[0].author);
+  assert.equal(next.books[0].anchor, 300);
+});
 test('默认书在中间层相邻摆放，旧存档保留正文和书签且读取不写存储', () => {
   const m = fixture(), data = m.freshLibrary();
   for (const [i, book] of data.books.entries()) { book.slotId = `s${i}-2`; book.anchor = 20 + i; }
@@ -117,13 +165,13 @@ test('抵达书柜即开始取指定书，归还后可退出并继续待处理�
   c.arrived();
   advance();
   assert.equal(c.flow.current.phase, 'reading');
-  const sleep = { sceneId: 'habitat', objectId: 'bed', kind: 'sleep' };
-  c.dispatch(sleep);
+  const nextAction = { sceneId: 'habitat', objectId: 'lamp', kind: 'toggle' };
+  c.dispatch(nextAction);
   advance();
   assert.equal(c.flow.current.phase, 'recenter');
   c.arrived();
   assert.equal(c.flow.current.phase, 'idle');
-  assert.deepEqual(actions.slice(-2), ['return', sleep]);
+  assert.deepEqual(actions.slice(-2), ['return', nextAction]);
   enter();
   assert.equal(c.flow.current.phase, 'catalog');
   c.back();

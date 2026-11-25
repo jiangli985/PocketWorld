@@ -19,9 +19,9 @@ const {CHAIR_FPS,CHAIR_SIT_FRAMES,CHAIR_SIT_SECONDS}=local('./chairMotion');
 const data=readFileSync(new URL('../../../assets/public/models/resident/luna-seat-contact.bin',import.meta.url));
 const buffer=data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength),cache=readSeatContactCache(buffer);
 const {gltf}=await load(new URL('../../../assets/public/models/resident/luna-walk-room.glb',import.meta.url));
-function instance(){
+function instance(contact = cache){
  const asset=clone(gltf.scene),rig=createResidentRig(asset,gltf.animations.find(c=>c.name==='Walk_Grounded_Loop'));
- const chair=createChairAnimation(asset,gltf.animations.find(c=>c.name==='ChairSit_Contact'),cache);
+ const chair=createChairAnimation(asset,gltf.animations.find(c=>c.name==='ChairSit_Contact'),contact ?? undefined);
  const root=new THREE.Group();root.add(rig.mesh);root.position.z=.54;
  const sample=(t,w=1)=>{rig.applyPose(0,0);chair.apply(t,w);root.updateMatrixWorld(true);asset.traverse(o=>{if(o.isSkinnedMesh)o.skeleton.update();});};
  return {asset,rig,chair,root,sample,dispose:()=>{chair.dispose();rig.dispose();}};
@@ -48,6 +48,26 @@ test('seat deformation is instance-local and releases the original geometry and 
  assert(a.asset.getObjectByName('mixamorigHips').position.length()<1);
  a.dispose();b.dispose();
 });
+test('late seat corrections preserve the current sit and apply on the next one', () => {
+  const delayed = instance(null), ready = instance();
+  const mesh = delayed.asset.getObjectByProperty('isSkinnedMesh', true);
+  const original = mesh.geometry;
+  delayed.sample(CHAIR_SIT_SECONDS);
+  ready.sample(CHAIR_SIT_SECONDS);
+  const hips = asset => asset.getObjectByName('mixamorigHips').position;
+  assert.deepEqual(hips(delayed.asset), hips(ready.asset));
+  delayed.chair.setContact(cache);
+  delayed.sample(CHAIR_SIT_SECONDS);
+  assert.equal(mesh.geometry, original);
+  delayed.sample(0, 0);
+  assert.notEqual(mesh.geometry, original);
+  delayed.sample(CHAIR_SIT_SECONDS);
+  const reference = ready.asset.getObjectByProperty('isSkinnedMesh', true);
+  assert.deepEqual(mesh.geometry.attributes.position.array, reference.geometry.attributes.position.array);
+  delayed.dispose();
+  ready.dispose();
+});
+
 test('authored sitting preserves limb lengths and finite skinning',()=>{
  const a=instance(),position=o=>o.getWorldPosition(new THREE.Vector3());
  const lengths=[];

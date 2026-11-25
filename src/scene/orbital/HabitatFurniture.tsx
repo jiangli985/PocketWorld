@@ -14,9 +14,8 @@ import { AssetBoundary, ReusableAsset } from './ReusableAsset';
 import { cloneSuppliedModel } from './supplied-model';
 import { CHAIR_POSES } from './chairPose';
 
-function FurnitureBed({ world }: { world: WorldModelProps }) {
-  const state = world.objects.bed ?? CLOSED_OBJECT;
-  return <ObjectHandle id="bed" action={state.active ? 'wake' : 'sleep'} hint={state.active ? '醒来 · 离开被窝' : '躺下休息'} world={world} position={BED_POSITION}>
+function FurnitureBed() {
+  return <group position={BED_POSITION}>
     <SuppliedAsset name="bed" size={[1.72, 1.4, 2.6]} fit="contact" fallback={<>    {[-0.64, 0.64].flatMap(x => [-1.06, 1.06].map(z => <SoftBox key={`${x}/${z}`} dims={[0.1, 0.32, 0.1]} position={[x, 0.16, z]} color={C.edge} />))}
     <SoftBox dims={[1.7, 0.19, 2.6]} position={[0, 0.365, 0]} color={C.wood} radius={0.04} />
     <SoftBox dims={[1.6, 0.25, 2.5]} position={[0, 0.595, 0]} color="#e5decb" radius={0.105} />
@@ -24,7 +23,7 @@ function FurnitureBed({ world }: { world: WorldModelProps }) {
     <SoftBox dims={[1.52, 0.44, 0.08]} position={[0, 0.76, -1.2]} color="#96aaa0" radius={0.07} />
     <Bedding />
 </>} />
-  </ObjectHandle>;
+  </group>;
 }
 
 function FixedChairModel() {
@@ -90,7 +89,7 @@ function FurnitureLamp({ world }: { world: WorldModelProps }) {
 function FurniturePlant({ world, observatory }: { world: WorldModelProps; observatory: boolean }) {
   const state = world.objects.plant ?? CLOSED_OBJECT;
   return <ObjectHandle id="plant" action="water" hint="照料盆栽 · 浇水" world={world} position={observatory ? [2.75, 0, 1.85] : PLANT_POSITION}>
-    <SuppliedAsset name="plant" size={observatory ? [1, 1.02, 1] : [.54, .88, .54]} fallback={<ReusableAsset path="plants/potted_plant_04.glb" height={observatory ? 1.02 : 0.85} />} />
+    <SuppliedAsset name="plant" loadingFallback={null} size={observatory ? [1, 1.02, 1] : [.54, .88, .54]} fallback={<ReusableAsset path="plants/potted_plant_04.glb" height={observatory ? 1.02 : 0.85} />} />
     {state.value > 0 && <Orb position={[0.03, 0.31, 0.02]} scale={[0.028, 0.012, 0.028]} color="#83b9b1" />}
   </ObjectHandle>;
 }
@@ -112,7 +111,19 @@ function FurnitureHatch() {
   </group>;
 }
 
-export const HabitatFurniture: React.FC<WorldModelProps & { sofaTime: React.RefObject<number | null> }> = world => {
+export function HabitatBedroom({ world, sofaTime }: { world: WorldModelProps; sofaTime: React.RefObject<number | null> }) {
+  return <>
+    <FurnitureBed />
+    <ObjectHandle id="sofa" panorama onClick={event => event.stopPropagation()} action={world.objects.sofa?.active ? 'stand' : 'sit'}
+      hint={world.objects.sofa?.active ? '起身' : '坐进懒人沙发'} world={world}>
+      <AssetBoundary><Suspense fallback={null}><FloorSofa sample={sofaTime} /></Suspense></AssetBoundary>
+    </ObjectHandle>
+    <FurnitureLamp world={world} />
+    <FurniturePlant world={world} observatory={false} />
+  </>;
+}
+
+export const HabitatFurniture: React.FC<WorldModelProps> = world => {
   const observatory = world.sceneId === 'observatory';
   return <group name={`Furniture_${world.sceneId}`}>
     <FurnitureDesk world={world} />
@@ -127,17 +138,11 @@ export const HabitatFurniture: React.FC<WorldModelProps & { sofaTime: React.RefO
         <Cylinder radius={0.25} height={0.035} position={[0, 0.018, 0]} color={C.ink} />
       </group>
     </> : <>
-      <FurnitureBed world={world} />
       <FurnitureChair world={world} />
-      <ObjectHandle id="sofa" panorama onClick={event => event.stopPropagation()} action={world.objects.sofa?.active ? 'stand' : 'sit'}
-        hint={world.objects.sofa?.active ? '起身' : '坐进懒人沙发'} world={world}>
-        <AssetBoundary><Suspense fallback={null}><FloorSofa sample={world.sofaTime} /></Suspense></AssetBoundary>
-      </ObjectHandle>
       <ReusableAsset name="Furniture_TrashCan" path="furniture/trash-can.glb"
         height={TRASH_CAN.height} position={TRASH_CAN.position} rotation={[0, TRASH_CAN.yaw, 0]} />
     </>}
-    <FurnitureLamp world={world} />
-    <FurniturePlant world={world} observatory={observatory} />
+    {observatory && <><FurnitureLamp world={world} /><FurniturePlant world={world} observatory /></>}
     <FurnitureHatch />
   </group>;
 };

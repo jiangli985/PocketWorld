@@ -1,11 +1,10 @@
 /**
  * 房间内可交互物品的统一注册契约
- * 新增任何房间可交互物（如电脑、唱片机、书架、床铺、灯光开关、宠物等）只需在此注册配置与对应交互视图。
+ * 新增任何房间可交互物（如电脑、唱片机、书架、灯光开关、宠物等）只需在此注册配置与对应交互视图。
  */
 export type InteractableId =
   | 'computer'
   | 'music-player'
-  | 'bed'
   | 'bookcase'
   | 'light-switch'
   | 'bedside-lamp'
@@ -45,7 +44,7 @@ export interface InteractableItemConfig {
   anchorPosition?: [number, number, number];
   /** 主角靠近可触发 E 键交互的半径 */
   interactRadius?: number;
-  /** 交互模式：推镜打开详情面板 / 即时切换状态（如开关灯）/ 角色动作（如躺床、坐椅、撸猫） */
+  /** 交互模式：推镜打开详情面板 / 即时切换状态（如开关灯）/ 角色动作（如坐椅、撸猫） */
   interactionMode?: InteractionMode;
 }
 
@@ -66,7 +65,7 @@ export interface RoomLightingState {
 /**
  * 主角人物状态与姿势
  */
-export type CharacterPosture = 'standing' | 'walking' | 'sleeping' | 'sitting' | 'petting';
+export type CharacterPosture = 'standing' | 'walking' | 'sitting' | 'petting';
 
 export interface CharacterState {
   position: [number, number, number];
@@ -83,7 +82,7 @@ export interface MusicDisc {
   id: string;
   title: string;
   artist: string;
-  /** 音频资源地址（内置合成标识或 URL.createObjectURL 生成的本地句柄） */
+  /** 音频资源地址：打包的静态 URL、合成标识或本地 Blob URL。 */
   audioUrl: string;
   /** 光盘封面主色调（本地导入时可根据文件名自动生成渐变盘面） */
   discThemeColor: [string, string];

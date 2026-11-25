@@ -1,5 +1,33 @@
 # Luna 动画制作源
 
+## 楼梯步态
+
+Luna 上、下楼各取 MotionSmith Take 1 中连续的左右两步。原文件均为 UE5 Manny 骨架、30 fps。帧号从 0 开始，上楼两个步段的边界为 48、64、80，下楼为 57、76、94，分别取脚趾开始离开踏面的帧。导出脚踝推进与抬升、脚掌俯仰、躯干倾斜、双膝屈曲、髋踝相对位置和双侧肩、肘、腕的运动方向。运行时按腿长和踏面尺寸重定向，并在首末级与平台衔接。两个方向都用支撑踝定位骨盆，按原片的前移曲线跨过左右脚换重的瞬间。骨盆至颈部的倾角驱动躯干，头部俯仰单独采样。上楼时，骨盆的抬升曲线限制承重腿伸直时身体的上升速度。下楼时，骨盆的降高曲线控制左右脚换重。前脚掌靠近踏板前缘，后跟越过台阶后逐渐下降，落脚时膝盖保留原片的轻微弯曲。[上楼原片](https://cosindra.ai/motionsmith/motions/walk-upstairs) · [下楼原片](https://cosindra.ai/motionsmith/motions/walk-downstairs)
+
+[步态曲线](./luna-stair-gait.json)约 18.5 KB，随应用打包。原始 GLB 保存在仓库外，来源与文件校验值见[素材清单](../../models.sources.json)。从仓库根目录运行下列命令可重建曲线。
+
+```bash
+node scripts/bake-luna-stairs.mjs /path/to/MotionSmith_walk_upstairs_take1.glb /path/to/MotionSmith_walk_downstairs_take1.glb
+```
+
+## 云朵连帽衫制作源（已下架）
+
+[Blender 制作源](./Luna-CloudHoodie.blend)采用用户提供的 Tripo 模型 `1115d436-5d3e-444c-be63-a6141e1f346c.glb`。用户未附独立角色许可声明。蓝发、云朵发饰、五官、连帽衫和短裤沿用这份模型。底色图在原 UV 上调整了唇线与眼部高光。袖子与衣身粘连的部分沿腋下拆开，补入两侧布面，以便抬臂取书。下颌尖端已收短并拓圆，主要随头骨运动。贴臂站姿下，衣侧在前臂压到的位置内收，袖子前后两侧的衣料保留蓬度，长袖在肘部上下保留椭圆截面，袖口权重从前臂渐变至手腕，使手腕弯曲时袖口保持开口。制作源包含 115 根骨骼、10 个角色动作和 4 张打包贴图。
+
+在 Blender 场景菜单选择 `Hoodie | Cloth Simulation`，回到第 1 帧后连续播放到第 72 帧，即可重算布料。衣身、左袖、右袖各有一个 Cloth 修改器。衣身固定在肩部和髋部罗纹，袖筒固定在肩口和袖口。两侧前臂从略微张开的位置收至腰侧，躯干及手臂碰撞体限制布料的活动空间。
+
+将最后 10 帧的平均位移映射到衣身、袖筒及口袋，再按站姿和步态为刺绣布面留出间距。制作源通过两个相对形态键 `SleeveContact_L`、`SleeveContact_R` 混合烘焙的结果。在 Blender 中可分别调节两侧，0 为放松，1 为贴臂受压。每个动作带有对应的衣料权重曲线。
+
+双脚在堆袜下沿裁去原鞋面、鞋底和鞋跟。新袜脚按 Luna 的足跟、内侧足弓和前掌轮廓接入，沿切口采样袜色，并匹配两侧 98 个边界点的位置、法线与骨骼权重。行走动作以袜底重新求解双腿 IK。走停混合阶段按袜脚几何的 `soleContacts` 支撑点修正脚尖高度。
+
+## 雪花裙装制作源（已下架）
+
+[Luna-Snowflower.blend](./Luna-Snowflower.blend) 是生活舱雪花裙装的可编辑制作源。造型与原贴图来自用户提供的 Tripo 文件 `ab1c7402-ed3c-428e-bf63-d4d73a8b9d7d.glb`，未附独立许可声明。脚踝以下按 Luna 的裸脚尺寸重建为连续的包脚袜，保留原小腿、袜口和蝴蝶结。新袜脚贴图已与原始底色、法线、粗糙度／金属度贴图一起打包。脚踝接缝的袜脚粗糙度按小腿对应贴图取样设为 0.53，两侧用相同的补光和高光色。
+
+面部按用户提供的《蓝发少女与雪花裙装》原画精修。眼睑、蓝色虹膜、唇色和肤色使用独立 UV 与材质 `Luna | Snowflower Face`。虹膜与皮肤各有粗糙度，鼻尖和双唇的起伏直接做在网格上。额前发束单独修正了混入发色的肤色斑。相关贴图均已打包，可在 Blender 中继续绘制。
+
+文件默认打开站立姿势的脸部近景。在骨架的 Action Editor 中可选择行走、站立、转椅落座、低沙发落座、环顾、伸懒腰、三层取书或上床。角色沿用 Luna 的 115 个骨骼及父子关系，五官跟随头骨，下颌向颈部渐变。手指、发束和裙骨按角色位置对齐，取书时前裙骨随抬膝量调整。袜脚分别使用小腿、脚掌与脚趾权重，脚踝接缝两侧权重一致。26 节发骨的 `hairDrape` 和 `hairSway` 分别控制每节的下垂补偿和回摆幅度，导出至 GLB 节点的 `extras`。发中和发尾的权重高于发根，后发的回摆大于脸侧发束。更新材质和发骨参数时保留 GLB 网格、动作及 `_CONTACT_ID` 索引。
+
 ## 地毯旁的懒人沙发
 
 落座主段取自 CMU Graphics Lab 的 75_20「low sit」。源动作为 60 Hz，烘焙使用第 95–261 帧（从 1 计数），保留下降和落座后的回稳段，以 30 Hz 导出。骨盆位移按 Luna 身形和座面校准，双腿 IK 固定原站姿脚掌，前裙三段裙骨沿腿面逐段弯折，两侧朝膝盖收拢，后摆越过软垫前缘后下垂，起身从当前样本逆放。坐垫的承重形变由同一播放时间驱动。[官方动作目录](https://mocap.cs.cmu.edu/search.php?subjectnumber=75) · [免费使用条件](https://mocap.cs.cmu.edu/)
@@ -42,40 +70,38 @@ python scripts/pack-luna-chair.py --output <外部目录>
 
 制作脚本检查原生 98 帧的接触面；运行时单测检查时间原点、绑定、独立实例、恢复、骨长与有限坐标。网页动作和导出后网格还需单独验收，不能用原生检查替代浏览器检查。验证结果及截图放在任务 PR，临时模型、报告和录屏不提交。
 
-## 上床三版
+## 坐姿待机
 
-`luna-bed-v3.blend` 是可编辑的 24 fps、0–222 帧动作；运行时使用 [独立动画库](../../public/models/resident/luna-bed-v3.glb)，复用既有 Luna 网格、115 骨骼、贴图与 Walk。制作源包含真实床接触尺寸、角色、关键帧、相机和灯光，不进入网页构建。
+懒人沙发托腮采用 CMU `13_04` 的左肘弯曲和头部转向（120 Hz，第 1573–2149 帧）。桌前固定椅晃腿采用 CMU `01_06` 坐在高处时的左右膝屈伸（120 Hz，第 985–1357 帧）。两段均从原始记录取坐稳后的片段，并导出为 10 Hz 曲线，托腮的放手段略放慢。网页在既有落座姿势上求解手掌接触和小腿摆角。懒人沙发保留原有骨盆、贴地双脚和坐垫承重。固定椅保留臀部与膝位。日常装的左手贴住下颌，右手托住左前臂。
 
-### 动作与坐标
+下载 [13_04.amc](https://mocap.cs.cmu.edu/subjects/13/13_04.amc) 和 [01_06.amc](https://mocap.cs.cmu.edu/subjects/01/01_06.amc) 到仓库外的同一目录，从仓库根目录运行以下命令生成 `src/scene/orbital/seatedIdleFrames.ts`。
 
-- 0–48：从运行时中立站姿直接手撑落座，无独立弯腰探床阶段。
-- 48 对齐二版 113；61 对齐二版 126；95 起保持二版 160 以后的转髋、抬腿、脚跟落床与 Mixamo 搭腹收尾。
-- 右小腿保持踝位置，按左侧健康解剖朝向修正轴向扭转；右踝、脚趾在坐姿提前放松，抬腿前短促转动做局部四元数平滑。未把脚锁平。
-- Blender 米制 Z 向上；角色缩放 1.43，床按运行时 contact-fit 1.72 × 1.40 × 2.60。运行时入口为 `[-1.48, 0, 0.73]`、朝向 `Math.PI / 2`。外层位置固定，全部上床根运动由 Hips 通道负责。
-- 最后睡姿保持；醒来或取消逆向采样当前动作，返回精确站姿后恢复行走。未新增闭眼或循环睡眠动作。
-
-### 来源
-
-沿用用户提供的二版 Luna 上床试片。二版前身为用户提供的 Plask XBot 动作，后半段重定向并按真实床适配；Mixamo「Laying Sleeping」只提供最后上身微动与搭腹手势，不包含落腿动作。Luna 与床来自项目既有 Tripo 模型。本次不新增外部模型或纹理，不把来源不明的素材声明为 CC0。运行时登记见 [来源清单](../../models.sources.json)。
-
-### 复建与验证
-
-使用 Blender 5.2.3：
-
-```powershell
-blender --background --python scripts/export-luna-bed.py
-npm test
+```sh
+python3 scripts/extract-luna-seated-idles.py <AMC目录>
 ```
 
-导出脚本从此制作源和既有 `luna-walk-room.glb` 的绑定矩阵重建动画库，避免 Blender 骨骼坐标轴与 glTF 的差异。不需要临时试片目录。GLB 仅有 115 节点、230 通道，799,688 bytes，无网格、蒙皮或图片。
+动捕由 CMU Graphics Lab 在 NSF EIA-0196217 资助下制作，允许在商业作品中使用及改编。原始或转换后的数据适用数据库条款。 [CMU Motion Capture Database](https://mocap.cs.cmu.edu/)
 
-床专项测试覆盖中立首帧、单层根运动、恢复 Walk、暂坐足轴、全段半帧右踝连续性、30/60/120 Hz、后台时间截断、反向取消与减少动态效果。视觉与接触证据存放在仓库外并在 PR 交付；不是通用布料或连续碰撞验证。继承的裙摆/发束局部交叠与二版臀部约 6 mm 接触压入仍有待后续处理。
+## 日常裙装的站姿修形
+
+[`Luna-ArmContact.blend`](Luna-ArmContact.blend) 打开时显示放松后的站姿，可在 `Luna_Surface` 的 Shape Keys 中分别调节 `LeftArmContact` 和 `RightArmContact`。两侧修形对应裙侧的受压和腋下过渡。运行时按同侧上臂、前臂朝下的程度和前伸幅度调节权重，抬手时释放。固定椅、沙发和取阅书籍使用已有接触姿势。
+
+在仓库根目录复建可编辑文件及运行时 GLB：
+
+```bash
+reviewDir=$(mktemp -d)
+git show 80d880c:assets/public/models/resident/luna-walk-room.glb > "$reviewDir/luna-base.glb"
+blender --background --factory-startup --python-exit-code 1 \
+  --python scripts/sculpt-luna-arm-contact.py -- --base "$reviewDir/luna-base.glb"
+```
+
+直接在 Blender 修改形态键后，给同一命令追加 `--from-blend assets/models/resident/Luna-ArmContact.blend` 将修改导出。打包只添加稀疏目标，保留原始顶点顺序、坐姿接触索引、骨骼、动作和贴图数据。偏头与拢手的角度来自 Luna 本地动作试演，由网页按时间包络播放。
 
 ## 站立伸懒腰
 
 用户提供的 Mixamo `Yawn.fbx` 为 30 FPS、1–251 帧骨骼动作。`scripts/export-luna-yawn.py` 将上身世界旋转相对绑定姿态的变化转换到 Luna 的绑定坐标，导出 `luna-yawn.glb`，232,092 bytes、54 条旋转轨道、8.33 秒。骨盆、腿和脚沿用运行时中立站姿。首次普通待机时加载，运行时淡入淡出整段动作。
 
-复建命令为 `blender --background --python scripts/export-luna-yawn.py -- <Yawn.fbx路径>`。输入由用户下载提供，许可见来源清单中的 Adobe Mixamo FAQ。普通待机复用现有骨骼，加入小幅胸腔呼吸、上身侧摆、转头及肩臂放松。9 秒普通待机采样中，头部移动范围约 1.7 cm，双手约 6.7–7.5 cm，脚部位置固定。
+复建命令为 `blender --background --python scripts/export-luna-yawn.py -- <Yawn.fbx路径>`。输入由用户下载提供，许可见来源清单中的 Adobe Mixamo FAQ。普通待机与额外动作的节奏及打断条件见 SPEC.md。
 
 
 ## 站立环顾
@@ -84,7 +110,7 @@ Mixamo 页面按描述 `Idle Stand Looking Around` 确认的 `Looking Around`，
 
 复用 `scripts/export-luna-yawn.py` 的绑定姿态与肩臂方向修正：`blender --background --python scripts/export-luna-yawn.py -- "<Looking Around.fbx路径>" looking-around`。生成 `luna-looking-around.glb`：180,012 bytes，54 条上身旋转轨道，6.33 秒；无网格、纹理和根位移。骨盆、腿及脚由原中立姿态负责，环顾期间保持原地。源 FBX 留在仓库外，SHA-256 与许可入口见来源清单。
 
-两种偶发动作独立按需加载；某一资源失败不阻塞另一动作或普通待机。时序与打断由 `standingIdle.ts` 统一管理，数值参数及产品行为见 SPEC.md。
+环顾和伸懒腰各自按需加载；偏头、拢手和松弛站姿由运行时直接计算。时序与打断由 `standingIdle.ts` 统一管理，数值参数及产品行为见 SPEC.md。
 
 ## 书柜取书与归还
 

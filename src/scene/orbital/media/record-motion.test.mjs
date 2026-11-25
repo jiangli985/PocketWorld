@@ -1,7 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import * as THREE from 'three';
-import { RecordTransport, recordPath, discPosition, RECORD_CENTER, PLATTER, PLAYER, DISC_LEAN, DISC_RADIUS, ARM_PLAY } from './record-motion.ts';
+import {
+  RecordTransport,
+  recordPath,
+  discPosition,
+  RECORD_CENTER,
+  PLATTER,
+  PLAYER,
+  RACK_ORIGIN,
+  RACK_SLOT_PITCH_X,
+  RACK_DIVIDER_X0,
+  DISC_YAW,
+  DISC_LEAN,
+  DISC_RADIUS,
+  ARM_PLAY,
+} from './record-motion.ts';
 const disc = index => ({ id: `disc-${index}`, title: `${index}`, audioUrl: `synth:${index}`, discThemeColor: ['#fff', '#000'] });
 const advance = (machine, target, options = {}) => {
   const events = [];
@@ -31,7 +47,7 @@ test('all records clear neighbouring complete vinyl, label and hub envelopes thr
   // Dense sampled solid surfaces, in the exact Disc geometry orientation. Check both directions
   // because a moving small label can otherwise pass into the stationary vinyl unnoticed.
   const pieces = [ { radius: .17, min: -.007, max: .007 }, { radius: .068, min: .006, max: .014 }, { radius: .018, min: .0115, max: .0205 } ];
-  const rack = new THREE.Quaternion().setFromEuler(new THREE.Euler(DISC_LEAN,0,0));
+  const rack = new THREE.Quaternion().setFromEuler(new THREE.Euler(DISC_LEAN, DISC_YAW, 0, 'YXZ'));
   const flat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI/2,0,0));
   const cylinder = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI/2,0,0));
   const samples = [];
@@ -56,6 +72,86 @@ test('all records clear neighbouring complete vinyl, label and hub envelopes thr
       }
     }
   }
+});
+
+test('all records slide cleanly out of their walnut groove and between the 7 brass wire dividers without clipping', () => {
+  const rack = new THREE.Quaternion().setFromEuler(new THREE.Euler(DISC_LEAN, DISC_YAW, 0, 'YXZ'));
+  const flat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+  const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(rack);
+  const dividerRadius = 0.0038;
+  const dividerMaxY = RACK_ORIGIN[1] + 0.309;
+  const rackFrontZ = RACK_ORIGIN[2] + 0.155;
+  const cheekInnerX = 0.580;
+
+  for (let slot = 0; slot < 6; slot++) {
+    for (let step = 0; step <= 200; step++) {
+      const t = step / 200;
+      const { position, tilt } = recordPath(slot, t);
+      const pos = new THREE.Vector3(...position);
+      const q = rack.clone().slerp(flat, tilt);
+
+      // Compute exact vertical & Z reach of the disc rim in its current orientation.
+      const discAxisY = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+      const discAxisX = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+      const discAxisN = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+      const halfY = Math.hypot(discAxisX.y, discAxisY.y) * DISC_RADIUS + Math.abs(discAxisN.y) * 0.014;
+      const halfZ = Math.hypot(discAxisX.z, discAxisY.z) * DISC_RADIUS + Math.abs(discAxisN.z) * 0.014;
+      const discMinY = pos.y - halfY;
+      const discBackZ = pos.z - halfZ;
+
+      // Whenever the disc occupies the rack's Z band and height band, it must stay untitled inside its own bay.
+      const overlapsRackZ = discBackZ < rackFrontZ;
+      if (overlapsRackZ && discMinY < dividerMaxY) {
+        assert.equal(tilt, 0, `slot ${slot} began tilting while still inside rack height at t=${t}`);
+        for (let k = 0; k <= 6; k++) {
+          const divOrigin = new THREE.Vector3(
+            RACK_ORIGIN[0] + RACK_DIVIDER_X0 + k * RACK_SLOT_PITCH_X,
+            RACK_ORIGIN[1] + 0.222,
+            RACK_ORIGIN[2],
+          );
+          const signedPerp = pos.clone().sub(divOrigin).dot(normal);
+          // Positive side of disc extends +0.0205 (hub); negative side extends -0.007 (vinyl back).
+          const clearance = signedPerp > 0 ? signedPerp - 0.007 - dividerRadius : -signedPerp - 0.0205 - dividerRadius;
+          assert.ok(clearance > 0.012, `slot ${slot} came too close to divider ${k} at t=${t}: clearance=${clearance.toFixed(4)}m`);
+        }
+        const halfExtentX = DISC_RADIUS * Math.cos(DISC_YAW);
+        assert.ok(pos.x - halfExtentX > RACK_ORIGIN[0] - cheekInnerX + 0.02, `slot ${slot} clips left cheek at t=${t}`);
+        assert.ok(pos.x + halfExtentX < RACK_ORIGIN[0] + cheekInnerX - 0.02, `slot ${slot} clips right cheek at t=${t}`);
+      } else if (overlapsRackZ && tilt > 0) {
+        assert.ok(discMinY > dividerMaxY + 0.05, `slot ${slot} dipped near rack while tilting at t=${t}: minY=${discMinY.toFixed(4)}`);
+      }
+    }
+  }
+});
+
+test('vinyl-rack.glb runtime asset is valid glTF 2.0 with expected assemblies and cabin footprint', () => {
+  const glbPath = path.resolve('assets/public/models/furniture/vinyl-rack.glb');
+  assert.ok(fs.existsSync(glbPath), 'vinyl-rack.glb must exist');
+  const buf = fs.readFileSync(glbPath);
+  assert.equal(buf.toString('ascii', 0, 4), 'glTF');
+  assert.equal(buf.readUInt32LE(4), 2);
+  const jsonLen = buf.readUInt32LE(12);
+  const gltf = JSON.parse(buf.toString('utf8', 20, 20 + jsonLen));
+  const names = new Set((gltf.nodes ?? []).map(n => n.name));
+  for (const required of [
+    'VinylRack_Root',
+    'Rack_Base_LowerSlab',
+    'Rack_Base_FrontRail',
+    'Rack_Base_RearRail',
+    'Rack_Cheek_Left',
+    'Rack_Cheek_Right',
+    'Rack_RearBrassRail_Low',
+    'Rack_RearBrassRail_High',
+    'Rack_Front_BadgePlate',
+    'Rack_Groove_Felt_0',
+    'Rack_Groove_Felt_5',
+    'Rack_BrassDivider_0',
+    'Rack_BrassDivider_6',
+  ]) {
+    assert.ok(names.has(required), `missing required GLB node ${required}`);
+  }
+  assert.equal((gltf.materials ?? []).length, 4);
+  assert.ok(buf.length < 2 * 1024 * 1024, `vinyl-rack.glb unexpectedly large: ${buf.length} bytes`);
 });
 
 test('needle is over the outer groove at playing yaw and touches the vinyl surface', () => {
