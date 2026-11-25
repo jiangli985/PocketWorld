@@ -199,7 +199,7 @@ class RoomAudioEngine {
   }
 
   public playSfx(
-    type: 'switch' | 'water' | 'paper' | 'soft' | 'disc' | 'footstep'
+    type: 'switch' | 'paper' | 'soft' | 'disc' | 'footstep'
   ) {
     if (type === 'footstep') {
       this.playFootstep();
@@ -225,14 +225,6 @@ class RoomAudioEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
       osc.start(now);
       osc.stop(now + 0.06);
-    } else if (type === 'water') {
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(420, now);
-      osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
-      gain.gain.setValueAtTime(0.07, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
-      osc.start(now);
-      osc.stop(now + 0.15);
     } else if (type === 'paper') {
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(240, now);
