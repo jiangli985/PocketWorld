@@ -17,6 +17,8 @@ test('closing in fades only the other deck and pulling back restores both', () =
   assert.equal(far, 0);
   assert.ok(middle > 0 && middle < 1);
   assert.equal(near, 1);
+  assert.equal(cutaway.cabinZoomIsolation(.74), 1);
+  assert.ok(cutaway.cabinZoomIsolation(.915) > 0);
   for (const [focus, other] of [['lower', 'upper'], ['upper', 'lower']]) {
     assert.deepEqual(cabinDeckOpacity(focus, far), { lower: 1, upper: 1 });
     assert.equal(cabinDeckOpacity(focus, middle)[focus], 1);
@@ -58,6 +60,22 @@ test('a fading room preserves shared materials and restores the original mesh an
   assert.ok(room.visible);
   assert.equal(inner.material, shared);
   assert.equal(inner.castShadow, true);
+});
+
+test('opaque geometry fades through continuous transparency', () => {
+  const room = new Group();
+  const original = new MeshStandardMaterial();
+  const mesh = new Mesh(undefined, original);
+  room.add(mesh);
+  const fade = cutaway.createCabinGroupFade();
+  fade.set(room, .5);
+  assert.equal(mesh.material.opacity, .5);
+  assert.equal(mesh.material.transparent, true);
+  assert.equal(mesh.material.alphaHash, false);
+  assert.equal(mesh.material.depthWrite, false);
+  fade.set(room, 1);
+  assert.equal(mesh.material, original);
+  assert.equal(mesh.material.transparent, false);
 });
 
 test('walking opens the next room early and fades the old room toward the landing', () => {

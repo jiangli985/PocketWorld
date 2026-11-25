@@ -22,6 +22,7 @@ import {
   REDUCED_TRANSITION_DURATION,
   SHIP_TARGET,
   approachStartPosition,
+  cabinOpacityForTransition,
   createFlightState,
   easeInOutCubic,
   easeOutQuart,
@@ -166,11 +167,13 @@ function CameraRig(props: CameraRigProps) {
     props.flight.mode = props.viewMode;
     if (props.viewMode === 'orbit' || props.viewMode === 'approach') {
       props.flight.hullOpacity = 1;
+      props.deckOpacity.current.interior = 0;
       viewFlight.current.active = false;
       return;
     }
     if (props.viewMode === 'cabin') {
       props.flight.hullOpacity = 0;
+      props.deckOpacity.current.interior = 1;
       viewFlight.current.active = false;
       return;
     }
@@ -182,6 +185,7 @@ function CameraRig(props: CameraRigProps) {
     fromLens.current.set(lens?.enabled ? lens.offsetX : 0, lens?.enabled ? lens.offsetY : 0);
     toLens.current.set(0, 0);
     if (props.viewMode === 'entering-cabin') {
+      props.deckOpacity.current.resident = 1;
       const frame = cabinFrames[props.cabinView];
       target.current.copy(origin).add(frame.target);
       destination.current.lerpVectors(frame.target, frame.position, cabinFrameScale(frame.distance)).add(origin);
@@ -296,7 +300,8 @@ function CameraRig(props: CameraRigProps) {
       vf.elapsed = Math.min(vf.duration, vf.elapsed + Math.min(delta, 0.1));
       const raw = vf.duration > 0 ? vf.elapsed / vf.duration : 1;
       const eased = easeInOutCubic(raw);
-      flight.hullOpacity = hullOpacityForTransition(vf.mode, eased);
+      flight.hullOpacity = hullOpacityForTransition(vf.mode, raw);
+      props.deckOpacity.current.interior = cabinOpacityForTransition(vf.mode, raw);
       if (camera instanceof THREE.PerspectiveCamera) {
         camera.zoom = THREE.MathUtils.lerp(zoomFlight.current[0], zoomFlight.current[1], eased);
         camera.updateProjectionMatrix();
@@ -384,9 +389,11 @@ function CameraRig(props: CameraRigProps) {
     const activeDeck = landed || props.cabinView === 'overview' ? resident.deck : props.cabinView;
     const view = !inHabitat ? 'overview' : props.focusedObject ? focusDeck : activeDeck;
     const fade = cabinDeckOpacity(view, props.focusedObject ? 1 : isolation, ascent, resident.stairFrom);
-    for (const part of ['lower', 'upper'] as const) {
-      const next = props.reducedMotion ? fade[part] : THREE.MathUtils.damp(opacity[part], fade[part], 15, delta);
-      opacity[part] = Math.abs(next - fade[part]) < .008 ? fade[part] : next;
+    if (flight.mode === 'cabin') {
+      for (const part of ['lower', 'upper'] as const) {
+        const next = props.reducedMotion ? fade[part] : THREE.MathUtils.damp(opacity[part], fade[part], 11, delta);
+        opacity[part] = Math.abs(next - fade[part]) < .008 ? fade[part] : next;
+      }
     }
     opacity.resident = 1;
     if (!moving.current) {
@@ -516,7 +523,11 @@ function OrbitalLighting({ objects, sceneId, sun }: Pick<WorldSceneProps, 'objec
 }
 function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpen: boolean; outfitPreview: boolean }) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
-  const deckOpacity = useRef<CabinOpacity>({ ...cabinDeckOpacity(props.cabinView, props.outfitPreview ? 1 : 0), resident: 1 });
+  const deckOpacity = useRef<CabinOpacity>({
+    ...cabinDeckOpacity(props.cabinView, props.outfitPreview ? 1 : 0),
+    resident: 1,
+    interior: props.viewMode === 'cabin' ? 1 : 0,
+  });
   const residentView = useRef<CabinResidentView>({ deck: 'lower', stairAscent: null, stairFrom: null });
   const sofaTime = useRef<number | null>(null);
   const interaction = useRef<NonNullable<WorldSceneProps['onApproach']> | null>(null);
@@ -579,7 +590,9 @@ function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpe
             <FeatureSurfaces {...world} />
           </CabinFadeGroup>
           {id === 'habitat' && <>
-            <CabinStaircase residentView={residentView} onCross={() => walkTo(id, stairDestination(residentView.current.deck))} />
+            <CabinFadeGroup part="interior" name="Cabin_Staircase_View">
+              <CabinStaircase residentView={residentView} onCross={() => walkTo(id, stairDestination(residentView.current.deck))} />
+            </CabinFadeGroup>
             <CabinUpperDeck>
               <HabitatShell world={world} deck="upper" onFloorClick={onFloorClick} />
               <BedroomGuard />

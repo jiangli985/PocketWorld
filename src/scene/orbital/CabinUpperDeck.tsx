@@ -15,14 +15,18 @@ export function CabinFadeGroup({ part, name, position, children }: React.PropsWi
   const group = useRef<Group>(null);
   const applied = useRef<number>();
   const fade = useMemo(createCabinGroupFade, []);
+  const opacity = () => {
+    const state = cutaway?.current;
+    return state ? state.interior * (part === 'interior' ? 1 : state[part]) : 1;
+  };
   useLayoutEffect(() => fade.restore, [fade]);
   useFrame(() => {
-    const opacity = cutaway?.current[part] ?? 1;
-    if (!group.current || (opacity === applied.current && (opacity === 0 || opacity === 1))) return;
-    fade.set(group.current, opacity);
-    applied.current = opacity;
+    const amount = opacity();
+    if (!group.current || (amount === applied.current && (amount === 0 || amount === 1))) return;
+    fade.set(group.current, amount);
+    applied.current = amount;
   });
-  return <group ref={group} name={name} position={position} visible={(cutaway?.current[part] ?? 1) > 0}>
+  return <group ref={group} name={name} position={position} visible={opacity() > 0}>
     {children}
   </group>;
 }

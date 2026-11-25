@@ -3,11 +3,11 @@ import type { CabinDeck } from './cabinLayout';
 import type { CabinView } from './cabinView';
 
 type DeckOpacity = Record<CabinDeck, number>;
-export type CabinOpacity = DeckOpacity & { resident: number };
+export type CabinOpacity = DeckOpacity & { resident: number; interior: number };
 export const QUICK_CABIN_DURATION = .65;
 
 export function cabinZoomIsolation(distanceRatio: number) {
-  return 1 - MathUtils.smoothstep(distanceRatio, .72, .90);
+  return 1 - MathUtils.smoothstep(distanceRatio, .75, .93);
 }
 
 export function cabinDeckOpacity(view: CabinView, isolation: number, ascent: number | null = null, from: CabinDeck | null = null): DeckOpacity {
@@ -57,8 +57,9 @@ export function createCabinGroupFade() {
         let faded = materials.get(original);
         if (!faded) {
           faded = original.clone();
-          // Keep depth testing for opaque walls and furnishings as their pixels fade out.
-          if (!original.transparent) faded.alphaHash = true;
+          faded.transparent = true;
+          faded.alphaHash = false;
+          faded.depthWrite = false;
           materials.set(original, faded);
         }
         return faded;
