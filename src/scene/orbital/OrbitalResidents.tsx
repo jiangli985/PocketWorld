@@ -114,6 +114,17 @@ function chairEntry(room: Room, pose: ChairPose): Point {
   const distance = (room.chairRadius + RADIUS) / Math.max(Math.abs(Math.sin(yaw)), Math.abs(Math.cos(yaw))) + 0.08;
   return chairFront(pose, distance);
 }
+/** Floor stand point for a clicked prop, so Luna approaches from the usable side instead of walking into its table. */
+function interactionAnchor(sceneId: string, objectId: string, point: Point): Point {
+  if (objectId === 'schedule') return [SCHEDULE_BOOK_POSITION[0] + .02, -1.42];
+  if (objectId === 'journal') return [JOURNAL_POSITION[0], -1.42];
+  if (objectId.startsWith('music-')) return [-.30, -1.42];
+  if (objectId === 'book-01') { const [x, , z] = readingStand(sceneId); return [x, z]; }
+  if (objectId === 'cabinet' || objectId === 'cabinet-item') { const [x, , z] = shelfPoint(sceneId, .55, 0, .65); return [x, z]; }
+  if (objectId === 'lamp') return sceneId === 'habitat' ? [NIGHTSTAND_X - .11, NIGHTSTAND_Z + .77] : [-1.42, -2.55];
+  if (objectId === 'clock') return [NIGHTSTAND_X + .22, NIGHTSTAND_Z + .64];
+  return point;
+}
 /** Solve the ankle target; the independent foot bone keeps the sole level. */
 function legReach(leg: ResidentLeg, ahead: number, below: number): [number, number] {
   const { upperLength: thigh, lowerLength: shin } = leg;
@@ -271,6 +282,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const keys = useRef(new Set<string>());
   const approach = useRef<Approach | null>(null);
+  const pendingComputer = useRef<{ action: WorldAction; perform: () => void; at: number } | null>(null);
   const catLocation = useRef<Point>([...CAT_HOME]);
   const walkWeight = useRef(0);
   const libraryNav = useRef('');
@@ -375,6 +387,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   };
   const stand = () => {
     const s = state.current;
+    pendingComputer.current = null;
     if (current.current.objects.sofa?.active && !s.dismissedSofa) { s.dismissedSofa = true; act('sofa', 'stand'); }
     if (current.current.objects.chair?.active && !s.dismissedChair) { s.dismissedChair = true; act('chair', 'stand'); }
     s.wanted = 'standing';
@@ -393,6 +406,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   };
   const cancelApproach = () => {
     approach.current = null;
+    pendingComputer.current = null;
     state.current.path = [];
     state.current.external = false;
     current.current.onArrive();
@@ -486,16 +500,30 @@ export function OrbitalResidents(props: ResidentsProps) {
         return true;
       }
       if (action.kind === 'stand') { cancelApproach(); perform(); return true; }
-      if (action.objectId === 'computer') {
-        if (!canUseComputer()) { p.onHover('computer', '请先在电脑椅上坐稳，再使用电脑'); return false; }
-        if (!p.approachEnabled) return false;
-        cancelApproach();
-        keys.current.clear();
-        perform();
-        return true;
-      }
       const pose = CHAIR_POSES[p.sceneId];
-      const target: Point = doll ? [doll.x, doll.z] : action.objectId === 'chair' ? [pose.x, pose.z] : action.objectId === 'pet' ? [...catLocation.current] : action.objectId === 'wardrobe' ? WARDROBE_STAND : [point[0], point[2]];
+      if (action.objectId === 'computer') {
+        if (!p.approachEnabled) { p.onHover('computer', '先返回房间，再使用电脑'); return false; }
+        if (canUseComputer()) { cancelApproach(); keys.current.clear(); perform(); return true; }
+        if (p.sceneId !== 'habitat' || p.objects.chair?.active || s.posture === 'chair') {
+          p.onHover('computer', '请先在电脑椅上坐稳，再使用电脑'); return false;
+        }
+        if (s.exiting || cabinPerformance.current) { p.onHover('computer', '请先结束当前动作，再使用电脑'); return false; }
+        // Stand up if needed, then board the desk chair; clicking again cancels the queued session.
+        pendingComputer.current = null;
+        cancelApproach();
+        stand();
+        keys.current.clear();
+        const chairAction: WorldAction = { ...action, objectId: 'chair', kind: 'sit' };
+        approach.current = { point: [pose.x, pose.z], height: point[1], action: chairAction, elapsed: 0,
+          perform: () => { pendingComputer.current = { action, perform, at: Date.now() }; current.current.onAction(chairAction); } };
+        s.external = true;
+        p.onHover('computer', '走到电脑椅前坐下…');
+        if (!s.exiting && !cabinPerformance.current) planApproach();
+        return false;
+      }
+      const target: Point = doll ? [doll.x, doll.z] : action.objectId === 'pet' ? [...catLocation.current]
+        : action.objectId === 'wardrobe' ? WARDROBE_STAND : action.objectId === 'chair' ? [pose.x, pose.z]
+        : interactionAnchor(p.sceneId, action.objectId, [point[0], point[2]]);
       if (s.posture === 'standing' && !s.exiting && !s.stairs && !cabinPerformance.current && !rug && !paper && !doll
         && (room.observatory || deckFromAuthoredX(root.position.x) === deckFromAuthoredX(target[0]))
         && action.objectId !== 'chair' && action.objectId !== 'sofa'
@@ -513,7 +541,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       return false;
     };
     props.interaction.current = request;
-    return () => { approach.current = null; if (props.interaction.current === request) props.interaction.current = null; };
+    return () => { approach.current = null; pendingComputer.current = null; if (props.interaction.current === request) props.interaction.current = null; };
   }, []);
 
   useEffect(() => {
@@ -534,6 +562,7 @@ export function OrbitalResidents(props: ResidentsProps) {
       event.stopPropagation();
       void roomAudio.unlock();
       if (event.repeat) return;
+      pendingComputer.current = null;
       if (approach.current) cancelApproach();
       const interactIndex = INTERACT_KEYS.indexOf(event.code);
       if (interactIndex >= 0) {
@@ -565,6 +594,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     const up = (event: KeyboardEvent) => { keys.current.delete(event.code); };
     const clear = () => {
       idleInput.current = true;
+      pendingComputer.current = null;
       keys.current.clear();
     };
     const hide = () => { if (document.hidden) clear(); };
@@ -661,6 +691,11 @@ export function OrbitalResidents(props: ResidentsProps) {
       }
       pending.elapsed += dt;
       if (pending.elapsed > 8 || p.focusedObject) cancelApproach();
+    }
+    const queued = pendingComputer.current;
+    if (queued) {
+      if (p.focusedObject || Date.now() - queued.at > 15000) pendingComputer.current = null;
+      else if (canUseComputer() && p.approachEnabled) { pendingComputer.current = null; queued.perform(); }
     }
     const seatEntry = chairEntry(room, pose);
     const destination = (posture: Posture): Point => posture === 'sofa' ? SOFA_ENTRY : seatEntry;
