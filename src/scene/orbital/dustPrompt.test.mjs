@@ -16,6 +16,7 @@ const {
   MAX_DUST_PARTICLES,
   createDustPromptState,
   decimatePoints,
+  layoutPromptShortcuts,
   splitPromptLines,
   setDustTargets,
   stepDustPrompt,
@@ -43,6 +44,24 @@ test('splitPromptLines wraps long hints cleanly at separator boundaries', () => 
   const lines = splitPromptLines('点击书页书写 · ← / → 翻页 · 自动保存 · Esc 返回', measure, 200);
   assert.equal(lines.length, 2);
   assert.ok(lines[0].length > 0 && lines[1].length > 0);
+});
+
+test('nearby shortcuts wrap between actions and keep the key paired with its label', () => {
+  const text = 'E · 查看藏书　Q · 打开柜门　T · 和团子互动';
+  const measure = value => value.length * 10;
+  const rows = width => Array.from(layoutPromptShortcuts(text, measure, width), row =>
+    Array.from(row, ({ key, label }) => [key, label]));
+  const actions = [['E', '查看藏书'], ['Q', '打开柜门'], ['T', '和团子互动']];
+  assert.deepEqual(rows(260), [actions]);
+  assert.deepEqual(rows(165), [actions.slice(0, 2), actions.slice(2)]);
+  assert.deepEqual(rows(110), actions.map(action => [action]));
+});
+
+test('plain flight and focused-object status text stays on its original path', () => {
+  const measure = value => value.length * 10;
+  for (const text of ['长按空格加速绕地 · 按 E 或点击飞船进入舱室', '点击书页书写 · Esc 返回', '请靠近书柜']) {
+    assert.equal(layoutPromptShortcuts(text, measure, 260).length, 0);
+  }
 });
 
 test('particles converge onto glyph targets and disperse away when cleared', () => {

@@ -33,6 +33,10 @@ export interface DustPromptState {
 
 export const MAX_DUST_PARTICLES = 3800;
 export const DUST_TONES = ['#fffaf0', '#f5ebd6', '#e6d1a7', '#ffffff', '#d4e2db'] as const;
+// Match the shared keycap size in orbital.css.
+export const PROMPT_KEYCAP_SIZE = 23;
+export const PROMPT_KEYCAP_GAP = 7;
+export const PROMPT_SHORTCUT_GAP = 16;
 
 const SPRING_STIFFNESS = 155;
 const SPRING_DAMPING = 24.5;
@@ -82,6 +86,33 @@ export function splitPromptLines(text: string, measure: (value: string) => numbe
   }
   const mid = Math.ceil(trimmed.length / 2);
   return [trimmed.slice(0, mid), trimmed.slice(mid)];
+}
+
+interface PromptShortcut {
+  key: string;
+  label: string;
+  width: number;
+}
+
+export function layoutPromptShortcuts(text: string, measure: (label: string) => number, maxWidth: number): PromptShortcut[][] {
+  const rows: PromptShortcut[][] = [[]];
+  let row = rows[0];
+  let rowWidth = 0;
+  for (const entry of text.trim().split('　')) {
+    const match = /^([EQT]) · (.+)$/.exec(entry);
+    if (!match) return [];
+    const [, key, label] = match;
+    const width = PROMPT_KEYCAP_SIZE + PROMPT_KEYCAP_GAP + measure(label);
+    if (row.length && rowWidth + PROMPT_SHORTCUT_GAP + width > maxWidth) {
+      row = [];
+      rows.push(row);
+      rowWidth = 0;
+    }
+    if (row.length) rowWidth += PROMPT_SHORTCUT_GAP;
+    row.push({ key, label, width });
+    rowWidth += width;
+  }
+  return rows;
 }
 
 function toDisperse(

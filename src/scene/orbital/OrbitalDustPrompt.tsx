@@ -1,7 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   DUST_TONES,
+  PROMPT_KEYCAP_GAP,
+  PROMPT_KEYCAP_SIZE,
+  PROMPT_SHORTCUT_GAP,
   createDustPromptState,
+  layoutPromptShortcuts,
   setDustTargets,
   splitPromptLines,
   stepDustPrompt,
@@ -11,6 +15,7 @@ import {
 const CANVAS_HEIGHT = 116;
 const TEXT_CENTER_Y = 34;
 const FONT_FAMILY = "'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif";
+type PromptKeycap = DustPoint & { key: string };
 
 function createDustSprites(): HTMLCanvasElement[] {
   return DUST_TONES.map(hex => {
@@ -35,16 +40,17 @@ function sampleGlyphs(
   text: string,
   width: number,
   height: number,
-): { points: DustPoint[]; shadow: HTMLCanvasElement | null; core: HTMLCanvasElement | null } {
+): { points: DustPoint[]; shadow: HTMLCanvasElement | null; core: HTMLCanvasElement | null; keycaps: PromptKeycap[] } {
   const trimmed = text.trim();
-  if (!trimmed || width <= 0 || height <= 0) return { points: [], shadow: null, core: null };
+  const empty = { points: [], shadow: null, core: null, keycaps: [] };
+  if (!trimmed || width <= 0 || height <= 0) return empty;
 
   const scale = 3;
   const offscreen = document.createElement('canvas');
   offscreen.width = Math.ceil(width * scale);
   offscreen.height = Math.ceil(height * scale);
   const ctx = offscreen.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return { points: [], shadow: null, core: null };
+  if (!ctx) return empty;
 
   const fontSize = width < 480 ? 15 : 18;
   const font = `600 ${fontSize}px ${FONT_FAMILY}`;
@@ -53,16 +59,35 @@ function sampleGlyphs(
 
   const padX = Math.min(180, Math.max(40, Math.round(width * 0.18)));
   const innerWidth = Math.max(150, width - padX * 2);
-  const lines = splitPromptLines(trimmed, value => ctx.measureText(value).width, innerWidth);
-  const lineHeight = fontSize * 1.38;
-  const startY = TEXT_CENTER_Y - ((lines.length - 1) * lineHeight) / 2;
+  const measure = (value: string) => ctx.measureText(value).width;
+  const shortcuts = layoutPromptShortcuts(trimmed, measure, innerWidth);
+  const keycaps: PromptKeycap[] = [];
+  const glyphs: (DustPoint & { label: string })[] = [];
+  if (shortcuts.length) {
+    const lineHeight = PROMPT_KEYCAP_SIZE + 5;
+    const startY = Math.max(PROMPT_KEYCAP_SIZE / 2 + 1, TEXT_CENTER_Y - ((shortcuts.length - 1) * lineHeight) / 2);
+    shortcuts.forEach((row, index) => {
+      const rowWidth = row.reduce((total, item) => total + item.width, 0) + (row.length - 1) * PROMPT_SHORTCUT_GAP;
+      const y = startY + index * lineHeight;
+      let left = (width - rowWidth) / 2;
+      for (const { key, label, width: itemWidth } of row) {
+        keycaps.push({ key, x: left + PROMPT_KEYCAP_SIZE / 2 - width / 2, y });
+        const labelLeft = left + PROMPT_KEYCAP_SIZE + PROMPT_KEYCAP_GAP;
+        glyphs.push({ label, x: (labelLeft + left + itemWidth) / 2, y });
+        left += itemWidth + PROMPT_SHORTCUT_GAP;
+      }
+    });
+  } else {
+    const lines = splitPromptLines(trimmed, measure, innerWidth);
+    const lineHeight = fontSize * 1.38;
+    const startY = TEXT_CENTER_Y - ((lines.length - 1) * lineHeight) / 2;
+    lines.forEach((label, index) => glyphs.push({ label, x: width / 2, y: startY + index * lineHeight }));
+  }
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';
-  lines.forEach((line, index) => {
-    ctx.fillText(line, width / 2, startY + index * lineHeight);
-  });
+  for (const { label, x, y } of glyphs) ctx.fillText(label, x, y);
 
   const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
   const points: DustPoint[] = [];
@@ -88,9 +113,7 @@ function sampleGlyphs(
     sctx.shadowColor = 'rgba(5, 10, 16, 0.96)';
     sctx.shadowBlur = 6;
     sctx.fillStyle = 'rgba(5, 10, 16, 0.65)';
-    lines.forEach((line, index) => {
-      sctx.fillText(line, width / 2, startY + index * lineHeight);
-    });
+    for (const { label, x, y } of glyphs) sctx.fillText(label, x, y);
   }
 
   const core = document.createElement('canvas');
@@ -103,12 +126,10 @@ function sampleGlyphs(
     cctx.textAlign = 'center';
     cctx.textBaseline = 'middle';
     cctx.fillStyle = '#fff9ec';
-    lines.forEach((line, index) => {
-      cctx.fillText(line, width / 2, startY + index * lineHeight);
-    });
+    for (const { label, x, y } of glyphs) cctx.fillText(label, x, y);
   }
 
-  return { points, shadow, core };
+  return { points, shadow, core, keycaps };
 }
 
 export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = ({
@@ -117,6 +138,7 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [keycaps, setKeycaps] = useState<PromptKeycap[]>([]);
   const stateRef = useRef(createDustPromptState());
   const shadowRef = useRef<HTMLCanvasElement | null>(null);
   const coreRef = useRef<HTMLCanvasElement | null>(null);
@@ -208,7 +230,8 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
       canvas.style.width = `${measured}px`;
       canvas.style.height = `${CANVAS_HEIGHT}px`;
 
-      const { points, shadow, core } = sampleGlyphs(propsRef.current.text, measured, CANVAS_HEIGHT);
+      const { points, shadow, core, keycaps } = sampleGlyphs(propsRef.current.text, measured, CANVAS_HEIGHT);
+      setKeycaps(keycaps);
       shadowRef.current = shadow;
       coreRef.current = core;
       setDustTargets(
@@ -231,7 +254,8 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
 
   useEffect(() => {
     const width = widthRef.current;
-    const { points, shadow, core } = sampleGlyphs(text, width, CANVAS_HEIGHT);
+    const { points, shadow, core, keycaps } = sampleGlyphs(text, width, CANVAS_HEIGHT);
+    setKeycaps(keycaps);
     if (text.trim()) {
       shadowRef.current = shadow;
       coreRef.current = core;
@@ -260,6 +284,8 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
   return (
     <div ref={containerRef} className="orbital-dust-prompt">
       <canvas ref={canvasRef} className="orbital-dust-canvas" aria-hidden="true" />
+      {keycaps.map(({ key, x, y }) => <kbd key={key} className="orbital-dust-keycap" aria-hidden="true"
+        style={{ left: `calc(50% + ${x}px)`, top: y }}>{key}</kbd>)}
       <p className="sr-only" role="status" aria-live="polite">{text}</p>
     </div>
   );
