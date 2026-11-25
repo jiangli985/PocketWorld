@@ -65,7 +65,7 @@ function mount(storage, remote) {
     },
   };
   react.default = react;
-  const { ScheduleProvider } = load('./ScheduleContext.tsx', { react, './schedule': schedule, '../journal/bookControl': load('../journal/bookControl.ts') }, { localStorage: storage });
+  const { ScheduleProvider } = load('./ScheduleContext.tsx', { react, './schedule': schedule, './paperBallLitter': { PaperBallLitter: { Provider: 'LitterProvider' } }, '../journal/bookControl': load('../journal/bookControl.ts') }, { localStorage: storage });
   function render() {
     cursor = 0; dirty = false;
     tree = ScheduleProvider({ adapters: remote ? { schedule: remote } : undefined, children: null });
