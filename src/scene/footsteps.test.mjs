@@ -587,6 +587,8 @@ test('clicking the wardrobe leads to its doors and E opens the wardrobe at the s
   const view = mount('orbital', { onAction: action => actions.push([action.objectId, action.kind]) });
   try {
     const [x, z] = cabinLayout.WARDROBE_STAND;
+    // Approach from the bedroom deck: clicking from below now waits at the stairs for E.
+    view.root.position.set(-4.08, 0, 1.65);
     const request = { sceneId: 'habitat', objectId: 'wardrobe', kind: 'open' };
     let reached = false;
     view.props.interaction.current([cabinLayout.WARDROBE_FOOTPRINT[0], 1.45, z], request, () => { reached = true; });
@@ -649,75 +651,81 @@ test('the static bed blocks walking without offering keyboard interaction, and n
   } finally { view.dispose(); }
 });
 
-test('a floor click uses the staircase before walking to the upper deck, then an approach can descend', () => {
+test('walking into the stair mouth stays on the deck; only E climbs, and E descends again', () => {
   const deckView = { current: { deck: 'lower', stairAscent: null } };
-  const view = mount('orbital', { deckView, walkTarget: [-3.05, 0, .8] });
+  const hints = [];
+  const view = mount('orbital', { deckView, onHover: (id, hint) => hints.push([id, hint]) });
   try {
+    const [x, z] = cabinStairs.stairLanding('lower');
+    view.root.position.set(x, 0, z);
+    view.key('KeyA');
+    for (let i = 0; i < 180; i++) view.frame(1 / 60);
+    assert.equal(deckView.current.stairAscent, null, 'walking into the stairs must not climb');
+    assert.equal(deckView.current.deck, 'lower');
+    assert.ok(view.root.position.x >= cabinLayout.DECK_WALK_BOUNDS.lower.left);
+    view.key('KeyA', 'keyup');
+    for (let i = 0; i < 10; i++) view.frame(1 / 60);
+    assert.ok(hints.some(([id, hint]) => id === 'stairs' && hint === 'E · 上楼'));
+    view.key('KeyQ');
+    for (let i = 0; i < 30; i++) view.frame(1 / 60);
+    assert.equal(deckView.current.stairAscent, null, 'only E is listed and only E climbs');
+
     const ascent = [];
-    for (let i = 0; i < 1700; i++) {
+    view.key('KeyE');
+    for (let i = 0; i < 1400; i++) {
       view.frame(1 / 60);
       if (deckView.current.stairAscent !== null) ascent.push(deckView.current.stairAscent);
-      if (deckView.current.deck === 'upper' && Math.abs(view.root.position.x + 3.05) < .04) break;
+      if (deckView.current.deck === 'upper') break;
     }
     assert.equal(deckView.current.deck, 'upper');
     assert.ok(ascent.length > 30 && ascent[0] === 0 && ascent.at(-1) === 1);
     assert.ok(ascent.every((value, index) => index === 0 || value >= ascent[index - 1]));
-    assert.ok(Math.hypot(view.root.position.x + 3.05, view.root.position.z - .8) < .06);
+    assert.equal(deckView.current.stairAscent, null);
+    const [ux, uz] = cabinStairs.stairLanding('upper');
+    assert.ok(Math.hypot(view.root.position.x - ux, view.root.position.z - uz) < .01);
 
-    const [x, z] = cabinLayout.CAT_HOME;
-    let reached = false;
-    view.props.interaction.current([x, 0, z], { sceneId: 'habitat', objectId: 'pet', kind: 'pet' }, () => { reached = true; });
-    assert.equal(reached, false);
-    const descents = [];
-    for (let i = 0; i < 1700 && !reached; i++) {
-      const count = view.sounds.length;
-      view.frame(1 / 60);
-      const height = deckView.current.stairAscent;
-      if (height > 0 && height < 1) descents.push(...view.sounds.slice(count));
-    }
-    assert(descents.length >= 17 && descents.every(sound => sound.intensity < .7));
-    assert(descents.every((sound, i) => i === 0 || sound.foot !== descents[i - 1].foot));
-    assert.equal(reached, true);
+    view.key('KeyE');
+    for (let i = 0; i < 1400 && deckView.current.deck !== 'lower'; i++) view.frame(1 / 60);
     assert.equal(deckView.current.deck, 'lower');
     assert.equal(deckView.current.stairAscent, null);
   } finally { view.dispose(); }
 });
 
-test('quick ascent cancels an in-flight approach and leaves the resident standing on the upper deck', () => {
-  const quickAscent = { current: null }, deckView = { current: { deck: 'lower', stairAscent: null } };
-  const view = mount('orbital', { quickAscent, deckView });
+test('a click on the other deck walks to the stair landing and waits for E instead of crossing', () => {
+  const [lx, lz] = cabinStairs.stairLanding('lower');
+  assert.deepEqual([...cabinStairs.stairApproachPoint('lower', [-3.05, .8])], [lx, 0, lz]);
+  assert.deepEqual([...cabinStairs.stairApproachPoint('lower', [1.1, .4])], [1.1, 0, .4]);
+  const deckView = { current: { deck: 'lower', stairAscent: null } };
+  const view = mount('orbital', { deckView, walkTarget: [lx, 0, lz] });
+  try {
+    for (let i = 0; i < 900; i++) view.frame(1 / 60);
+    assert.equal(deckView.current.deck, 'lower');
+    assert.equal(deckView.current.stairAscent, null);
+    assert.ok(Math.hypot(view.root.position.x - lx, view.root.position.z - lz) < .06);
+
+    view.key('KeyE');
+    for (let i = 0; i < 1400 && deckView.current.deck !== 'upper'; i++) view.frame(1 / 60);
+    assert.equal(deckView.current.deck, 'upper');
+    view.key('KeyE');
+    for (let i = 0; i < 1400 && deckView.current.deck !== 'lower'; i++) view.frame(1 / 60);
+    assert.equal(deckView.current.deck, 'lower');
+    assert.equal(deckView.current.stairAscent, null);
+  } finally { view.dispose(); }
+});
+
+test('an object on the other deck is refused from below until the resident uses the stairs', () => {
+  const deckView = { current: { deck: 'lower', stairAscent: null } };
+  const hints = [];
+  const view = mount('orbital', { deckView, onHover: (id, hint) => hints.push([id, hint]) });
   let acted = false;
   try {
     view.props.interaction.current(cabinLayout.CLOCK_POSITION, { sceneId: 'habitat', objectId: 'clock', kind: 'inspect' }, () => { acted = true; });
-    for (let i = 0; i < 1000 && (deckView.current.stairAscent ?? 0) < .25; i++) view.frame(1 / 60);
-    assert.ok(deckView.current.stairAscent >= .25);
-    assert.equal(quickAscent.current(), true);
-    for (let i = 0; i < 120; i++) view.frame(1 / 60);
-    assert.equal(deckView.current.deck, 'upper');
-    assert.equal(deckView.current.stairAscent, null);
-    assert.equal(view.root.userData.posture, 'standing');
-    assert.ok(view.root.position.distanceTo(new THREE.Vector3(...cabinStairs.stairDestination('lower'))) < .01);
+    for (let i = 0; i < 600; i++) view.frame(1 / 60);
     assert.equal(acted, false);
-    assert.equal(quickAscent.current(), false);
-  } finally { view.dispose(); }
-  assert.equal(quickAscent.current, null);
-});
-
-test('the port edge only starts a stair crossing at the landing', () => {
-  const deckView = { current: { deck: 'lower', stairAscent: null } };
-  const view = mount('orbital', { deckView });
-  const [x, z] = cabinStairs.stairLanding('lower');
-  try {
-    view.root.position.set(x, 0, 0);
-    view.key('KeyA');
-    for (let i = 0; i < 100; i++) view.frame(1 / 60);
+    assert.equal(deckView.current.deck, 'lower');
     assert.equal(deckView.current.stairAscent, null);
-    assert.ok(view.root.position.x >= cabinLayout.DECK_WALK_BOUNDS.lower.left);
-    view.key('KeyA', 'keyup');
-    view.root.position.set(x, 0, z);
-    view.key('KeyA');
-    for (let i = 0; i < 1100 && deckView.current.deck !== 'upper'; i++) view.frame(1 / 60);
-    assert.equal(deckView.current.deck, 'upper');
+    assert.ok(hints.some(([, hint]) => hint === '先在楼梯口按 E 上楼'));
+    assert.ok(Math.hypot(view.root.position.x - cabinLayout.HABITAT_SPAWN[0], view.root.position.z - cabinLayout.HABITAT_SPAWN[1]) < .05);
   } finally { view.dispose(); }
 });
 
@@ -758,7 +766,7 @@ test('Space leaves a pending walk-to-object interaction in place', () => {
   const view = mount('orbital');
   let performed = 0;
   try {
-    view.props.interaction.current(cabinLayout.CLOCK_POSITION, { sceneId: 'habitat', objectId: 'clock', kind: 'inspect' }, () => performed++);
+    view.props.interaction.current([cabinLayout.CAT_HOME[0], .3, cabinLayout.CAT_HOME[1]], { sceneId: 'habitat', objectId: 'pet', kind: 'pet' }, () => performed++);
     assert.equal(view.key('Space').defaultPrevented, false);
     for (let i = 0; i < 2100 && !performed; i++) view.frame(1 / 60);
     assert.equal(performed, 1);
@@ -782,7 +790,7 @@ test('Escape cancels a pending interaction before the object opens', () => {
   const view = mount('orbital');
   let performed = 0;
   try {
-    view.props.interaction.current(cabinLayout.CLOCK_POSITION, { sceneId: 'habitat', objectId: 'clock', kind: 'inspect' }, () => performed++);
+    view.props.interaction.current([cabinLayout.CAT_HOME[0], .3, cabinLayout.CAT_HOME[1]], { sceneId: 'habitat', objectId: 'pet', kind: 'pet' }, () => performed++);
     view.frame(1 / 60);
     assert.equal(view.key('Escape').defaultPrevented, true, 'App must not also handle this cancellation');
     for (let i = 0; i < 900; i++) view.frame(1 / 60);
