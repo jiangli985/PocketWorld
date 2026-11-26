@@ -1,3 +1,4 @@
+import * as assetQueue from '../assetQueue.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -112,6 +113,7 @@ function mountLibrarySurface({ initialUserBooks = [], userBookByteFiller = false
   const deps = {
     react,
     three: THREE,
+    '../assetQueue.ts': assetQueue,
     './catalog': catalog,
     '../../audioEngine': { roomAudio: { playSfx() {} } },
     './library.css': {},

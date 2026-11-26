@@ -1,5 +1,5 @@
 import React, { Component, Suspense, useEffect, useMemo } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from './useSceneGLTF';
 import type { ThreeElements } from '@react-three/fiber';
 import * as THREE from 'three';
 

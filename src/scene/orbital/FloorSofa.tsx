@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from './useSceneGLTF';
 import { useFrame } from '@react-three/fiber';
 import { Box3, Mesh, Vector3 } from 'three';
 import { FLOOR_SOFA } from './cabinLayout';

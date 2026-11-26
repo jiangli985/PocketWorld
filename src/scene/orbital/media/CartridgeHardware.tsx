@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useMemo } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from '../useSceneGLTF';
 import { useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import tavernMark from '../../../../assets/games/ski/tavern-mark.webp';

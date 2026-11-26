@@ -1,3 +1,4 @@
+import * as assetQueue from './orbital/assetQueue.ts';
 import * as paperGrip from './orbital/schedule/paperGrip.ts';
 import * as plushCarry from './orbital/plushCarry.ts';
 import test from 'node:test';
@@ -19,6 +20,7 @@ function load(path, dependencies, globals = {}) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
   }).outputText;
   const context = { exports: {}, ...globals, require(name) {
+    if (name === './assetQueue.ts' || name === '../assetQueue.ts') return assetQueue;
     assert.ok(name in dependencies, `Unexpected dependency: ${name}`);
     return dependencies[name];
   } };

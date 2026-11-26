@@ -1,3 +1,4 @@
+import { loadSceneAsset } from './assetQueue.ts';
 import { MathUtils, PropertyBinding, Quaternion, Vector3, type AnimationClip, type Object3D } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { ResidentOutfit } from './wardrobe/outfit';
@@ -24,7 +25,7 @@ export function loadCabinActions(outfit: ResidentOutfit) {
   const cached = pending.get(outfit);
   if (cached) return cached;
   const path = import.meta.env.BASE_URL + 'models/resident/luna-cabin-actions-' + outfit + '.glb';
-  const request = new GLTFLoader().loadAsync(path).then(({ animations }) => {
+  const request = loadSceneAsset(path, () => new GLTFLoader().loadAsync(path)).then(({ animations }) => {
     const clips = {} as CabinClips;
     for (const name of CABIN_ACTIONS) {
       const clip = animations.find(value => value.name === name);
