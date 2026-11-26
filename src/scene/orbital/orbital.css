@@ -16,7 +16,7 @@
 .orbital-dust-prompt { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 4; display: flex; justify-content: center; width: min(1040px, calc(100vw - 24px)); }
 @font-face {
   font-family: 'PocketWorld Prompt Rounded';
-  src: local('YouYuan'), local('幼圆'), url('../../../assets/fonts/pocketworld-prompt-rounded.woff2') format('woff2');
+  src: local('AaMianHuatang'), local('字体管家棉花糖'), local('YouYuan'), local('幼圆'), url('../../../assets/fonts/pocketworld-prompt-rounded.woff2') format('woff2');
   font-weight: 400; font-style: normal; font-display: swap;
 }
 .orbital-dust-canvas { display: block; pointer-events: none; }
