@@ -20,18 +20,25 @@
 .orbital-flight-bar { position: absolute; right: 38px; bottom: max(30px, env(safe-area-inset-bottom)); z-index: 4; display: flex; align-items: center; gap: 10px; pointer-events: auto; }
 .orbital-cabin-controls { position: absolute; left: max(38px, calc(env(safe-area-inset-left) + 12px)); bottom: var(--cabin-controls-bottom); z-index: 4; display: flex; gap: 14px; pointer-events: none; }
 .orbital-cabin-controls kbd, .orbital-dust-keycap {
-  position: relative; isolation: isolate; display: inline-grid; place-items: center;
-  width: 23px; height: 23px; box-sizing: border-box; padding: 0 3px 3px 0; border-radius: 5px;
+  display: inline-grid; place-items: center;
+  width: 23px; height: 23px; box-sizing: border-box; border-radius: 5px;
+  font: 700 11px/1 system-ui, sans-serif; letter-spacing: 0; text-shadow: none;
+}
+.orbital-cabin-controls kbd {
+  position: relative; isolation: isolate; padding: 0 3px 3px 0;
   background: linear-gradient(135deg, #f3f3f2 12%, #d5d6d5 53%, #bfc1c1 100%);
   box-shadow: inset 0 1px 1px #fff9, inset -1px -1px 2px #92959466, 0 2px 3px #0008;
-  color: #444747; font: 700 11px/1 system-ui, sans-serif; letter-spacing: 0; text-shadow: none;
+  color: #444747;
 }
-.orbital-cabin-controls kbd::before, .orbital-dust-keycap::before {
+.orbital-cabin-controls kbd::before {
   content: ''; position: absolute; z-index: -1; inset: 1px 4px 4px 1px; border-radius: 4px 4px 6px 4px;
   background: linear-gradient(150deg, #f8f8f7, #e8e9e8);
   box-shadow: inset 0 1px 1px #fff9, 1px 1px 2px #888b8b38;
 }
-.orbital-dust-keycap { position: absolute; transform: translate(-50%, -50%); opacity: .88; }
+.orbital-dust-keycap {
+  position: absolute; transform: translate(-50%, -50%);
+  color: #fff4dd; border: 1px solid currentColor; background: transparent;
+}
 .orbital-cabin-controls button:active:not(:disabled) kbd {
   transform: translateY(2px);
   box-shadow: inset 0 1px 1px #fff9, inset -1px -1px 2px #92959466, 0 1px 2px #0006;

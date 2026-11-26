@@ -125,6 +125,15 @@ test('retargeting reuses active particles and disperses surplus', () => {
   assert.ok(state.particles.every(p => p.mode === 'converge'));
 });
 
+test('reused particles take the keycap or text style of their new target', () => {
+  const state = createDustPromptState();
+  setDustTargets(state, '查看藏书', [{ x: 280, y: 32 }, { x: 310, y: 32, keycap: true }], 300, 34);
+  assert.equal(state.particles[1].keycap, true);
+  setDustTargets(state, '打开日记', [{ x: 315, y: 32, keycap: true }, { x: 280, y: 32 }], 300, 34);
+  assert.equal(state.particles[0].keycap, true);
+  assert.equal(state.particles[1].keycap, undefined);
+});
+
 test('keycaps follow the text settling and fade through the dispersal frames', () => {
   const state = createDustPromptState();
   const rng = makeRng(17);

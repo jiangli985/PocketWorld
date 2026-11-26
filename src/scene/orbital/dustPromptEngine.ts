@@ -1,6 +1,7 @@
 export interface DustPoint {
   x: number;
   y: number;
+  keycap?: boolean;
 }
 
 export interface DustParticle {
@@ -11,6 +12,7 @@ export interface DustParticle {
   tx: number;
   ty: number;
   alpha: number;
+  keycap?: boolean;
   size: number;
   tone: number;
   mode: 'converge' | 'disperse';
@@ -197,6 +199,7 @@ export function setDustTargets(
     if (reused) {
       reused.tx = target.x;
       reused.ty = target.y;
+      reused.keycap = target.keycap;
       reused.mode = 'converge';
       reused.life = 0;
       reused.delay = reducedMotion ? 0 : random() * 0.06;
@@ -222,6 +225,7 @@ export function setDustTargets(
         tx: target.x,
         ty: target.y,
         alpha: reducedMotion ? 1 : 0,
+        keycap: target.keycap,
         size: 0.52 + random() * 0.34,
         tone,
         mode: 'converge',

@@ -92,24 +92,25 @@ function sampleGlyphs(
 
   ctx.fillStyle = '#ffffff';
   for (const { label, x, y } of glyphs) ctx.fillText(label, x, y);
-  // The outline and letter gather before the solid keycap appears.
-  const maskSize = PROMPT_KEYCAP_SIZE - 4;
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.4;
+  // Red marks keycap particles in the sampling mask.
+  const maskSize = PROMPT_KEYCAP_SIZE - 1;
+  ctx.strokeStyle = '#ff0000';
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  for (const { x, y } of keycaps) ctx.roundRect(x + (width - maskSize) / 2, y - maskSize / 2, maskSize, maskSize, 4);
+  for (const { x, y } of keycaps) ctx.roundRect(x + (width - maskSize) / 2, y - maskSize / 2, maskSize, maskSize, 4.5);
   ctx.stroke();
+  ctx.fillStyle = '#ff0000';
   ctx.font = '700 11px system-ui, sans-serif';
-  for (const { key, x, y } of keycaps) ctx.fillText(key, x + width / 2 - 1.5, y - 1.5);
+  for (const { key, x, y } of keycaps) ctx.fillText(key, x + width / 2, y);
 
   const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
   const points: DustPoint[] = [];
   const step = 2;
   for (let py = 0; py < offscreen.height; py += step) {
     for (let px = 0; px < offscreen.width; px += step) {
-      const alpha = data[(py * offscreen.width + px) * 4 + 3];
-      if (alpha >= 112) {
-        points.push({ x: px / scale, y: py / scale });
+      const pixel = (py * offscreen.width + px) * 4;
+      if (data[pixel + 3] >= 112) {
+        points.push({ x: px / scale, y: py / scale, keycap: data[pixel + 1] === 0 });
       }
     }
   }
@@ -178,7 +179,8 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
       const motion = keycapMotion.current;
       const previousProgress = motion.progress;
       motion.progress = stepDustKeycapProgress(previousProgress, state.settleProgress, motion.targeted, dt, propsRef.current.reducedMotion);
-      if (keycapLayerRef.current) keycapLayerRef.current.style.opacity = String(dustPromptCoreProgress(motion.progress));
+      const keycapProgress = dustPromptCoreProgress(motion.progress);
+      if (keycapLayerRef.current) keycapLayerRef.current.style.opacity = String(keycapProgress);
       if (!motion.targeted && previousProgress > 0 && motion.progress === 0) setKeycaps([]);
 
       if (canvas) {
@@ -206,14 +208,15 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
 
           const sprites = spritesRef.current ?? (spritesRef.current = createDustSprites());
           for (const p of state.particles) {
-            if (p.alpha <= 0.01) continue;
+            const alpha = p.keycap ? p.alpha * (1 - keycapProgress) : p.alpha;
+            if (alpha <= 0.01) continue;
             const settled = p.mode === 'converge' && Math.abs(p.tx - p.x) < 0.6 && Math.abs(p.ty - p.y) < 0.6;
             const shimmer = p.mode === 'converge' && !settled && !propsRef.current.reducedMotion
               ? Math.sin(p.age * 3.1 + p.tx * 0.13) * 0.08
               : 0;
             const drawRadius = p.size * (p.mode === 'disperse' ? 1.55 : 1.32);
             const sprite = sprites[p.tone] ?? sprites[0];
-            ctx.globalAlpha = p.alpha * (settled ? 0.94 + Math.sin(p.age * 3.2) * 0.06 : 0.86 + Math.sin(p.age * 4.4) * 0.14);
+            ctx.globalAlpha = alpha * (settled ? 0.94 + Math.sin(p.age * 3.2) * 0.06 : 0.86 + Math.sin(p.age * 4.4) * 0.14);
             ctx.drawImage(
               sprite,
               p.x + shimmer - drawRadius,
