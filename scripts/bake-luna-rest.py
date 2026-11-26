@@ -24,7 +24,10 @@ def glb_append(base, output, clips):
     indices={n.get('name','').replace(':',''):i for i,n in enumerate(doc['nodes'])}
     marker=doc.get('extras',{}).get('pocketworldRestPoseBase')
     if marker:
-        binary=binary[:marker['bytes']]
+        # Texture repacking changes byte offsets; derive the base end from live views.
+        base_views=doc['bufferViews'][:marker['views']]
+        base_end=max(v.get('byteOffset',0)+v['byteLength'] for v in base_views)
+        binary=binary[:(base_end+3)//4*4]
         doc['bufferViews']=doc['bufferViews'][:marker['views']]
         doc['accessors']=doc['accessors'][:marker['accessors']]
     doc.setdefault('extras',{})['pocketworldRestPoseBase']={'bytes':len(binary),'views':len(doc['bufferViews']),'accessors':len(doc['accessors'])}
@@ -120,8 +123,8 @@ class Pose:
             sign=1 if side=='Left' else -1; inv=self.basis(side)
             a=self.pos(side+'Arm');e=self.pos(side+'ForeArm');w=self.pos(side+'Hand')
             u=(e-a).length;l=(w-e).length
-            upper=Vector((sign*.16,-.985,-.035)).normalized()
-            lower=Vector((sign*.04,-.987,.16)).normalized()
+            upper=Vector((sign*.23,-.973,-.035)).normalized()
+            lower=Vector((sign*.08,-.984,.16)).normalized()
             self.aim(side+'Arm',side+'ForeArm',a+upper*u)
             e=self.pos(side+'ForeArm');self.aim(side+'ForeArm',side+'Hand',e+lower*l)
             self.hand(side,Vector((sign*.02,-1,.12)),Vector((-sign,0,.10)),inv)
@@ -185,7 +188,7 @@ class Pose:
             for channel in ('location','rotation_quaternion','scale'):b.keyframe_insert(channel,frame=frame)
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--root',required=True);parser.add_argument('--input');parser.add_argument('--blend',required=True);parser.add_argument('--output-dir',required=True);parser.add_argument('--base-dir');parser.add_argument('--from-blend',action='store_true')
+    parser=argparse.ArgumentParser();parser.add_argument('--root',required=True);parser.add_argument('--input');parser.add_argument('--blend',required=True);parser.add_argument('--output-dir',required=True);parser.add_argument('--base-dir');parser.add_argument('--from-blend',action='store_true');parser.add_argument('--update-standing',action='store_true',help='Reauthor frame 1 only, preserving the existing seated poses')
     args=parser.parse_args(sys.argv[sys.argv.index('--')+1:]);root=Path(args.root).resolve();out=Path(args.output_dir).resolve()
     if args.from_blend:
         bpy.ops.wm.open_mainfile(filepath=args.blend)
@@ -208,7 +211,7 @@ def main():
         pose=Pose(rig,record);clips={}
         for kind,frame,name in [('standing',1,'Luna_Relaxed_Standing'),('seated',31,'Luna_Sofa_Lap'),('cheek',61,'Luna_Sofa_Cheek')]:
             scene.frame_set(frame)
-            if not args.from_blend:
+            if not args.from_blend or (args.update_standing and kind=='standing'):
                 old=rig.animation_data.action if rig.animation_data else None
                 if kind=='standing':pose.standing()
                 elif kind=='seated':pose.lap(outfit)

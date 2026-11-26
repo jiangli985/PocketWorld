@@ -1083,13 +1083,14 @@ export function OrbitalResidents(props: ResidentsProps) {
     const standingAtRest = !!rig.current && p.enabled && !p.focusedObject
       && !document.hidden && s.posture === 'standing' && wanted === 'standing' && !s.exiting
       && !walking && distance < .00001 && walkWeight.current === 0
-      && !keys.current.size && !idleInput.current && !s.path.length && !s.stairs && !s.external
+      && !keys.current.size && !s.path.length && !s.stairs && !s.external
       && !approach.current && !libraryActive && !cabinPerformance.current && !plushGrip.current;
     const im = idleMotion.current;
     const fittedIdle = rig.current?.fitted?.idle;
     const yawnClip = fittedIdle?.yawn ?? im.clip;
     const lookClip = fittedIdle?.look ?? im.lookClip;
-    stepIdle(idle.current, rawDelta, standingAtRest && !p.reducedMotion, yawnClip?.duration ?? 0,
+    // Camera input interrupts decorative gestures, but never removes the standing pose.
+    stepIdle(idle.current, rawDelta, standingAtRest && !idleInput.current && !p.reducedMotion, yawnClip?.duration ?? 0,
       Math.random, lookClip?.duration ?? 0, standingAtRest, cabin.clips);
     idleInput.current = false;
     if (idle.current.elapsed >= STANDING_IDLE.delay && !lookClip && !im.lookLoading && idle.current.elapsed >= im.lookRetryAt) {

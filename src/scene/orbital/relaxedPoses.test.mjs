@@ -18,7 +18,7 @@ function local(name) {
   return modules.get(name);
 }
 const { createResidentRig } = local('./residentRig');
-const { createIdleState, createIdlePlayer } = local('./standingIdle');
+const { createIdleState, createIdlePlayer, stepIdle } = local('./standingIdle');
 const { createSeatedIdle, createSeatedIdlePlayer } = local('./seatedIdle');
 const { sofaPlayer } = local('./sofaMotion');
 const assets = new URL('../../../assets/public/models/resident/', import.meta.url);
@@ -63,6 +63,47 @@ function palmContact(root, side, wrist, middle, normal) {
   assert(distances[Math.floor(distances.length / 2)] < .015, `${side} only touches with a distant fingertip`);
 }
 
+
+test('camera input interrupts gestures without dropping standing pose; movement and contact still release it', () => {
+  // Execute the production eligibility and step call, so accidentally coupling
+  // idleInput back into standingAtRest is caught by this regression.
+  const source = readFileSync(new URL('./OrbitalResidents.tsx', import.meta.url), 'utf8');
+  const block = source.match(/    const standingAtRest = [\s\S]+?    idleInput\.current = false;/)?.[0];
+  assert.ok(block, 'resident standing update exists');
+  const update = new vm.Script(`{ ${block} }`);
+  for (const hz of [30, 60, 120]) for (const reducedMotion of [false, true]) {
+    const state = createIdleState(() => .5);
+    const scope = vm.createContext({
+      rig: { current: {} }, p: { enabled: true, focusedObject: null, reducedMotion },
+      document: { hidden: false }, s: { posture: 'standing', exiting: false, path: [], stairs: null, external: false },
+      wanted: 'standing', walking: false, distance: 0, walkWeight: { current: 0 }, keys: { current: new Set() },
+      idleInput: { current: false }, approach: { current: null }, libraryActive: false,
+      cabinPerformance: { current: null }, plushGrip: { current: null }, idleMotion: { current: {} },
+      idle: { current: state }, cabin: { clips: {} }, rawDelta: 1 / hz, stepIdle, Math,
+    });
+    for (let i = 0; i < hz; i++) update.runInContext(scope);
+    assert.equal(state.restWeight, 1);
+    Object.assign(state, { elapsed: 10, weight: 1, shortTime: 1, shortWeight: 1 });
+    for (let i = 0; i < hz * 2; i++) {
+      scope.idleInput.current = true; // pointerdown, held pointermove, wheel
+      update.runInContext(scope);
+      assert.equal(state.restWeight, 1, 'dragging must preserve the authored arm pose');
+    }
+    assert.equal(state.elapsed, 0);
+    assert.equal(state.weight, 0);
+    assert.equal(state.shortTime, -1);
+    for (const blocker of ['walking', 'focusedObject', 'posture']) {
+      state.restWeight = 1;
+      if (blocker === 'walking') scope.walking = true;
+      if (blocker === 'focusedObject') scope.p.focusedObject = 'library';
+      if (blocker === 'posture') scope.s.posture = 'seated';
+      for (let i = 0; i < hz; i++) update.runInContext(scope);
+      assert.equal(state.restWeight, 0, `${blocker} must release standing arms`);
+      scope.walking = false; scope.p.focusedObject = null; scope.s.posture = 'standing';
+    }
+  }
+});
+
 for (const [outfit, file] of Object.entries(files)) {
   test(`${outfit}: Blender standing pose lowers both arms with inward palms and keeps planted supports`, async () => {
     const { gltf } = await load(new URL(file, assets));
@@ -90,7 +131,8 @@ for (const [outfit, file] of Object.entries(files)) {
       for (const side of ['Left', 'Right']) {
         const shoulder = position(side + 'Arm'), elbow = position(side + 'ForeArm'), wrist = position(side + 'Hand');
         const middle = position(side + 'HandIndex1').add(position(side + 'HandRing1')).add(position(side + 'HandPinky1')).multiplyScalar(1 / 3);
-        assert(elbow.clone().sub(shoulder).angleTo(down) < .26, `${side} arm is still held out`);
+        const spread = elbow.clone().sub(shoulder).angleTo(down);
+        assert(spread > .21 && spread < .26, `${side} arm should rest slightly open: ${spread}`);
         assert(middle.clone().sub(wrist).angleTo(wrist.clone().sub(elbow)) < .21, `${side} wrist bends outward`);
         const normal = middle.clone().sub(wrist).cross(position(side + 'HandIndex1').sub(position(side + 'HandPinky1'))).normalize();
         assert(normal.x < -.85, `${side} palm does not face the body`); // Cross product reverses between sides.
