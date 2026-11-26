@@ -14,6 +14,11 @@
 .orbital-emblem::after { content: ''; position: absolute; inset: 6px -5px; border: 1px solid #bca783; border-radius: 50%; transform: rotate(-35deg); }
 .orbital-edition { margin: 4px 0 0 27px; font-size: 8px; letter-spacing: 2.4px; color: #8c969b; }
 .orbital-dust-prompt { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 4; display: flex; justify-content: center; width: min(1040px, calc(100vw - 24px)); }
+@font-face {
+  font-family: 'PocketWorld Prompt Rounded';
+  src: url('../../../assets/fonts/pocketworld-prompt-rounded.woff2') format('woff2');
+  font-weight: 600; font-style: normal; font-display: swap;
+}
 .orbital-dust-canvas { display: block; pointer-events: none; }
 .orbital-dust-keycaps { position: absolute; inset: 0; opacity: 0; }
 .orbital-app:has(.library-surface) .orbital-dust-prompt { display: none; }
@@ -37,7 +42,9 @@
 }
 .orbital-dust-keycap {
   position: absolute; transform: translate(-50%, -50%);
-  color: #fff4dd; border: 1px solid currentColor; background: transparent;
+  font: 600 12px/1 'PocketWorld Prompt Rounded', 'YouYuan', system-ui, sans-serif;
+  color: #fff4dd; border: 2px solid; border-radius: 6px;
+  border-color: #fff5e0 #ecd9b5 #bea57d #f2e3c3; background: transparent;
 }
 .orbital-cabin-controls button:active:not(:disabled) kbd {
   transform: translateY(2px);

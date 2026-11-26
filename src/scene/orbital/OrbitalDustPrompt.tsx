@@ -16,7 +16,8 @@ import {
 
 const CANVAS_HEIGHT = 116;
 const TEXT_CENTER_Y = 34;
-const FONT_FAMILY = "'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif";
+const ROUNDED_FONT = "'PocketWorld Prompt Rounded'";
+const FONT_FAMILY = `${ROUNDED_FONT}, 'YouYuan', 'Hiragino Maru Gothic ProN', 'PingFang SC', 'Microsoft YaHei', sans-serif`;
 type PromptKeycap = DustPoint & { key: string };
 
 function createDustSprites(): HTMLCanvasElement[] {
@@ -93,14 +94,14 @@ function sampleGlyphs(
   ctx.fillStyle = '#ffffff';
   for (const { label, x, y } of glyphs) ctx.fillText(label, x, y);
   // Red marks keycap particles in the sampling mask.
-  const maskSize = PROMPT_KEYCAP_SIZE - 1;
+  const maskSize = PROMPT_KEYCAP_SIZE - 2;
   ctx.strokeStyle = '#ff0000';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  for (const { x, y } of keycaps) ctx.roundRect(x + (width - maskSize) / 2, y - maskSize / 2, maskSize, maskSize, 4.5);
+  for (const { x, y } of keycaps) ctx.roundRect(x + (width - maskSize) / 2, y - maskSize / 2, maskSize, maskSize, 5);
   ctx.stroke();
   ctx.fillStyle = '#ff0000';
-  ctx.font = '700 11px system-ui, sans-serif';
+  ctx.font = `600 12px ${FONT_FAMILY}`;
   for (const { key, x, y } of keycaps) ctx.fillText(key, x + width / 2, y);
 
   const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
@@ -277,7 +278,14 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
 
     syncLayout();
     window.addEventListener('resize', syncLayout);
+    let active = true;
+    void document.fonts.load(`600 18px ${ROUNDED_FONT}`).then(() => {
+      if (active && propsRef.current.text) {
+        syncPrompt(propsRef.current.text, widthRef.current, propsRef.current.reducedMotion);
+      }
+    }, () => undefined);
     return () => {
+      active = false;
       window.removeEventListener('resize', syncLayout);
     };
   }, []);
