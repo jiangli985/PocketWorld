@@ -39,6 +39,11 @@ export function otherDeck(deck: CabinDeck): CabinDeck {
   return deck === 'lower' ? 'upper' : 'lower';
 }
 
+export function stairDestination(deck: CabinDeck): Position {
+  const [x, z] = stairLanding(otherDeck(deck));
+  return deck === 'lower' ? [x + .02, 0, z - .04] : [x + .30, 0, z];
+}
+
 /** Distance increases on the way up. Both turns connect at floor level. */
 export function sampleCabinStairs(distance: number): { position: Position; ascent: number; tread: number | null } {
   const run = distance - lowerTurn - landingRun;
@@ -56,4 +61,5 @@ export function sampleCabinStairs(distance: number): { position: Position; ascen
 export interface CabinResidentView {
   deck: CabinDeck;
   stairAscent: number | null;
+  stairFrom: CabinDeck | null;
 }
