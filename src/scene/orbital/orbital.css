@@ -9,9 +9,21 @@
 .computer-game-controls button:focus-visible { outline: 3px solid #e3cc8f; outline-offset: 2px; }
 .orbital-header { position: absolute; top: 34px; left: 42px; right: 42px; display: flex; align-items: center; pointer-events: none; z-index: 4; }
 .orbital-wordmark { display: flex; align-items: center; gap: 13px; }
-.orbital-wordmark img { display: block; width: 180px; height: auto; }
-.orbital-emblem { display: block; width: 28px; height: 28px; border: 1px solid #e5dcc4; border-radius: 50%; position: relative; }
-.orbital-emblem::after { content: ''; position: absolute; inset: 8px -6px; border: 1px solid #bca783; border-radius: 50%; transform: rotate(-35deg); }
+.orbital-wordmark img {
+  display: block; width: 180px; height: auto;
+  filter: drop-shadow(0 1px 0 #b58b5d) drop-shadow(0 3px 3px #03020bb3);
+}
+.orbital-emblem {
+  display: block; width: 28px; height: 28px; position: relative;
+  border: 1px solid; border-color: #fff0cd #d7b883 #998264 #e9d6ae; border-radius: 50%;
+  background: radial-gradient(circle at 28% 24%, #efd09536, #9b744b10 55%, transparent 76%);
+  box-shadow: inset 0 1px 2px #ffe7b525, 0 2px 3px #03020b80;
+}
+.orbital-emblem::after {
+  content: ''; position: absolute; inset: 8px -6px; border: 1px solid;
+  border-color: #f3dfad #c4a778 #a88b64 #ead1a1; border-radius: 50%; transform: rotate(-35deg);
+  box-shadow: 0 1px 1px #03020b80;
+}
 .orbital-dust-prompt { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 4; display: flex; justify-content: center; width: min(1040px, calc(100vw - 24px)); }
 .orbital-dust-canvas { display: block; pointer-events: none; }
 .orbital-app:has(.library-surface) .orbital-dust-prompt { display: none; }
