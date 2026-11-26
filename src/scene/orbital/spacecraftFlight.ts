@@ -157,7 +157,7 @@ export function easeInOutCubic(t: number): number {
 export function readInitialViewMode(search: string, reducedMotion: boolean): SpacecraftViewMode {
   const params = new URLSearchParams(search);
   const dev = params.get('dev');
-  if (dev === 'mario' || dev === 'shooter') return 'cabin';
+  if (dev === 'mario' || dev === 'shooter' || params.get('game') === 'ski') return 'cabin';
   const view = params.get('view')?.trim().toLowerCase();
   if (view === 'cabin') return 'cabin';
   if (view === 'orbit') return 'orbit';
@@ -220,6 +220,14 @@ export function hullOpacityForTransition(mode: SpacecraftViewMode, progress: num
   if (mode === 'cabin') return 0;
   if (mode === 'entering-cabin') return 1 - smoothstep01(0.18, 0.80, progress);
   return smoothstep01(0.14, 0.78, progress);
+}
+
+/** Let the two models overlap while the camera passes between exterior and interior framing. */
+export function cabinOpacityForTransition(mode: SpacecraftViewMode, progress: number): number {
+  if (mode === 'approach' || mode === 'orbit') return 0;
+  if (mode === 'cabin') return 1;
+  if (mode === 'entering-cabin') return smoothstep01(0.16, 0.72, progress);
+  return 1 - smoothstep01(0.25, 0.80, progress);
 }
 
 /** Advance orbital cruise, boost inertia, time acceleration, and Earth sweep by dt seconds. */

@@ -7,9 +7,9 @@
       "file": "resident/luna-ribbon.glb",
       "source": "User-supplied bf6b5b5d-a86b-4f38-b940-dc6e2a2a05dd.glb. Face references Luna's everyday outfit.",
       "used": true,
-      "bytes": 9026456,
-      "sha256": "dbc3f627d0b071166b176132ef477a8c16fdfbc8c191eda5a4ef90bf9cb5c932",
-      "processing": "91-joint fitted skeleton, retouched face and rounded chin, original 4K albedo and the everyday outfit’s full-atlas fill, skin tint and normal strength, grounded walk, desk chair, sofa and three book pickups. Editable source: assets/models/resident/Luna-Ribbon.blend. Blender-authored relaxed standing, sofa lap and cheek poses are appended without changing existing mesh, skin, texture or animation bytes. Source: assets/models/resident/Luna-Relaxed-Poses.blend; rebuild: scripts/bake-luna-rest.py.",
+      "bytes": 7226972,
+      "sha256": "606527be8ba9f631b76cdb35151287020817658b0be4f12975a99121bb2b7d48",
+      "processing": "91-joint fitted skeleton, retouched face and rounded chin, 2K albedo resized from the original 4K texture in Blender, with the everyday outfit’s full-atlas fill, skin tint and normal strength, grounded walk, desk chair, sofa and three book pickups. Editable source: assets/models/resident/Luna-Ribbon.blend. Rebuild texture limit with scripts/resize-luna-textures.py. Blender-authored relaxed standing, sofa lap and cheek poses are appended without changing existing mesh, skin, texture or animation bytes. Source: assets/models/resident/Luna-Relaxed-Poses.blend; rebuild: scripts/bake-luna-rest.py.",
       "license": "User supplied the model for this project. No separate model license was provided."
     },
     {
@@ -173,9 +173,9 @@
       "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the arm-supported scoot from the cushion edge to the resting pose; Walk and 2K data maps from repository commit 6f6df88; original 4K base color from the user-supplied Tripo GLB, also preserved in commit 2e1ff72.",
       "license": "User-supplied; no separate license declaration supplied.",
       "used": true,
-      "bytes": 10538520,
-      "sha256": "a85d2a5553c3b4f2f52d4d96b21a5eb54f790ad6692849b812086a637d14c956",
-      "processing": "The seated clip and detailed contact mesh are baked from Blender. Luna-ArmContact.blend adds independent sparse skirt and underarm morph targets driven by arm pose. The original vertex mapping, walk channels and existing compressed textures are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. See assets/models/resident/README.md. Blender-authored relaxed standing, sofa lap and cheek poses are appended without changing existing mesh, skin, texture or animation bytes. Source: assets/models/resident/Luna-Relaxed-Poses.blend; rebuild: scripts/bake-luna-rest.py."
+      "bytes": 10155272,
+      "sha256": "7e15924ea92676ee8dc089a6079efd470fc0bafdaa6febc0cb093a63644d7f02",
+      "processing": "The seated clip and detailed contact mesh are baked from Blender. Luna-ArmContact.blend adds independent sparse skirt and underarm morph targets driven by arm pose. Blender resizes the original 4K base color to 2K; vertex mapping, walk channels and all other image bytes are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. Rebuild with scripts/resize-luna-textures.py. See assets/models/resident/README.md. Blender-authored relaxed standing, sofa lap and cheek poses are appended without changing existing mesh, skin, texture or animation bytes. Source: assets/models/resident/Luna-Relaxed-Poses.blend; rebuild: scripts/bake-luna-rest.py."
     },
     {
       "file": "resident/luna-seat-contact.bin",

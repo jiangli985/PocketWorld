@@ -1,410 +1,331 @@
-import { TRAILS } from './model.ts';
-import type { FeatureKind, SkiInput, SkiPlayer, SkiState, TrailId } from './model.ts';
-import { playerBody, skiContacts, rideHeight, type Circle } from './character.ts';
+import {
+  FISH_CAPACITY, FISH_CATALOG, GUEST_ORDERS, ORDER_CAPACITY, RECIPE_CATALOG, ROD_CATALOG,
+  TAP_MAX_PERCENT, TAP_REDUCTION_MS, TRIP_TARGET_SCORE, FIGHT_KEYS, FIGHT_MS, FIGHT_GOAL,
+  isRecipeId, type FishId, type RecipeId, type RodLevel,
+  BAITS, BAIT_LIMIT, BAIT_PACK, BAIT_SAMPLES, CAREER_LIMIT, FISH_MASS, HEAVY_REEL_EXTRA_MS, isBaitId,
+  type BaitId,
+} from './catalog.ts';
+import type {
+  ActionResult, CastSnapshot, FishingEvent, FishingGame, FishingOptions, FishingOrder,
+  FishingProgress, RejectionReason, TripPhase, TripResult, CatchCard,
+} from './model.ts';
 
-const TAU = Math.PI * 2;
-const START_X = 200;
-const SEGMENT = 2400;
-const STEP = 1 / 120;
-const MAX_FEATURES = 72;
-const MAX_PARTICLES = 80;
-const FLIP_BOOST_SPEED = 45;
-const FLIP_BOOST_DURATION = 0.9;
-const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
-const wrapped = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
+type Cast =
+  | { phase: 'waiting'; remainingMs: number; originalWaitMs: number; tappedMs: number; rodLevel: RodLevel }
+  | { phase: 'reeling'; remainingMs: number; fishId: FishId }
+  | { phase: 'fight'; remainingMs: number; key: string; progress: number };
 
-export function terrainY(x: number, trail: TrailId): number {
-  const amplitude = trail === 'valley' ? 21 : trail === 'forest' ? 32 : 26;
-  return 420 + amplitude * Math.sin(x / 460) + 9 * Math.sin(x / 173);
+type PendingOrder = { -readonly [K in keyof FishingOrder]: FishingOrder[K] };
+
+const totalWeight = FISH_CATALOG.reduce((total, fish) => total + fish.weight, 0);
+const accept = (...events: FishingEvent[]): ActionResult => ({ ok: true, events });
+const reject = (reason: RejectionReason): ActionResult => ({ ok: false, reason });
+
+function pendingRevenue(orders: readonly FishingOrder[]) {
+  return orders.reduce((total, order) => total + RECIPE_CATALOG[order.recipeId].price, 0);
 }
 
-export function terrainAngle(x: number, trail: TrailId): number {
-  const amplitude = trail === 'valley' ? 21 : trail === 'forest' ? 32 : 26;
-  return Math.atan(amplitude / 460 * Math.cos(x / 460) + 9 / 173 * Math.cos(x / 173));
-}
+/** Pure simulation, with no scheduling, platform APIs, or storage. See FishingGame for the host API. */
+export function createFishingGame({ random, progress, highScore: initialHighScore = 0 }: FishingOptions): FishingGame {
+  const fishCounts = Object.fromEntries(FISH_CATALOG.map(({ id }) => [id, progress?.fishCounts[id] ?? 0])) as Record<FishId, number>;
+  let fishCount = FISH_CATALOG.reduce((total, { id }) => total + fishCounts[id], 0);
+  const discovered = new Set(progress?.discoveredFishIds);
+  const orders: PendingOrder[] = progress?.orders.map(order => ({ ...order })) ?? [];
+  let coins = progress?.coins ?? 0;
+  let rodLevel = progress?.rodLevel ?? 1;
+  let equipped = progress?.equippedRodLevel ?? rodLevel;
+  if (!Number.isSafeInteger(coins) || coins < 0 || coins > Number.MAX_SAFE_INTEGER - pendingRevenue(orders)) {
+    throw new RangeError('Invalid saved coin balance');
+  }
+  let score = 0;
+  let guestIndex = 0;
+  let guestPortions = 0;
+  let highScore = Number.isSafeInteger(initialHighScore) && initialHighScore >= 0 ? initialHighScore : 0;
+  let phase: TripPhase = 'home';
+  let active = true;
+  let result: TripResult | null = null;
+  let cast: Cast | null = null;
+  let target: typeof FISH_CATALOG[number] = FISH_CATALOG[0];
+  let targetGrams: number = FISH_MASS.sardine[0];
+  let massQuantile = 0;
+  let castBait: BaitId = 'none';
+  let selectedBait = progress?.angling?.bait ?? 'none';
+  const baitStock = { ...(progress?.angling?.stock ?? BAIT_SAMPLES) };
+  const careerCounts = { ...progress?.angling?.counts };
+  let best = progress?.angling?.best;
+  let anglingChanged = !!progress?.angling;
+  let lastCatch: CatchCard | undefined;
+  let tapCooldownMs = 0;
 
-type Placement = readonly [FeatureKind, number, number, number?];
-const OPENING: readonly Placement[] = [
-  ['coin', 650, 18, 52], ['coin', 730, 18, 52], ['coin', 810, 18, 52],
-  ['rock', 1020, 44], ['ramp', 1470, 76], ['coin', 1580, 18, 110],
-  ['coin', 1670, 18, 145], ['slide', 2040, 60],
-];
-const ROUTES: Record<TrailId, readonly (readonly Placement[])[]> = {
-  valley: [
-    [['rock', 420, 44], ['ramp', 1020, 76], ['slide', 1840, 60]],
-    [['branch', 450, 120], ['rock', 1160, 48], ['charge', 1740, 60]],
-    [['ice', 240, 350], ['ramp', 1080, 76], ['rock', 1280, 44], ['slide', 1900, 60]],
-  ],
-  forest: [
-    [['branch', 360, 140], ['ramp', 1040, 80], ['rock', 1240, 48], ['charge', 1820, 60]],
-    [['rock', 400, 46], ['branch', 1120, 150], ['slide', 1820, 60]],
-    [['ramp', 320, 80], ['branch', 1320, 140], ['charge', 1900, 60]],
-  ],
-  night: [
-    [['ice', 220, 380], ['ramp', 940, 80], ['charge', 1860, 60]],
-    [['rock', 380, 48], ['ice', 1000, 300], ['slide', 1780, 60]],
-    [['ramp', 320, 80], ['rock', 1300, 48], ['charge', 1900, 60]],
-  ],
-};
+  function getProgress(): FishingProgress {
+    return {
+      version: 2, coins, rodLevel,
+      ...(equipped !== rodLevel && { equippedRodLevel: equipped }),
+      fishCounts: { ...fishCounts },
+      discoveredFishIds: FISH_CATALOG.flatMap(({ id }) => discovered.has(id) ? [id] : []),
+      orders: orders.map(order => ({ ...order })),
+      ...(anglingChanged && { angling: {
+        bait: selectedBait, stock: { ...baitStock }, counts: { ...careerCounts },
+        ...(best && { best: { ...best } }),
+      } }),
+    };
+  }
 
-function generate(state: SkiState): void {
-  const x = state.player.x;
-  state.features = state.features.filter(f => f.x + f.width > x - 450);
-  state.nextSegment = Math.max(state.nextSegment, Math.floor((x - 450) / SEGMENT));
-  while (state.nextSegment * SEGMENT < x + 1900) {
-    const segment = state.nextSegment++;
-    const layouts = ROUTES[state.trail];
-    const placements = segment === 0 ? OPENING : layouts[(segment - 1) % layouts.length];
-    for (const [kind, offset, width, height = 0] of placements) {
-      const fx = segment * SEGMENT + offset;
-      if (fx + width < x - 450) continue;
-      state.features.push({ id: state.nextId++, kind, x: fx, width,
-        y: terrainY(fx + width / 2, state.trail) - height, used: false });
+  function getCast(): CastSnapshot {
+    return cast ? { ...cast } : { phase: fishCount >= FISH_CAPACITY ? 'full' : 'idle' };
+  }
+
+  function blocked(...allowed: TripPhase[]): RejectionReason | undefined {
+    if (!active) return 'inactive';
+    if (!allowed.includes(phase)) return 'wrong-phase';
+  }
+
+  function draw() {
+    const value = random();
+    if (!(value >= 0 && value < 1)) throw new RangeError('Fishing random source must return a value in [0, 1)');
+    return value;
+  }
+
+  function startCast(events: FishingEvent[]) {
+    const { minWaitMs, maxWaitMs, rareBonusMs } = ROD_CATALOG[equipped];
+    const base = minWaitMs + Math.floor(draw() * (maxWaitMs - minWaitMs + 1));
+    const roll = draw();
+    let weight = 0;
+    target = FISH_CATALOG.find(fish => roll < (weight += fish.weight) / totalWeight)!;
+    castBait = selectedBait !== 'none' && baitStock[selectedBait] > 0 ? selectedBait : 'none';
+    if (castBait !== 'none') {
+      baitStock[castBait]--;
+      if (!baitStock[castBait]) selectedBait = 'none';
+      anglingChanged = true;
     }
-    if (segment > 0) {
-      for (let i = 0; i < 3; i++) {
-        const fx = segment * SEGMENT + 740 + i * 72;
-        state.features.push({ id: state.nextId++, kind: 'coin', x: fx, width: 18,
-          y: terrainY(fx, state.trail) - 52, used: false });
-      }
+    const bait = BAITS[castBait];
+    // Conditional on the species, the roll's position inside its band is uniform.
+    const position = Math.max(0, Math.min(1, (roll * totalWeight - (weight - target.weight)) / target.weight));
+    massQuantile = position ** bait.massPower;
+    const [minGrams, maxGrams] = FISH_MASS[target.id];
+    targetGrams = Math.round(minGrams + (maxGrams - minGrams) * massQuantile);
+    const waitMs = base + target.extraWaitMs - (target.rarity === '稀有' ? rareBonusMs : 0) - bait.speedMs;
+    cast = { phase: 'waiting', remainingMs: waitMs, originalWaitMs: waitMs, tappedMs: 0, rodLevel: equipped };
+    events.push({ type: 'cast-started', waitMs, rodLevel: equipped, ...(castBait !== 'none' && { bait: castBait }) });
+  }
+
+  function nextKey(previous = '') {
+    const pool = FIGHT_KEYS.replace(previous, '');
+    return pool[Math.floor(draw() * pool.length)];
+  }
+
+  function startBite(events: FishingEvent[]) {
+    if (target.rarity === '稀有') {
+      cast = { phase: 'fight', remainingMs: FIGHT_MS, key: nextKey(), progress: 0 };
+      events.push({ type: 'fight-started' });
+    } else {
+      events.push(startReeling('bite'));
     }
   }
-  if (state.features.length > MAX_FEATURES) state.features.length = MAX_FEATURES;
-}
 
-export function createRun(trail: TrailId): SkiState {
-  const speed = TRAILS.find(t => t.id === trail)!.baseSpeed;
-  const state: SkiState = {
-    trail, time: 0, player: {
-      x: START_X, y: terrainY(START_X, trail), vy: 0, speed,
-      angle: terrainAngle(START_X, trail), grounded: true, airTime: 0,
-      rotation: 0, flipping: false, tucked: false, crashTime: 0, invulnerable: 0,
-      airBoosts: 0, boostTime: 0, boostFlash: 0,
-      coyote: 0.1, jumpBuffer: 0, partner: null, shield: false, squash: 0,
+  function startReeling(type: 'bite' | 'reel-started'): FishingEvent {
+    const durationMs = target.reelMs + (massQuantile >= .8 ? HEAVY_REEL_EXTRA_MS : 0);
+    cast = { phase: 'reeling', remainingMs: durationMs, fishId: target.id };
+    return { type, durationMs };
+  }
+
+  function catchFish(): FishingEvent {
+    const { id } = target;
+    const firstDiscovery = !discovered.has(id);
+    discovered.add(id);
+    fishCounts[id]++;
+    fishCount++;
+    const record = !best || targetGrams > best.grams;
+    if (record) best = { fishId: id, grams: targetGrams };
+    careerCounts[id] = Math.min(CAREER_LIMIT, (careerCounts[id] ?? 0) + 1);
+    lastCatch = { fishId: id, grams: targetGrams, bait: castBait, record, firstDiscovery };
+    anglingChanged = true;
+    cast = null;
+    return { type: 'fish-caught', fishId: id, firstDiscovery };
+  }
+
+  function sellOrder(order: FishingOrder, events: FishingEvent[]) {
+    const { price } = RECIPE_CATALOG[order.recipeId];
+    orders.shift();
+    coins += price;
+    score += price;
+    const ticket = GUEST_ORDERS[guestIndex];
+    let guest: { name: string; bonus: number } | undefined;
+    if (ticket?.recipes.includes(order.recipeId) && ++guestPortions === ticket.portions) {
+      // Tips must leave room for all recipes whose base prices are already reserved.
+      const room = Number.MAX_SAFE_INTEGER - pendingRevenue(orders) - Math.max(coins, score);
+      const bonus = Math.min(ticket.bonus, room);
+      coins += bonus;
+      score += bonus;
+      guest = { name: ticket.guest, bonus };
+      guestIndex++;
+      guestPortions = 0;
+    }
+    highScore = Math.max(highScore, score);
+    events.push({ type: 'order-sold', fishId: order.fishId, recipeId: order.recipeId, price, score, highScore, ...(guest && { guest }) });
+  }
+
+  return {
+    getProgress,
+    getSnapshot() {
+      return {
+        phase, active, progress: getProgress(), fishCount, cast: getCast(), tapCooldownMs,
+        score, highScore, guestIndex, guestPortions, result: result && { ...result },
+        ...(lastCatch && { lastCatch: { ...lastCatch } }),
+      };
     },
-    chasers: Array.from({ length: 8 }, (_, i) => ({
-      x: START_X - 308 - i * 52, offset: -i * 52, lane: i % 3, phase: i * 0.79,
-    })),
-    features: [], particles: [], distance: 0, coins: 0, flips: 0, combo: 0,
-    bonus: 0, score: 0, coinFlash: 0, over: false, caughtTime: 0,
-    cameraY: terrainY(START_X, trail) - 420,
-    nextSegment: 0, nextId: 0, message: '按住跳跃，松手稳稳落地', messageTime: 5, events: [],
-  };
-  generate(state);
-  return state;
-}
-
-export function frontGap(state: SkiState): number {
-  if (!state.chasers.length) return Infinity;
-  const left = Math.min(...playerBody(state.player).map(circle => circle.x - circle.radius));
-  return Math.max(0, left - Math.max(...state.chasers.map(c => c.x)) - 14);
-}
-
-function message(state: SkiState, text: string): void {
-  state.message = text;
-  state.messageTime = 2.2;
-}
-
-function burst(state: SkiState, color: string, reducedMotion: boolean, x = state.player.x, y = state.player.y - 12): void {
-  if (reducedMotion) return;
-  for (let i = 0; i < 8 && state.particles.length < MAX_PARTICLES; i++) {
-    const angle = i * TAU / 8;
-    state.particles.push({ x, y,
-      vx: Math.cos(angle) * 65, vy: -50 + Math.sin(angle) * 50,
-      life: 0.35 + i * 0.025, color });
-  }
-}
-
-function dismount(p: SkiPlayer): void {
-  if (p.grounded) p.y += rideHeight(p);
-  p.partner = null;
-  p.shield = false;
-}
-
-function crash(state: SkiState, reducedMotion: boolean): void {
-  const p = state.player;
-  if (p.crashTime > 0 || p.invulnerable > 0) return;
-  p.crashTime = 1.25;
-  p.speed = Math.max(60, p.speed * 0.3);
-  p.invulnerable = 1.6;
-  p.jumpBuffer = 0;
-  p.rotation = 0;
-  p.flipping = false;
-  p.boostTime = 0;
-  p.boostFlash = 0;
-  p.tucked = false;
-  state.combo = 0;
-  dismount(p);
-  state.events.push('crash');
-  message(state, '轻按跳跃，快快起身！');
-  burst(state, '#FFFFFF', reducedMotion);
-}
-
-function jump(p: SkiPlayer, velocity = -390): void {
-  p.grounded = false;
-  p.vy = velocity;
-  p.airTime = 0;
-  p.rotation = 0;
-  p.airBoosts = 0;
-  p.flipping = false;
-  p.coyote = 0;
-  p.jumpBuffer = 0;
-  p.squash = 0;
-}
-
-function chaserBody(x: number, trail: TrailId): Circle[] {
-  const y = terrainY(x, trail);
-  return [{ x, y: y - 32, radius: 14 }, { x, y: y - 52, radius: 12 }];
-}
-function sweptCircle(a: Circle, b: Circle, c: Circle, d: Circle): boolean {
-  const x = a.x - c.x;
-  const y = a.y - c.y;
-  const dx = b.x - d.x - x;
-  const dy = b.y - d.y - y;
-  const length = dx * dx + dy * dy;
-  const t = length === 0 ? 0 : clamp(-(x * dx + y * dy) / length, 0, 1);
-  return (x + dx * t) ** 2 + (y + dy * t) ** 2 <= (Math.max(a.radius, b.radius) + c.radius) ** 2;
-}
-
-function rectangleHit(before: Circle[], after: Circle[], left: number, right: number, top: number, bottom: number): boolean {
-  return after.some((circle, i) => {
-    const old = before[Math.min(i, before.length - 1)];
-    const radius = Math.max(old.radius, circle.radius);
-    const dx = circle.x - old.x;
-    const dy = circle.y - old.y;
-    let enter = 0;
-    let exit = 1;
-    for (const [start, delta, min, max] of [[old.x, dx, left - radius, right + radius], [old.y, dy, top - radius, bottom + radius]]) {
-      if (Math.abs(delta) < 1e-9) {
-        if (start < min || start > max) return false;
-      } else {
-        const a = (min - start) / delta;
-        const b = (max - start) / delta;
-        enter = Math.max(enter, Math.min(a, b));
-        exit = Math.min(exit, Math.max(a, b));
-        if (enter > exit) return false;
-      }
-    }
-    return true;
-  });
-}
-
-function groundContact(state: SkiState) {
-  const p = state.player;
-  const support = (circles: Circle[]) => Math.min(...circles.map(circle =>
-    terrainY(circle.x, state.trail) - (circle.y - p.y) - circle.radius));
-  const body = support(playerBody(p));
-  const skis = support(skiContacts(p));
-  return { y: Math.min(body, skis), bodyFirst: body < skis - 2 };
-}
-
-function simulate(state: SkiState, input: SkiInput, dt: number, reducedMotion: boolean): void {
-  const p = state.player;
-  const oldX = p.x;
-  const oldFeet = p.y + rideHeight(p);
-  const wasCrashed = p.crashTime > 0;
-  p.tucked = input.tuck && !wasCrashed;
-  const before = playerBody(p);
-  const beforeSkis = skiContacts(p);
-  state.time += dt;
-  state.messageTime = Math.max(0, state.messageTime - dt);
-  state.coinFlash = Math.max(0, state.coinFlash - dt);
-  p.boostTime = Math.max(0, p.boostTime - dt);
-  p.boostFlash = Math.max(0, p.boostFlash - dt);
-  p.squash = Math.max(0, p.squash - dt * 3);
-  p.invulnerable = Math.max(0, p.invulnerable - dt);
-  p.jumpBuffer = Math.max(0, p.jumpBuffer - dt);
-  p.coyote = p.grounded ? 0.1 : Math.max(0, p.coyote - dt);
-  if (input.jumpPressed) {
-    if (wasCrashed) p.crashTime = Math.max(0, p.crashTime - 0.24);
-    else p.jumpBuffer = 0.13;
-  }
-  if (wasCrashed) {
-    p.crashTime = Math.max(0, p.crashTime - dt);
-    if (p.crashTime === 0) {
-      p.angle = terrainAngle(p.x, state.trail);
-      p.invulnerable = Math.max(p.invulnerable, 0.55);
-      message(state, '站稳啦，继续滑！');
-    }
-  }
-  const base = TRAILS.find(t => t.id === state.trail)!.baseSpeed;
-  const difficulty = Math.min(65, state.distance / 65);
-  const onIce = state.features.some(f => f.kind === 'ice' && p.x >= f.x && p.x <= f.x + f.width);
-  const targetSpeed = clamp(base + difficulty + Math.sin(terrainAngle(p.x, state.trail)) * 80
-    + (p.partner === 'slide' ? 80 : p.partner === 'charge' ? 100 : 0)
-    + (onIce && p.grounded ? 30 : 0) + state.combo * 4
-    + (p.boostTime > 0 ? FLIP_BOOST_SPEED : 0), 180, 470);
-  p.speed += ((p.crashTime > 0 ? 65 : targetSpeed) - p.speed) * Math.min(1, dt * (p.crashTime > 0 ? 5 : 1.9));
-  if (p.jumpBuffer > 0 && p.crashTime === 0 && (p.grounded || p.coyote > 0)) jump(p);
-  p.x += p.speed * dt;
-  if (p.grounded) {
-    const difference = wrapped(terrainAngle(p.x, state.trail) - p.angle);
-    p.angle += clamp(difference, -10 * dt, 10 * dt);
-    p.y = groundContact(state).y;
-    p.vy = 0;
-  } else {
-    p.airTime += dt;
-    const holdLift = input.jump && !input.tuck && p.airTime < 0.23 && p.vy < 0;
-    p.vy += (holdLift ? 330 : input.tuck ? 1450 : 780) * dt;
-    p.y += p.vy * dt;
-    if (p.crashTime === 0) {
-      const activeFlip = input.jump && !input.tuck && p.airTime >= 0.24;
-      const turn = activeFlip ? -8.2 : clamp(input.tilt, -1, 1) * 3.4;
-      if (activeFlip && !p.flipping) {
-        p.flipping = true;
-        state.events.push('flip');
-      }
-      p.angle += turn * dt;
-      p.rotation += turn * dt;
-      // Reward each newly completed full turn once; rocking across a boundary
-      // or the automatic landing correction cannot farm additional boosts.
-      const completed = Math.floor((Math.abs(p.rotation) + 1e-6) / TAU);
-      if (completed > p.airBoosts) {
-        p.airBoosts = completed;
-        p.boostTime = FLIP_BOOST_DURATION;
-        p.boostFlash = 0.45;
-        p.speed = Math.min(470, p.speed + FLIP_BOOST_SPEED);
-        state.events.push('boost');
-        message(state, `${completed} 圈！翻滚小加速`);
-        burst(state, '#FFD475', reducedMotion, p.x, p.y - 30);
-      }
-      if (!activeFlip && Math.abs(input.tilt) < 0.1) {
-        const difference = wrapped(terrainAngle(p.x, state.trail) - p.angle);
-        p.angle += clamp(difference, -7 * dt, 7 * dt);
-      }
-    }
-    const contact = groundContact(state);
-    if (p.vy >= 0 && p.y >= contact.y) {
-      p.y = contact.y;
-      p.grounded = true;
-      p.vy = 0;
-      p.coyote = 0.1;
-      if (p.crashTime === 0) {
-        if (contact.bodyFirst) crash(state, reducedMotion);
-        else {
-          const flips = Math.floor((Math.abs(p.rotation) + 1e-6) / TAU);
-          if (flips > 0) {
-            state.combo = Math.min(3, state.combo + 1);
-            state.flips += flips;
-            state.bonus += flips * 120 * state.combo;
-            p.speed = Math.min(470, p.speed + 22);
-            message(state, `${flips} 圈翻转 · 技巧 ×${state.combo}`);
-          }
-          state.events.push('land');
-          p.squash = 0.65;
-          burst(state, '#E3F4FF', reducedMotion);
+    setActive(value) { active = value; },
+    startTrip() {
+      const reason = blocked('home');
+      if (reason) return reject(reason);
+      phase = 'playing';
+      score = 0;
+      guestIndex = guestPortions = 0;
+      lastCatch = undefined;
+      return accept({ type: 'trip-started', score, highScore });
+    },
+    pause() {
+      const reason = blocked('playing');
+      if (reason) return reject(reason);
+      phase = 'paused';
+      return accept();
+    },
+    resume() {
+      const reason = blocked('paused');
+      if (reason) return reject(reason);
+      phase = 'playing';
+      return accept();
+    },
+    finishTrip() {
+      const reason = blocked('playing', 'paused');
+      if (reason) return reject(reason);
+      phase = 'settled';
+      cast = null;
+      tapCooldownMs = 0;
+      result = { score, highScore, victory: score >= TRIP_TARGET_SCORE };
+      return accept({ type: 'trip-finished', result: { ...result } });
+    },
+    returnHome() {
+      const reason = blocked('settled');
+      if (reason) return reject(reason);
+      phase = 'home';
+      result = null;
+      return accept();
+    },
+    advance(deltaMs, fishing = true) {
+      const events: FishingEvent[] = [];
+      if (!active || phase !== 'playing' || !Number.isSafeInteger(deltaMs) || deltaMs <= 0 || deltaMs > 1_800_000) return events;
+      // Bound the work even if every cast times out without filling the basket.
+      while (deltaMs > 0) {
+        if (fishing && !cast && fishCount < FISH_CAPACITY) startCast(events);
+        const order = orders[0];
+        const elapsed = Math.min(deltaMs, fishing ? cast?.remainingMs ?? Infinity : Infinity, order?.remainingMs ?? Infinity);
+        deltaMs -= elapsed;
+        if (order) order.remainingMs -= elapsed;
+        // At a shared deadline the sale event precedes fishing feedback.
+        if (order?.remainingMs === 0) sellOrder(order, events);
+        if (!fishing) continue;
+        tapCooldownMs = Math.max(0, tapCooldownMs - elapsed);
+        if (cast && (cast.remainingMs -= elapsed) === 0) {
+          if (cast.phase === 'waiting') startBite(events);
+          else if (cast.phase === 'fight') { cast = null; events.push({ type: 'fish-escaped' }); }
+          else events.push(catchFish());
         }
       }
-      if (p.crashTime > 0) {
-        p.angle = terrainAngle(p.x, state.trail);
-        p.y = groundContact(state).y;
+      return events;
+    },
+    tapRod() {
+      const reason = blocked('playing');
+      if (reason) return reject(reason);
+      if (cast?.phase !== 'waiting') return reject('not-waiting');
+      if (tapCooldownMs > 0) return reject('tap-cooldown');
+      const budget = Math.floor(cast.originalWaitMs * TAP_MAX_PERCENT / 100) - cast.tappedMs;
+      if (budget <= 0) return reject('tap-limit');
+      const reducedMs = Math.min(TAP_REDUCTION_MS, cast.remainingMs, budget);
+      cast.tappedMs += reducedMs;
+      cast.remainingMs -= reducedMs;
+      tapCooldownMs = ROD_CATALOG[cast.rodLevel].tapCooldownMs;
+      const events: FishingEvent[] = [{ type: 'rod-tapped', reducedMs }];
+      if (cast.remainingMs === 0) startBite(events);
+      return accept(...events);
+    },
+    fight(key) {
+      const reason = blocked('playing');
+      if (reason || cast?.phase !== 'fight') return reject(reason ?? 'wrong-phase');
+      if (key !== cast.key) {
+        cast.progress = Math.max(0, cast.progress - 1);
+        return accept({ type: 'fight-miss' });
       }
-      p.rotation = 0;
-      p.flipping = false;
-      p.airTime = 0;
-      if (p.jumpBuffer > 0 && p.crashTime === 0) jump(p);
-    }
-  }
-
-  let after = playerBody(p);
-  for (const f of state.features) {
-    if (f.used || f.x > p.x + 80 || f.x + f.width < oldX - 80) continue;
-    if (f.kind === 'coin') {
-      const coin = { x: f.x + f.width / 2, y: f.y, radius: 10 };
-      if (after.some((body, i) => sweptCircle(before[Math.min(i, before.length - 1)], body, coin, coin))) {
-        f.used = true;
-        state.coins++;
-        state.coinFlash = 0.22;
-        state.events.push('coin');
-        burst(state, '#FFD475', reducedMotion, coin.x, coin.y);
+      if (++cast.progress === FIGHT_GOAL) return accept(startReeling('reel-started'));
+      cast.key = nextKey(cast.key);
+      return accept({ type: 'fight-hit' });
+    },
+    queueOrder(fishId, recipeId, quantity = 1) {
+      const reason = blocked('playing');
+      if (reason) return reject(reason);
+      const fish = FISH_CATALOG.find(({ id }) => id === fishId);
+      if (!fish) return reject('unknown-fish');
+      if (!isRecipeId(recipeId)) return reject('unknown-recipe');
+      const recipe = RECIPE_CATALOG[recipeId];
+      if (recipe.fishIds && !recipe.fishIds.includes(fishId)) return reject('ineligible-fish');
+      if (!Number.isSafeInteger(quantity) || quantity < 1) return reject('invalid-quantity');
+      if (quantity > ORDER_CAPACITY - orders.length) return reject('queue-full');
+      const requiredFish = recipe.fishPerPortion * quantity;
+      if (fishCounts[fishId] < requiredFish) return reject('no-fish');
+      // Reserve room for every accepted sale so they always pay the catalog price exactly.
+      const ceiling = Number.MAX_SAFE_INTEGER - pendingRevenue(orders) - recipe.price * quantity;
+      if (coins > ceiling || score > ceiling) return reject('balance-limit');
+      fishCounts[fishId] -= requiredFish;
+      fishCount -= requiredFish;
+      for (let index = 0; index < quantity; index++) {
+        orders.push({ fishId, recipeId, remainingMs: recipe.durationMs });
       }
-    } else if (f.kind === 'slide' || f.kind === 'charge') {
-      if (p.crashTime === 0 && rectangleHit(before, after, f.x, f.x + f.width, f.y - 50, f.y)) {
-        p.partner = f.kind;
-        p.shield = f.kind === 'slide';
-        if (p.grounded) p.y = groundContact(state).y;
-        p.speed = Math.min(470, p.speed + 35);
-        f.used = true;
-        state.events.push('mount');
-        message(state, f.kind === 'slide' ? '牛来滑行 · 一次护盾' : '牛来冲撞 · 撞开圆石');
-        burst(state, '#F8CF66', reducedMotion);
-      }
-    } else if (f.kind === 'ramp') {
-      if (p.grounded && p.crashTime === 0 && oldX <= f.x + f.width && p.x >= f.x + f.width * 0.65) {
-        f.used = true;
-        jump(p, -430);
-        burst(state, '#FFFFFF', reducedMotion);
-      }
-    } else if (f.kind === 'rock' || f.kind === 'branch') {
-      const skis = skiContacts(p);
-      const partnerHit = p.partner && f.kind === 'rock' && rectangleHit(
-        [{ x: oldX, y: oldFeet - 20, radius: 20 }],
-        [{ x: p.x, y: p.y + rideHeight(p) - 20, radius: 20 }],
-        f.x + 5, f.x + f.width - 5, f.y - 34, f.y);
-      const top = f.y - (f.kind === 'rock' ? 34 : 72);
-      const bottom = f.y - (f.kind === 'rock' ? 0 : 46);
-      const hit = partnerHit || rectangleHit(before, after, f.x + 5, f.x + f.width - 5, top, bottom)
-        || (beforeSkis.length > 0 && rectangleHit(beforeSkis, skis, f.x + 5, f.x + f.width - 5, top, bottom));
-      if (!hit) continue;
-      f.used = true;
-      if (p.partner === 'charge' && f.kind === 'rock') {
-        state.bonus += 30;
-        burst(state, '#CBDDE4', reducedMotion);
-      } else if (p.partner === 'slide' && p.shield) {
-        dismount(p);
-        p.boostTime = 0;
-        p.boostFlash = 0;
-        p.invulnerable = Math.max(p.invulnerable, 0.3);
-        message(state, '牛来挡住了撞击！');
-        burst(state, '#F8CF66', reducedMotion);
-      } else crash(state, reducedMotion);
-    }
-  }
-  after = playerBody(p);
-  const gapToFront = frontGap(state);
-  const openingGrace = 55 * clamp((28 - state.time) / 22, 0, 1);
-  const chaseSpeed = base - 8 + difficulty - openingGrace + clamp((gapToFront - 220) * 0.6, 0, 180);
-  for (const chaser of state.chasers) {
-    const oldBody = chaserBody(chaser.x, state.trail);
-    chaser.x += chaseSpeed * dt;
-    const newBody = chaserBody(chaser.x, state.trail);
-    if (!state.over && after.some((body, i) => oldBody.some((enemy, j) =>
-      sweptCircle(before[Math.min(i, before.length - 1)], body, enemy, newBody[j])))) {
-      state.over = true;
-      p.boostTime = 0;
-      p.boostFlash = 0;
-      dismount(p);
-      state.caughtTime = 0;
-      state.events.push('caught');
-      message(state, '豆包追上来啦！');
-    }
-  }
-  state.distance = Math.max(state.distance, (p.x - START_X) / 10);
-  state.score = Math.floor(state.distance) + state.coins * 25 + state.bonus;
-  state.cameraY += (terrainY(p.x, state.trail) - 420 - state.cameraY) * Math.min(1, dt * 3);
-  if (reducedMotion) state.particles.length = 0;
-  else {
-    for (const particle of state.particles) {
-      particle.x += particle.vx * dt;
-      particle.y += particle.vy * dt;
-      particle.vy += 120 * dt;
-      particle.life -= dt;
-    }
-    state.particles = state.particles.filter(particle => particle.life > 0).slice(-MAX_PARTICLES);
-  }
-  generate(state);
-}
-
-export function stepRun(state: SkiState, input: SkiInput, dt: number, reducedMotion = false): void {
-  state.events.length = 0;
-  if (state.over || !Number.isFinite(dt) || dt <= 0) return;
-  // Cap resumed/background frames; the caller owns its fixed-step accumulator.
-  let remaining = Math.min(dt, 0.1);
-  let pressed = input.jumpPressed;
-  while (remaining > 1e-9 && !state.over) {
-    const step = Math.min(STEP, remaining);
-    simulate(state, { ...input, jumpPressed: pressed }, step, reducedMotion);
-    pressed = false;
-    remaining -= step;
-  }
+      return accept({ type: 'order-queued', fishId, recipeId, ...(quantity > 1 && { quantity }) });
+    },
+    upgradeRod() {
+      const reason = blocked('playing');
+      if (reason) return reject(reason);
+      if (rodLevel === 3) return reject('max-rod-level');
+      const nextLevel = rodLevel === 1 ? 2 : 3;
+      const cost = ROD_CATALOG[nextLevel].upgradeCost;
+      if (coins < cost) return reject('not-enough-coins');
+      coins -= cost;
+      rodLevel = nextLevel;
+      equipped = nextLevel;
+      return accept({ type: 'rod-upgraded', rodLevel, cost });
+    },
+    equipRod(level) {
+      const reason = blocked('playing');
+      if (reason) return reject(reason);
+      if (!Object.prototype.hasOwnProperty.call(ROD_CATALOG, level) || level > rodLevel) return reject('rod-not-owned');
+      if (level === equipped) return accept();
+      equipped = level;
+      return accept({ type: 'rod-equipped', rodLevel: level });
+    },
+    selectBait(bait) {
+      const reason = blocked('playing');
+      if (reason) return reject(reason);
+      if (!isBaitId(bait)) return reject('unknown-bait');
+      if (bait !== 'none' && !baitStock[bait]) return reject('bait-empty');
+      if (bait === selectedBait) return accept();
+      selectedBait = bait;
+      anglingChanged = true;
+      return accept({ type: 'bait-selected', bait });
+    },
+    buyBait(bait) {
+      const reason = blocked('playing');
+      if (reason) return reject(reason);
+      if (bait !== 'shrimp' && bait !== 'fish') return reject('unknown-bait');
+      if (baitStock[bait] + BAIT_PACK > BAIT_LIMIT) return reject('bait-full');
+      if (coins < BAITS[bait].price) return reject('not-enough-coins');
+      coins -= BAITS[bait].price;
+      baitStock[bait] += BAIT_PACK;
+      anglingChanged = true;
+      return accept({ type: 'bait-bought', bait });
+    },
+    stowCast() {
+      cast = null;
+      tapCooldownMs = 0;
+    },
+  };
 }

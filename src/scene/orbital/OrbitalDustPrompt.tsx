@@ -1,16 +1,26 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   DUST_TONES,
+  PROMPT_ADJACENT_KEY_GAP,
+  PROMPT_KEYCAP_GAP,
+  PROMPT_KEYCAP_SIZE,
+  PROMPT_SHORTCUT_GAP,
   createDustPromptState,
+  dustPromptCoreProgress,
+  formatPromptText,
+  layoutPromptShortcuts,
   setDustTargets,
   splitPromptLines,
+  stepDustKeycapProgress,
   stepDustPrompt,
   type DustPoint,
+  type PromptText,
 } from './dustPromptEngine';
 
 const CANVAS_HEIGHT = 116;
 const TEXT_CENTER_Y = 34;
 const FONT_FAMILY = "'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif";
+type PromptKeycap = DustPoint & { key: string; width: number };
 
 function createDustSprites(): HTMLCanvasElement[] {
   return DUST_TONES.map(hex => {
@@ -32,46 +42,85 @@ function createDustSprites(): HTMLCanvasElement[] {
 }
 
 function sampleGlyphs(
-  text: string,
+  text: PromptText,
   width: number,
   height: number,
-): { points: DustPoint[]; shadow: HTMLCanvasElement | null; core: HTMLCanvasElement | null } {
-  const trimmed = text.trim();
-  if (!trimmed || width <= 0 || height <= 0) return { points: [], shadow: null, core: null };
+): { points: DustPoint[]; shadow: HTMLCanvasElement | null; core: HTMLCanvasElement | null; keycaps: PromptKeycap[] } {
+  const trimmed = formatPromptText(text).trim();
+  const empty = { points: [], shadow: null, core: null, keycaps: [] };
+  if (!trimmed || width <= 0 || height <= 0) return empty;
 
   const scale = 3;
   const offscreen = document.createElement('canvas');
   offscreen.width = Math.ceil(width * scale);
   offscreen.height = Math.ceil(height * scale);
   const ctx = offscreen.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return { points: [], shadow: null, core: null };
+  if (!ctx) return empty;
 
   const fontSize = width < 480 ? 15 : 18;
   const font = `600 ${fontSize}px ${FONT_FAMILY}`;
   ctx.scale(scale, scale);
   ctx.font = font;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
 
   const padX = Math.min(180, Math.max(40, Math.round(width * 0.18)));
   const innerWidth = Math.max(150, width - padX * 2);
-  const lines = splitPromptLines(trimmed, value => ctx.measureText(value).width, innerWidth);
-  const lineHeight = fontSize * 1.38;
-  const startY = TEXT_CENTER_Y - ((lines.length - 1) * lineHeight) / 2;
+  const measure = (value: string) => ctx.measureText(value).width;
+  const shortcuts = layoutPromptShortcuts(text, measure, innerWidth);
+  const keycaps: PromptKeycap[] = [];
+  const glyphs: (DustPoint & { label: string })[] = [];
+  if (shortcuts.length) {
+    const lineHeight = PROMPT_KEYCAP_SIZE + 5;
+    const startY = Math.max(PROMPT_KEYCAP_SIZE / 2 + 1, TEXT_CENTER_Y - ((shortcuts.length - 1) * lineHeight) / 2);
+    shortcuts.forEach((row, index) => {
+      const rowWidth = row.reduce((total, item) => total + item.width, 0) + (row.length - 1) * PROMPT_SHORTCUT_GAP;
+      const y = startY + index * lineHeight;
+      let left = (width - rowWidth) / 2;
+      for (const { keycaps: caps, label, labelWidth, width: itemWidth } of row) {
+        const { actualBoundingBoxAscent, actualBoundingBoxDescent } = ctx.measureText(label);
+        // Lift the outline slightly to align with the text's visual center.
+        const centerY = y + (actualBoundingBoxDescent - actualBoundingBoxAscent) / 2 - 1;
+        glyphs.push({ label, x: left + labelWidth / 2, y });
+        let keyLeft = left + labelWidth + PROMPT_KEYCAP_GAP;
+        for (const cap of caps) {
+          keycaps.push({ ...cap, x: keyLeft + cap.width / 2 - width / 2, y: centerY });
+          keyLeft += cap.width + PROMPT_ADJACENT_KEY_GAP;
+        }
+        left += itemWidth + PROMPT_SHORTCUT_GAP;
+      }
+    });
+  } else {
+    const lines = splitPromptLines(trimmed, measure, innerWidth);
+    const lineHeight = fontSize * 1.38;
+    const startY = TEXT_CENTER_Y - ((lines.length - 1) * lineHeight) / 2;
+    lines.forEach((label, index) => glyphs.push({ label, x: width / 2, y: startY + index * lineHeight }));
+  }
 
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';
-  lines.forEach((line, index) => {
-    ctx.fillText(line, width / 2, startY + index * lineHeight);
-  });
+  for (const { label, x, y } of glyphs) ctx.fillText(label, x, y);
+  // Red marks keycap particles in the sampling mask.
+  const maskSize = PROMPT_KEYCAP_SIZE - 2;
+  ctx.strokeStyle = '#ff0000';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (const { x, y, width: capWidth } of keycaps) {
+    const maskWidth = capWidth - 2;
+    ctx.roundRect(x + (width - maskWidth) / 2, y - maskSize / 2, maskWidth, maskSize, 5);
+  }
+  ctx.stroke();
+  ctx.fillStyle = '#ff0000';
+  ctx.font = '700 11px system-ui, sans-serif';
+  for (const { key, x, y } of keycaps) ctx.fillText(key, x + width / 2, y);
 
   const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
   const points: DustPoint[] = [];
   const step = 2;
   for (let py = 0; py < offscreen.height; py += step) {
     for (let px = 0; px < offscreen.width; px += step) {
-      const alpha = data[(py * offscreen.width + px) * 4 + 3];
-      if (alpha >= 112) {
-        points.push({ x: px / scale, y: py / scale });
+      const pixel = (py * offscreen.width + px) * 4;
+      if (data[pixel + 3] >= 112) {
+        points.push({ x: px / scale, y: py / scale, keycap: data[pixel + 1] === 0 });
       }
     }
   }
@@ -88,9 +137,7 @@ function sampleGlyphs(
     sctx.shadowColor = 'rgba(5, 10, 16, 0.96)';
     sctx.shadowBlur = 6;
     sctx.fillStyle = 'rgba(5, 10, 16, 0.65)';
-    lines.forEach((line, index) => {
-      sctx.fillText(line, width / 2, startY + index * lineHeight);
-    });
+    for (const { label, x, y } of glyphs) sctx.fillText(label, x, y);
   }
 
   const core = document.createElement('canvas');
@@ -103,20 +150,21 @@ function sampleGlyphs(
     cctx.textAlign = 'center';
     cctx.textBaseline = 'middle';
     cctx.fillStyle = '#fff9ec';
-    lines.forEach((line, index) => {
-      cctx.fillText(line, width / 2, startY + index * lineHeight);
-    });
+    for (const { label, x, y } of glyphs) cctx.fillText(label, x, y);
   }
 
-  return { points, shadow, core };
+  return { points, shadow, core, keycaps };
 }
 
-export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = ({
+export const DustPrompt: React.FC<{ text: PromptText; reducedMotion?: boolean }> = ({
   text,
   reducedMotion = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const keycapLayerRef = useRef<HTMLDivElement>(null);
+  const [keycaps, setKeycaps] = useState<PromptKeycap[]>([]);
+  const keycapMotion = useRef({ targeted: false, progress: 0 });
   const stateRef = useRef(createDustPromptState());
   const shadowRef = useRef<HTMLCanvasElement | null>(null);
   const coreRef = useRef<HTMLCanvasElement | null>(null);
@@ -138,6 +186,12 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
       lastTimeRef.current = now;
 
       stepDustPrompt(state, dt, propsRef.current.reducedMotion);
+      const motion = keycapMotion.current;
+      const previousProgress = motion.progress;
+      motion.progress = stepDustKeycapProgress(previousProgress, state.settleProgress, motion.targeted, dt, propsRef.current.reducedMotion);
+      const keycapProgress = dustPromptCoreProgress(motion.progress);
+      if (keycapLayerRef.current) keycapLayerRef.current.style.opacity = String(keycapProgress);
+      if (!motion.targeted && previousProgress > 0 && motion.progress === 0) setKeycaps([]);
 
       if (canvas) {
         const ctx = canvas.getContext('2d');
@@ -154,23 +208,27 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
             ctx.restore();
           }
 
-          if (coreRef.current && state.settleProgress > 0.55) {
+          const coreProgress = coreRef.current ? dustPromptCoreProgress(state.settleProgress) : 0;
+          if (coreRef.current && coreProgress > 0) {
             ctx.save();
-            ctx.globalAlpha = ((state.settleProgress - 0.55) / 0.45) * 0.28;
+            ctx.globalAlpha = coreProgress;
             ctx.drawImage(coreRef.current, 0, 0, width, CANVAS_HEIGHT);
             ctx.restore();
           }
 
           const sprites = spritesRef.current ?? (spritesRef.current = createDustSprites());
+          // Tighten the glow as the particles approach the strokes they came from.
+          const convergeScale = 1.32 - state.settleProgress * .46;
           for (const p of state.particles) {
-            if (p.alpha <= 0.01) continue;
+            const alpha = p.alpha * (1 - (p.keycap ? keycapProgress : coreProgress));
+            if (alpha <= 0.01) continue;
             const settled = p.mode === 'converge' && Math.abs(p.tx - p.x) < 0.6 && Math.abs(p.ty - p.y) < 0.6;
             const shimmer = p.mode === 'converge' && !settled && !propsRef.current.reducedMotion
               ? Math.sin(p.age * 3.1 + p.tx * 0.13) * 0.08
               : 0;
-            const drawRadius = p.size * (p.mode === 'disperse' ? 1.55 : 1.32);
+            const drawRadius = p.size * (p.mode === 'disperse' ? 1.55 : convergeScale);
             const sprite = sprites[p.tone] ?? sprites[0];
-            ctx.globalAlpha = p.alpha * (settled ? 0.94 + Math.sin(p.age * 3.2) * 0.06 : 0.86 + Math.sin(p.age * 4.4) * 0.14);
+            ctx.globalAlpha = alpha * (settled ? 0.94 + Math.sin(p.age * 3.2) * 0.06 : 0.86 + Math.sin(p.age * 4.4) * 0.14);
             ctx.drawImage(
               sprite,
               p.x + shimmer - drawRadius,
@@ -183,7 +241,7 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
         }
       }
 
-      if (state.active) {
+      if (state.active || motion.progress > 0) {
         rafRef.current = window.requestAnimationFrame(tick);
       } else {
         rafRef.current = 0;
@@ -195,59 +253,57 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
     rafRef.current = window.requestAnimationFrame(tick);
   };
 
+  const syncPrompt = (value: PromptText, width: number, reduce: boolean) => {
+    const state = stateRef.current;
+    const motion = keycapMotion.current;
+    const announcement = formatPromptText(value).trim();
+    const { points, shadow, core, keycaps } = sampleGlyphs(value, width, CANVAS_HEIGHT);
+    motion.targeted = keycaps.length > 0;
+    if (motion.targeted || motion.progress === 0) setKeycaps(keycaps);
+    if (motion.targeted && state.text !== announcement) {
+      motion.progress = reduce ? 1 : 0;
+      if (keycapLayerRef.current) keycapLayerRef.current.style.opacity = String(motion.progress);
+    }
+    if (announcement || !state.particles.length) {
+      shadowRef.current = shadow;
+      coreRef.current = core;
+    }
+    setDustTargets(state, announcement, points, width / 2, TEXT_CENTER_Y, reduce);
+    if (state.active || motion.progress > 0) startLoop();
+  };
+
   useEffect(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+
     const syncLayout = () => {
-      const container = containerRef.current;
-      const canvas = canvasRef.current;
-      if (!container || !canvas) return;
       const measured = Math.max(280, Math.min(1040, Math.round(container.clientWidth || window.innerWidth - 24)));
-      widthRef.current = measured;
       const dpr = Math.min(window.devicePixelRatio || 1, 3);
-      canvas.width = Math.round(measured * dpr);
-      canvas.height = Math.round(CANVAS_HEIGHT * dpr);
+      const pixelWidth = Math.round(measured * dpr);
+      const pixelHeight = Math.round(CANVAS_HEIGHT * dpr);
+      if (widthRef.current === measured && canvas.width === pixelWidth && canvas.height === pixelHeight) return;
+      widthRef.current = measured;
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
       canvas.style.width = `${measured}px`;
       canvas.style.height = `${CANVAS_HEIGHT}px`;
 
-      const { points, shadow, core } = sampleGlyphs(propsRef.current.text, measured, CANVAS_HEIGHT);
-      shadowRef.current = shadow;
-      coreRef.current = core;
-      setDustTargets(
-        stateRef.current,
-        propsRef.current.text,
-        points,
-        measured / 2,
-        TEXT_CENTER_Y,
-        propsRef.current.reducedMotion,
-      );
-      if (stateRef.current.active) startLoop();
+      syncPrompt(propsRef.current.text, measured, propsRef.current.reducedMotion);
     };
 
     syncLayout();
+    const observer = new ResizeObserver(syncLayout);
+    observer.observe(container);
     window.addEventListener('resize', syncLayout);
     return () => {
+      observer.disconnect();
       window.removeEventListener('resize', syncLayout);
     };
   }, []);
 
   useEffect(() => {
-    const width = widthRef.current;
-    const { points, shadow, core } = sampleGlyphs(text, width, CANVAS_HEIGHT);
-    if (text.trim()) {
-      shadowRef.current = shadow;
-      coreRef.current = core;
-    } else if (!stateRef.current.particles.length) {
-      shadowRef.current = null;
-      coreRef.current = null;
-    }
-    setDustTargets(
-      stateRef.current,
-      text,
-      points,
-      width / 2,
-      TEXT_CENTER_Y,
-      reducedMotion,
-    );
-    if (stateRef.current.active) startLoop();
+    syncPrompt(text, widthRef.current, reducedMotion);
   }, [text, reducedMotion]);
 
   useEffect(() => () => {
@@ -260,7 +316,11 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
   return (
     <div ref={containerRef} className="orbital-dust-prompt">
       <canvas ref={canvasRef} className="orbital-dust-canvas" aria-hidden="true" />
-      <p className="sr-only" role="status" aria-live="polite">{text}</p>
+      <div ref={keycapLayerRef} className="orbital-dust-keycaps" aria-hidden="true">
+        {keycaps.map(({ key, width, x, y }, index) => <kbd key={`${key}-${index}`} className="orbital-keycap orbital-dust-keycap" aria-hidden="true"
+          style={{ left: `calc(50% + ${x}px)`, top: y, width }}>{key}</kbd>)}
+      </div>
+      <p className="sr-only" role="status" aria-live="polite">{formatPromptText(text)}</p>
     </div>
   );
 };

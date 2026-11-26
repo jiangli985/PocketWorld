@@ -11,7 +11,7 @@ import { SCHEDULE_BOOK_POSITION, SCHEDULE_BOOK_SCALE, SCHEDULE_BOOK_YAW } from '
 
 function FurnitureComputer({ world }: { world: WorldModelProps }) {
   const state = world.objects.computer ?? CLOSED_OBJECT;
-  return <ObjectHandle id="computer" action="inspect" panorama hint="坐稳电脑椅后使用电脑" world={world} position={[1.55, 1.12, -2.6]}>
+  return <ObjectHandle id="computer" action="inspect" panoramaOnly hint="坐稳电脑椅后使用电脑" world={world} position={[1.55, 1.12, -2.6]}>
     <SuppliedAsset name="computer.fitted" size={CRT_SIZE} fit="contact" position={[0, 0, -.07]} fallback={<group scale={[CRT_SCALE, CRT_SCALE, 1]}>
     <SoftBox dims={[0.55, 0.065, 0.42]} position={[0, 0.0325, 0.01]} color="#c2c0aa" radius={0.045} />
     <Cylinder radius={0.12} height={0.09} position={[0, 0.1, -0.04]} color="#aeae9b" />

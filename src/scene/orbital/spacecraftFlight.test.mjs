@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import * as flightMotion from './spacecraftFlight.ts';
 import { load } from './load-for-validation.mjs';
 import { UPPER_DECK_OFFSET } from './cabinLayout.ts';
 import { CABIN_STAIRS, STAIR_UPPER_PLATFORM_BACK } from './cabinStairs.ts';
@@ -26,6 +27,7 @@ test('initial view mode respects query params and reduced motion', () => {
   assert.equal(readInitialViewMode('?view=orbit', false), 'orbit');
   assert.equal(readInitialViewMode('?view=cabin', false), 'cabin');
   assert.equal(readInitialViewMode('?dev=mario', false), 'cabin');
+  assert.equal(readInitialViewMode('?game=ski', false), 'cabin');
   assert.equal(readInitialViewMode('?dev=shooter', false), 'cabin');
 });
 
@@ -191,4 +193,26 @@ test('hull opacity fades smoothly during enter/leave transitions and stays solid
   assert.equal(hullOpacityForTransition('leaving-cabin', 0), 0);
   assert.ok(hullOpacityForTransition('leaving-cabin', 0.5) > 0.2 && hullOpacityForTransition('leaving-cabin', 0.5) < 0.8);
   assert.equal(hullOpacityForTransition('leaving-cabin', 1), 1);
+});
+
+test('the interior and hull dissolve together in both flight directions', () => {
+  const opacity = flightMotion.cabinOpacityForTransition;
+  assert.equal(opacity('orbit', 1), 0);
+  assert.equal(opacity('cabin', 0), 1);
+  for (const [mode, start, end] of [['entering-cabin', 0, 1], ['leaving-cabin', 1, 0]]) {
+    assert.equal(opacity(mode, 0), start);
+    assert.equal(opacity(mode, 1), end);
+    let previous = start;
+    let overlap = 0;
+    for (let i = 1; i <= 20; i++) {
+      const progress = i / 20;
+      const cabin = opacity(mode, progress);
+      const hull = hullOpacityForTransition(mode, progress);
+      assert.ok(start === 0 ? cabin >= previous : cabin <= previous);
+      assert.ok(cabin > 0 || hull > 0, 'there is always a visible model during the transition');
+      if (cabin > 0 && cabin < 1 && hull > 0 && hull < 1) overlap++;
+      previous = cabin;
+    }
+    assert.ok(overlap >= 7, 'both models should overlap through the crossfade');
+  }
 });

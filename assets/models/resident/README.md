@@ -2,7 +2,7 @@
 
 ## 第二套 · 蝴蝶结外套
 
-[可编辑角色](./Luna-Ribbon.blend)使用用户提供的蝴蝶结外套、短裤与长袜模型，五官参照日常装绘制，下巴尖端略微上提，两侧过渡成圆弧。下巴前缘随头骨转动，往颈部逐渐恢复颈骨权重。贴图已打包。游戏中的角色使用 91 根骨骼，保留独立的手指与头发骨链。运行时保留角色原始 4096 × 4096 底色图，从日常装读取底色倍率、全身底色补光和法线强度，并复用同一套暖桃色肤色着色。服装卡片使用该运行时材质的全身渲染。
+[可编辑角色](./Luna-Ribbon.blend)使用用户提供的蝴蝶结外套、短裤与长袜模型，五官参照日常装绘制，下巴尖端略微上提，两侧过渡成圆弧。下巴前缘随头骨转动，往颈部逐渐恢复颈骨权重。贴图已打包。游戏中的角色使用 91 根骨骼，保留独立的手指与头发骨链。底色图在 Blender 中由原始 4096 × 4096 缩至 2048 × 2048，从日常装读取底色倍率、全身底色补光和法线强度，并复用同一套暖桃色肤色着色。服装卡片使用该运行时材质的全身渲染。
 
 `scripts/fit-luna-ribbon.py` 接收已绑定的 `Luna-Ribbon.glb`，用 NumPy 基于两套骨架的局部绑定偏移重定向动作。走路与地毯动作按实际蒙皮校准高度，固定椅按坐垫轮廓生成独立接触缓存。取书及沙发动作随第二套模型载入，生活舱动作独立加载。
 
@@ -85,11 +85,17 @@ blender --background --python scripts/bake-luna-sofa.py -- "$CMU_SUBJECT_75" /tm
 
 ### 运行资源
 
-- `assets/public/models/resident/luna-walk-room.glb`：保留 `Walk_Grounded_Loop`，加入 `ChairSit_Contact`（第 1–98 帧，30 fps，时间归零后 97/30 秒）。31,140 个三角形，10,406,152 bytes。
+- `assets/public/models/resident/luna-walk-room.glb`：保留 `Walk_Grounded_Loop`，加入 `ChairSit_Contact`（第 1–98 帧，30 fps，时间归零后 97/30 秒）。31,140 个三角形，10,123,612 bytes。
 - 同目录 `luna-seat-contact.bin`：98 帧、3,251 个局部顶点的蒙皮前修形，1,911,608 bytes。不能只替换 GLB 而遗漏该文件；普通 glTF 查看器只显示骨骼动作，不会自动应用此缓存。
-- GLB 与接触缓存合计 12.32 MB；源 `.blend` 不在 `assets/public/`，不进入网页构建。
+- GLB 与接触缓存合计 12.04 MB；源 `.blend` 不在 `assets/public/`，不进入网页构建。
 
-原始 4096 × 4096 底色 JPEG 来自用户提供的 Tripo GLB，在 Git 提交 `2e1ff72` 的 `art/resident/animated-transfer/walk-repair/luna-walk-repaired.glb` 中也有相同副本。法线与粗糙度／金属度图保留 2048 × 2048。当前材质将法线强度设为 0.18、金属系数设为 0，并复用底色作为 0.55 强度的自发光，用来减轻室内近景的发际线和眼周暗块。
+原始 4096 × 4096 底色 JPEG 来自用户提供的 Tripo GLB，在 Git 提交 `2e1ff72` 的 `art/resident/animated-transfer/walk-repair/luna-walk-repaired.glb` 中也有相同副本。当前运行时与 `Luna-ArmContact.blend` 底色已在 Blender 中缩为 2048 × 2048；法线与粗糙度／金属度图维持原有 2048 × 2048 数据。当前材质将法线强度设为 0.18、金属系数设为 0，并复用底色作为 0.55 强度的自发光，用来减轻室内近景的发际线和眼周暗块。
+
+### 人物贴图 2K 上限
+
+在仓库根目录运行 `blender --background --python scripts/resize-luna-textures.py`。脚本只缩小日常装、蝴蝶结外套与丁香开衫中最长边超过 2048 的图片，保持宽高比；同步打包对应 Blender 制作源。GLB 中仅替换缩放图片的 bufferView，校验其余二进制数据和模型描述不变，避免重新导出网格破坏 `_CONTACT_ID`、修形或动画。已达上限的图片不重新编码，重复执行不会改写资源。可用 `-- --report <仓库外路径>` 保存处理报告。完成其他模型制作脚本后，应再运行此命令，确保运行资源符合 2K 上限。
+
+日常装 GLB 为 9.65 MiB，蝴蝶结外套为 6.86 MiB；丁香开衫原本即为 2K，保持 7.43 MiB。两张底色由 4096² 降为 2048²，各减少 75% 像素；文件体积不按像素数等比下降，仍包含未改动的贴图、几何和动作。
 
 ### 复建
 

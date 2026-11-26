@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
+import { roomAudio } from '../audioEngine';
 import { initialOutfit, isOutfit, rememberOutfit, type ResidentOutfit } from './wardrobe/outfit';
 import { CLOSED_OBJECT, type WorldAction, type WorldActionContext, type WorldFeatureAdapters, type WorldMotion, type WorldObjectState, type WorldSceneId, type WorldTransition } from '../../types/world';
 
@@ -35,6 +36,8 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
   const motion = useRef<WorldMotion>({ progress: 0, sceneProgress: 0 });
   const live = useRef({ sceneId, sceneObjects, focusedObject });
   live.current = { sceneId, sceneObjects, focusedObject };
+  const transitionPhase = useRef(transition.phase);
+  transitionPhase.current = transition.phase;
   const sequence = useRef(0);
   const pending = useRef<{ abort: AbortController; context: WorldActionContext; timeline?: gsap.core.Timeline; rollback: () => void } | null>(null);
   const mountingOutfit = useRef<{ outfit: ResidentOutfit; resolve: (ready: boolean) => void } | null>(null);
@@ -61,6 +64,7 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
   const onAction = useCallback(async (request: WorldAction) => {
     if (request.sceneId !== live.current.sceneId) return;
     const displayed = live.current;
+    if (request.kind === 'inspect' && displayed.focusedObject === request.objectId && !pending.current && transitionPhase.current === 'active') return;
     const wardrobe = request.sceneId === 'habitat' && request.objectId === 'wardrobe';
     const choice = request.payload?.itemId;
     const outfit = wardrobe && request.kind === 'select' && isOutfit(choice) ? choice : null;
@@ -101,6 +105,9 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
       const mounted = outfit && new Promise<boolean>(resolve => { mountingOutfit.current = { outfit, resolve }; });
       const followsVisibleState = ['toggle', 'open', 'sit', 'turn-page'].includes(action.kind);
       const next = outfit ? { ...visiblePrevious, open: false, itemId: outfit } : nextObjectState(followsVisibleState ? visiblePrevious : previous, action);
+      if (action.objectId === 'lamp' && action.kind === 'toggle') {
+        roomAudio.playSfx(next.active ? 'lamp-on' : 'lamp-off');
+      }
       setSceneObjects(current => {
         const updated = { ...current[action.sceneId], [action.objectId]: next };
         const takingSeat = action.kind === 'sit' && next.active;

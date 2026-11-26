@@ -63,6 +63,7 @@ function mount(kind, overrides = {}, idleLibrary) {
   };
   const audio = {
     playFootstep: (options = {}) => sounds.push({ ...options }),
+    playSfx() {},
     unlock() { actions.push('unlock'); return Promise.resolve(true); },
     getSnapshot: () => ({ disc: {}, isPlaying: false }),
     subscribe() {}, stopMusic() {},
@@ -82,6 +83,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     './Cat': { Cat: 'Cat' },
     './Slippers': { SlipperPair: 'SlipperPair' },
     './PlushDolls': { PlushDolls: 'PlushDolls' },
+    './CabinUpperDeck': { CabinFadeGroup: 'CabinFadeGroup' },
     './schedule/paperGrip': paperGrip,
     './plushCarry': plushCarry,
     './plushMotion': load('./orbital/plushMotion.ts', {}),
@@ -103,6 +105,7 @@ function mount(kind, overrides = {}, idleLibrary) {
       './seatedIdleFrames': load('./orbital/seatedIdleFrames.ts', {}),
     }),
     './scene/audioEngine': { roomAudio: audio, PRESET_MUSIC_DISCS: [] },
+    './scene/orbital/media/record-motion': load('./orbital/media/record-motion.ts', {}),
     './scene/orbital/OrbitalScene': { OrbitalScene: 'OrbitalScene' },
     './scene/orbital/library/useLibrary': { useLibrary: options => ({ dispatch: options.onAction, back: options.onReturn, data: { books: [] }, flow: { current: { phase: 'idle' } }, view: { phase: 'idle' }, motion: { current: null } }) },
     './scene/orbital/library/LibrarySurface': { LibrarySurface: 'LibrarySurface' },
@@ -632,7 +635,7 @@ test('the static bed blocks walking without offering keyboard interaction, and n
   try {
     const [x, , z] = cabinLayout.BED_POSITION;
     view.root.position.set(x + 1.12, 0, z + .90);
-    for (const key of ['KeyE', 'KeyQ', 'KeyR']) view.key(key);
+    for (const key of ['KeyE', 'KeyQ', 'KeyT']) view.key(key);
     for (let i = 0; i < 240; i++) view.frame(1 / 60);
     assert.deepEqual(actions, []);
     assert.equal(view.root.userData.posture, 'standing');
@@ -695,6 +698,40 @@ test('walking into the stair mouth stays on the deck; only E climbs, and E desce
   } finally { view.dispose(); }
 });
 
+test('quick stair travel cancels an in-flight approach and reaches both landings', () => {
+  const quickTravel = { current: null }, deckView = { current: { deck: 'lower', stairAscent: null } };
+  const targets = [];
+  const view = mount('orbital', { quickTravel, deckView, onQuickTravelTarget: target => targets.push(target) });
+  let acted = false;
+  try {
+    const [x, z] = cabinStairs.stairLanding('lower');
+    view.root.position.set(x, 0, z);
+    view.key('KeyE');
+    for (let i = 0; i < 1000 && (deckView.current.stairAscent ?? 0) < .25; i++) view.frame(1 / 60);
+    assert.ok(deckView.current.stairAscent >= .25);
+    assert.equal(quickTravel.current('upper'), true);
+    for (let i = 0; i < 120; i++) view.frame(1 / 60);
+    assert.equal(deckView.current.deck, 'upper');
+    assert.equal(deckView.current.stairAscent, null);
+    assert.equal(view.root.userData.posture, 'standing');
+    assert.ok(view.root.position.distanceTo(new THREE.Vector3(...cabinStairs.stairDestination('lower'))) < .01);
+    assert.equal(quickTravel.current('upper'), false, 'a queued request cannot reverse direction after arrival');
+    view.props.interaction.current(cabinLayout.CLOCK_POSITION, { sceneId: 'habitat', objectId: 'clock', kind: 'inspect' }, () => { acted = true; });
+    assert.equal(quickTravel.current('lower'), true, 'quick descent is available from the upper deck');
+    for (let i = 0; i < 120; i++) view.frame(1 / 60);
+    assert.equal(deckView.current.deck, 'lower');
+    assert.equal(deckView.current.stairAscent, null);
+    assert.ok(view.root.position.distanceTo(new THREE.Vector3(...cabinStairs.stairDestination('upper'))) < .01);
+    assert.equal(acted, false);
+    assert.deepEqual(targets, ['upper', 'lower', 'upper']);
+    view.props.enabled = false;
+    view.frame(1 / 60);
+    assert.equal(targets.at(-1), null);
+    assert.equal(quickTravel.current('upper'), false);
+  } finally { view.dispose(); }
+  assert.equal(quickTravel.current, null);
+});
+
 test('a click on the other deck walks to the stair landing and waits for E instead of crossing', () => {
   const [lx, lz] = cabinStairs.stairLanding('lower');
   assert.deepEqual([...cabinStairs.stairApproachPoint('lower', [-3.05, .8])], [lx, 0, lz]);
@@ -733,7 +770,7 @@ test('an object on the other deck is refused from below until the resident uses 
   } finally { view.dispose(); }
 });
 
-test('crowded nightstand items map E, Q and R to the three nearest props', () => {
+test('crowded nightstand items map E, Q and T to the three nearest props', () => {
   const performed = [];
   const view = mount('orbital', { onAction: action => performed.push(action.objectId) });
   try {
@@ -746,7 +783,8 @@ test('crowded nightstand items map E, Q and R to the three nearest props', () =>
     performed.length = 0;
     view.root.position.set(cabinLayout.NIGHTSTAND_X + .22, 0, cabinLayout.NIGHTSTAND_Z + .70);
     view.key('KeyR');
-    assert.deepEqual(performed, [], 'R selects nothing without the plant interaction');
+    view.key('KeyT');
+    assert.deepEqual(performed, [], 'the nightstand has no third item, and R is reserved for quick travel');
   } finally { view.dispose(); }
 });
 
@@ -902,7 +940,7 @@ test('the desk front is walkable up to the tabletop and has no drawer interactio
 
     view.root.position.set(0.35, 0, -1.32);
     view.frame(1 / 60);
-    for (const key of ['KeyE', 'KeyQ', 'KeyR']) view.key(key);
+    for (const key of ['KeyE', 'KeyQ', 'KeyT']) view.key(key);
     for (let i = 0; i < 60; i++) view.frame(1 / 60);
     assert.deepEqual(performed, []);
     assert.ok(!hints.some(hint => hint?.includes('抽屉')));
