@@ -22,9 +22,90 @@ export const BASE_DRIFT_SPEED = 1.6;
 export const BOOST_DRIFT_SPEED = 36.0;
 export const BOOST_FOV_KICK = 5.5;
 
+/** Sweeping low-Earth-orbit horizon geometry in exterior orbital view (`orbitPresence = 1`). */
+export const ORBIT_EARTH_RADIUS = 468;
+export const ORBIT_EARTH_DISTANCE = 760;
+
+const orbitLook = ORBIT_DIRECTION.clone().negate();
 const orbitRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), ORBIT_DIRECTION).normalize();
 const orbitUp = new THREE.Vector3().crossVectors(ORBIT_DIRECTION, orbitRight);
-const orbitVerticalSlope = Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
+const orbitCamRight = orbitRight; // +X screen right when looking along -ORBIT_DIRECTION
+const orbitCamUp = orbitUp;       // +Y screen up when looking along -ORBIT_DIRECTION
+const orbitHalfFovY = THREE.MathUtils.degToRad(CAMERA_FOV / 2);
+const orbitVerticalSlope = Math.tan(orbitHalfFovY);
+
+export interface OrbitCelestialLayout {
+  earthPosition: [number, number, number];
+  earthRadius: number;
+  moonPosition: [number, number, number];
+  moonRadius: number;
+  cabinMoonPosition: [number, number, number];
+  cabinMoonRadius: number;
+  sunStartTarget: [number, number, number];
+  upDirection: [number, number, number];
+  cameraLook: [number, number, number];
+}
+
+/**
+ * Compute three-body celestial framing for exterior orbital cruise:
+ * - Sweeping giant LEO Earth horizon arc across the lower frame beneath the hull
+ * - Blazing starburst Sun in the upper-left sky
+ * - Cratered Moon in the upper-right sky
+ */
+export function orbitCelestialLayout(aspect: number): OrbitCelestialLayout {
+  const safeAspect = Math.max(0.35, Number.isFinite(aspect) ? aspect : 16 / 9);
+  const halfFovX = Math.atan(orbitVerticalSlope * safeAspect);
+  const portrait = safeAspect < 0.85;
+
+  const dirFromNdc = (ndcX: number, ndcY: number) => {
+    const yaw = Math.atan(ndcX * Math.tan(halfFovX));
+    const pitch = Math.atan(ndcY * orbitVerticalSlope);
+    return orbitLook.clone()
+      .multiplyScalar(Math.cos(pitch) * Math.cos(yaw))
+      .addScaledVector(orbitCamRight, Math.cos(pitch) * Math.sin(yaw))
+      .addScaledVector(orbitCamUp, Math.sin(pitch))
+      .normalize();
+  };
+
+  // 1. Giant LEO Earth sweeping across the bottom of the frame right beneath the duplex hull
+  const earthAngRadius = Math.asin(ORBIT_EARTH_RADIUS / ORBIT_EARTH_DISTANCE);
+  const crestNdcY = portrait ? -0.22 : -0.275;
+  const crestPitch = Math.atan(crestNdcY * orbitVerticalSlope);
+  const centerPitch = crestPitch - earthAngRadius;
+  const centerYaw = Math.atan(-0.025 * Math.tan(halfFovX));
+  const earthDir = orbitLook.clone()
+    .multiplyScalar(Math.cos(centerPitch) * Math.cos(centerYaw))
+    .addScaledVector(orbitCamRight, Math.cos(centerPitch) * Math.sin(centerYaw))
+    .addScaledVector(orbitCamUp, Math.sin(centerPitch))
+    .normalize();
+  const earthPosition = earthDir.clone().multiplyScalar(ORBIT_EARTH_DISTANCE).toArray() as [number, number, number];
+
+  // 2. Cratered Moon suspended in the upper-right orbital sky
+  const moonDir = dirFromNdc(portrait ? 0.50 : 0.39, portrait ? 0.45 : 0.43);
+  const moonDist = 1180;
+  const moonRadius = portrait ? 40 : 68;
+  const moonPosition = moonDir.clone().multiplyScalar(moonDist).toArray() as [number, number, number];
+
+  // Subtle companion Moon position in cabin mode (upper-right sky beyond the rear window)
+  const cabinMoonDir = dirFromNdc(portrait ? 0.44 : 0.48, 0.32);
+  const cabinMoonPosition = cabinMoonDir.clone().multiplyScalar(1260).toArray() as [number, number, number];
+  const cabinMoonRadius = 46;
+
+  // 3. Blazing Sun upper-left sky target at initial entry
+  const sunStartTarget = dirFromNdc(-0.55, portrait ? 0.47 : 0.44).toArray() as [number, number, number];
+
+  return {
+    earthPosition,
+    earthRadius: ORBIT_EARTH_RADIUS,
+    moonPosition,
+    moonRadius,
+    cabinMoonPosition,
+    cabinMoonRadius,
+    sunStartTarget,
+    upDirection: orbitCamUp.toArray() as [number, number, number],
+    cameraLook: orbitLook.toArray() as [number, number, number],
+  };
+}
 
 export interface SpacecraftFlightState {
   mode: SpacecraftViewMode;
