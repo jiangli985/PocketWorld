@@ -16,17 +16,9 @@ import {
 
 const CANVAS_HEIGHT = 116;
 const TEXT_CENTER_Y = 34;
-const ROUNDED_FONT = "'PocketWorld Prompt Rounded'";
-const FONT_FAMILY = `${ROUNDED_FONT}, 'YouYuan', 'Hiragino Maru Gothic ProN', 'PingFang SC', 'Microsoft YaHei', sans-serif`;
+const PROMPT_FONT = "'PocketWorld Prompt'";
+const FONT_FAMILY = `${PROMPT_FONT}, 'YouYuan', 'Hiragino Maru Gothic ProN', 'PingFang SC', 'Microsoft YaHei', sans-serif`;
 type PromptKeycap = DustPoint & { key: string };
-
-function paintPromptGlyph(ctx: CanvasRenderingContext2D, text: string, x: number, y: number) {
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = .75;
-  ctx.lineJoin = 'round';
-  ctx.strokeText(text, x, y);
-  ctx.fillText(text, x, y);
-}
 
 function createDustSprites(): HTMLCanvasElement[] {
   return DUST_TONES.map(hex => {
@@ -100,7 +92,7 @@ function sampleGlyphs(
   }
 
   ctx.fillStyle = '#ffffff';
-  for (const { label, x, y } of glyphs) paintPromptGlyph(ctx, label, x, y);
+  for (const { label, x, y } of glyphs) ctx.fillText(label, x, y);
   // Red marks keycap particles in the sampling mask.
   const maskSize = PROMPT_KEYCAP_SIZE - 2;
   ctx.strokeStyle = '#ff0000';
@@ -110,7 +102,7 @@ function sampleGlyphs(
   ctx.stroke();
   ctx.fillStyle = '#ff0000';
   ctx.font = `400 12px ${FONT_FAMILY}`;
-  for (const { key, x, y } of keycaps) paintPromptGlyph(ctx, key, x + width / 2, y);
+  for (const { key, x, y } of keycaps) ctx.fillText(key, x + width / 2, y);
 
   const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
   const points: DustPoint[] = [];
@@ -149,7 +141,7 @@ function sampleGlyphs(
     cctx.textAlign = 'center';
     cctx.textBaseline = 'middle';
     cctx.fillStyle = '#fff9ec';
-    for (const { label, x, y } of glyphs) paintPromptGlyph(cctx, label, x, y);
+    for (const { label, x, y } of glyphs) cctx.fillText(label, x, y);
   }
 
   return { points, shadow, core, keycaps };
@@ -289,7 +281,7 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
     syncLayout();
     window.addEventListener('resize', syncLayout);
     let active = true;
-    void document.fonts.load(`400 18px ${ROUNDED_FONT}`).then(() => {
+    void document.fonts.load(`400 18px ${PROMPT_FONT}`).then(() => {
       if (active && propsRef.current.text) {
         syncPrompt(propsRef.current.text, widthRef.current, propsRef.current.reducedMotion);
       }

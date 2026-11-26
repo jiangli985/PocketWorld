@@ -15,8 +15,8 @@
 .orbital-edition { margin: 4px 0 0 27px; font-size: 8px; letter-spacing: 2.4px; color: #8c969b; }
 .orbital-dust-prompt { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 4; display: flex; justify-content: center; width: min(1040px, calc(100vw - 24px)); }
 @font-face {
-  font-family: 'PocketWorld Prompt Rounded';
-  src: local('AaMianHuatang'), local('字体管家棉花糖'), local('YouYuan'), local('幼圆'), url('../../../assets/fonts/pocketworld-prompt-rounded.woff2') format('woff2');
+  font-family: 'PocketWorld Prompt';
+  src: local('FZCHSJW--GB1-0'), local('FZCuHeiSongS-B-GB'), local('方正粗黑宋简体'), local('YouYuan'), local('幼圆'), url('../../../assets/fonts/pocketworld-prompt-rounded.woff2') format('woff2');
   font-weight: 400; font-style: normal; font-display: swap;
 }
 .orbital-dust-canvas { display: block; pointer-events: none; }
@@ -27,8 +27,7 @@
 .orbital-cabin-controls kbd, .orbital-dust-keycap {
   display: inline-grid; place-items: center;
   width: 23px; height: 23px; box-sizing: border-box;
-  font: 400 12px/1 'PocketWorld Prompt Rounded', 'YouYuan', system-ui, sans-serif;
-  -webkit-text-stroke: .75px currentColor;
+  font: 400 12px/1 'PocketWorld Prompt', 'YouYuan', system-ui, sans-serif;
   color: #fff4dd; border: 2px solid; border-radius: 6px; letter-spacing: 0; text-shadow: none;
   border-color: #fff5e0 #ecd9b5 #bea57d #f2e3c3; background: transparent;
 }
@@ -44,8 +43,7 @@
 .orbital-cabin-controls .orbital-flight-pill {
   display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 4px;
   border: 0; border-radius: 4px; background: transparent; backdrop-filter: none;
-  color: #fff9ec; font: 400 18px/1.2 'PocketWorld Prompt Rounded', 'YouYuan', sans-serif;
-  -webkit-text-stroke: .75px currentColor;
+  color: #fff9ec; font: 400 18px/1.2 'PocketWorld Prompt', 'YouYuan', sans-serif;
   letter-spacing: 0; white-space: nowrap; pointer-events: auto;
   text-shadow: 0 1px 2px #080714, 0 0 4px #080714e6, 0 0 1px #080714;
 }
