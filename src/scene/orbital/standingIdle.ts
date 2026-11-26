@@ -139,7 +139,7 @@ const CLASP = {
 
 /** Called after the resident's base pose. Only upper-body rotations are owned here. */
 export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationClip, lookClip?: THREE.AnimationClip,
-  applyCabinAction?: ReturnType<typeof createCabinActionPlayer>) {
+  applyCabinAction?: ReturnType<typeof createCabinActionPlayer>, standingClip?: THREE.AnimationClip) {
   const bone = (name: string) => root.getObjectByName('mixamorig' + name)!;
   const bind = (motion?: THREE.AnimationClip) => motion?.tracks.map(track => {
     const { nodeName, propertyName } = THREE.PropertyBinding.parseTrackName(track.name);
@@ -149,7 +149,8 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
     }
     return { joint, curve: track.createInterpolant() };
   }) ?? [];
-  const yawnChannels = bind(clip), lookChannels = bind(lookClip);
+  const yawnChannels = bind(clip), restChannels = bind(standingClip);
+  const lookChannels = bind(lookClip).filter(({ joint }) => !standingClip || /Spine|Neck|Head/.test(joint.name));
   const fittedSleeves = root.userData.outfit === 'cardigan';
   const spine = bone('Spine2'), neck = bone('Neck'), head = bone('Head');
   const arms = (['Right', 'Left'] as const).map(side => {
@@ -182,7 +183,12 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
   };
   const breathingOffset = fittedSleeves ? sleeveBreath : modelOffset;
   return (state: IdleState, animate = true) => {
-    const restWeight = fittedSleeves ? 0 : smooth(state.restWeight);
+    const restWeight = standingClip || !fittedSleeves ? smooth(state.restWeight) : 0;
+    // Blender-authored relaxed shoulders, elbows, wrists and fingers.
+    for (const { joint, curve } of restChannels) {
+      rotation.fromArray(curve.evaluate(0));
+      joint.quaternion.slerp(rotation, restWeight);
+    }
     const weight = animate ? smooth(state.weight) : 0;
     const armWeight = fittedSleeves ? weight * .18 : weight;
     const breath = Math.sin(state.phase * Math.PI * 2 / STANDING_IDLE.breathPeriod);
@@ -200,10 +206,12 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
       for (const { direction, fingers, parts } of arms) {
         const [{ joint: shoulder }, { joint: upper }, { joint: forearm }, { joint: hand }] = parts;
         if (clasp) for (const part of parts) part.base.copy(part.joint.quaternion).multiply(part.clasp);
-        modelOffset(shoulder, 0, 0, direction * .025, restWeight);
-        modelOffset(upper, -.125, 0, -direction * .15, restWeight);
-        modelOffset(forearm, -.155, 0, -direction * .038, restWeight);
-        modelOffset(hand, .085, -direction * .065, -direction * .025, restWeight);
+        if (!standingClip) {
+          modelOffset(shoulder, 0, 0, direction * .025, restWeight);
+          modelOffset(upper, -.125, 0, -direction * .15, restWeight);
+          modelOffset(forearm, -.155, 0, -direction * .038, restWeight);
+          modelOffset(hand, .085, -direction * .065, -direction * .025, restWeight);
+        }
         if (fittedSleeves) {
           sleeveBreath(shoulder, 0, 0, -direction * breath * STANDING_IDLE.shoulderRoll, armWeight);
           sleeveBreath(upper, sway * STANDING_IDLE.armSwing, 0, -direction * .025, armWeight);
@@ -219,7 +227,7 @@ export function createIdlePlayer(root: THREE.Object3D, clip?: THREE.AnimationCli
           const arc = 4 * clasp * (1 - clasp);
           modelOffset(upper, -.30 * arc, 0, direction * .085 * arc, 1);
         }
-        const curl = .18 * restWeight + .10 * clasp;
+        const curl = (standingClip ? 0 : .18 * restWeight) + .10 * clasp;
         for (const finger of fingers) finger.joint.rotateOnAxis(finger.axis, curl * finger.flex);
       }
     }

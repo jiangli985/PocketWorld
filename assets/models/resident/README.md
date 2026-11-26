@@ -112,7 +112,7 @@ python scripts/pack-luna-chair.py --output <外部目录>
 
 ## 坐姿待机
 
-懒人沙发托腮采用 CMU `13_04` 的左肘弯曲和头部转向（120 Hz，第 1573–2149 帧）。桌前固定椅晃腿采用 CMU `01_06` 坐在高处时的左右膝屈伸（120 Hz，第 985–1357 帧）。两段均从原始记录取坐稳后的片段，并导出为 10 Hz 曲线，托腮的放手段略放慢。网页在既有落座姿势上求解手掌接触和小腿摆角。懒人沙发保留原有骨盆、贴地双脚和坐垫承重。固定椅保留臀部与膝位。日常装的左手贴住下颌，右手托住左前臂。
+懒人沙发托腮采用 CMU `13_04` 的左肘弯曲和头部转向（120 Hz，第 1573–2149 帧）。桌前固定椅晃腿采用 CMU `01_06` 坐在高处时的左右膝屈伸（120 Hz，第 985–1357 帧）。两段均从原始记录取坐稳后的片段，并导出为 10 Hz 曲线，托腮的放手段略放慢。网页沿原曲线时序混合下述 Blender 搭腿与托腮姿态，并求解固定椅的小腿摆角。懒人沙发保留原有骨盆、贴地双脚和坐垫承重。三套衣装坐稳时双手分搭大腿或裙面；托腮时左手顺着脸侧抬起，右手继续搭腿。固定椅保留臀部与膝位。
 
 下载 [13_04.amc](https://mocap.cs.cmu.edu/subjects/13/13_04.amc) 和 [01_06.amc](https://mocap.cs.cmu.edu/subjects/01/01_06.amc) 到仓库外的同一目录，从仓库根目录运行以下命令生成 `src/scene/orbital/seatedIdleFrames.ts`。
 
@@ -121,6 +121,22 @@ python3 scripts/extract-luna-seated-idles.py <AMC目录>
 ```
 
 动捕由 CMU Graphics Lab 在 NSF EIA-0196217 资助下制作，允许在商业作品中使用及改编。原始或转换后的数据适用数据库条款。 [CMU Motion Capture Database](https://mocap.cs.cmu.edu/)
+
+## 自然垂臂与沙发手势
+
+[`Luna-Relaxed-Poses.blend`](Luna-Relaxed-Poses.blend) 保存三套衣装各自的 `Relaxed_everyday`、`Relaxed_ribbon`、`Relaxed_cardigan` 场景。每个场景的第 1 帧为自然站姿，第 31 帧为双手搭腿，第 61 帧为左手托腮；这是可编辑姿态库，运行时过渡仍使用原走停、落座与 CMU 手势时序。
+
+`scripts/bake-luna-rest.py` 从 Blender 骨骼求值导出 `Luna_Relaxed_Standing`、`Luna_Sofa_Lap`、`Luna_Sofa_Cheek` 三个旋转片段，追加到各自运行模型。站定时肩臂收近身侧、掌心朝内，环顾只驱动躯干和头颈。沙发落座后段逐渐进入搭腿，托腮时右手保持原接触，起身沿原时轴退出。减少动态效果时保留自然站姿和双手搭腿。原模型二进制数据、UV 拆点、形态键、骨权与接触缓存不变。
+
+开衫右手的 `RightHandMiddle1` 绑定位置偏向掌内，不能单独用它到手腕的向量判断真实掌向。制作时以食指、无名指和小指指根的平均位置确定掌轴，结合真实蒙皮复核接触；腕部旋转相对真实绑定姿态分担到前臂。回归见 `src/scene/orbital/relaxedPoses.test.mjs`。
+
+从仓库根目录运行以下命令，将中间输出留在仓库外。修改源文件的关键姿态后，使用 `--from-blend` 重新导出到临时目录，核对后替换对应三套运行 GLB，并更新素材清单。
+
+```powershell
+node scripts/sample-luna-rest.mjs . "$env:PI_SCRATCH_DIR/rest-reference.json"
+blender --background --factory-startup --python-exit-code 1 --python scripts/bake-luna-rest.py -- --root . --input "$env:PI_SCRATCH_DIR/rest-reference.json" --blend "$env:PI_SCRATCH_DIR/Luna-Relaxed-Poses.blend" --output-dir "$env:PI_SCRATCH_DIR/rest-models"
+blender --background --factory-startup --python-exit-code 1 --python scripts/bake-luna-rest.py -- --root . --from-blend --blend assets/models/resident/Luna-Relaxed-Poses.blend --output-dir "$env:PI_SCRATCH_DIR/rest-models"
+```
 
 ## 日常裙装的站姿修形
 
@@ -166,6 +182,19 @@ blender --background --factory-startup --python-exit-code 1 --python scripts/bak
 托底转移采用 `SUPPORT_SKIN_OFFSETS` 的书本局部接触修正：在制作帧 96–144（导出帧 132–180）加密到每帧四个采样。烘焙先保留原始手掌、手指朝向与动作，再从评估后的 Blender 姿态只重新求解左腕位置和两段手臂，保持原肘部弯曲平面；修正值依据实际蒙皮到圆角封面三角形的距离标定。导出仍为 6 秒，含 325 个采样时点，归还逆向使用同一动作。程序开合与双向翻页仍由网页姿态控制。
 
 程序开合左手继续使用 `bookSupportPose` 的提早抬升曲线，右手闭合抓握的前臂轴向分担在展开前半段淡出；阅读和双向翻页保留原轨迹。取书左手在导出 124 帧完成接触求解并开始承重，主手在 132 帧后才转向封面；接托期间的肘部让位连续淡出到原转书姿态。不能把接近 1 的伸手混合权重或掌部代理点当作真实皮肤接触。左手从书底下方进入接托。真实手与书的三角面回归覆盖三层正逆 115–134 帧，每 0.25 帧采样，共 462 个姿态。双手进入书体的深度须小于 1 mm，从第 124 帧开始要求左手承重间隙小于 2 mm；原转书与开合接触、65°掌向、70°静态腕角及连续性阈值保留。右掌在书本局部朝 +Y，左手承重后，右手沿书脊外缘退开并绕书本局部 Z 轴换握。闭书时右掌朝 −Y、左掌朝 +Y。回归以放松时五指的自然内弯方向标定蒙皮指腹，以拇指对掌校验左右掌面符号，逐层双向检查每根手指的指腹顶点到近侧封面、拇指腹到包边，以及左掌侧到书底的距离。有限采样的范围见[场景进度文档](../../../src/scene/orbital/进度文档.md)。
+
+### 丁香开衫掌面校准
+
+[`Luna-Cardigan-Book-Hands.blend`](Luna-Cardigan-Book-Hands.blend) 保存两侧 `PalmBearing` 掌部导引，以及 `Cardigan_Book_Hands_0`、`_1`、`_2` 三层取书动作（0–180 帧，30 fps）。掌轴按真实指根横排和掌侧蒙皮校准，避免偏向掌内的右中指指根误导腕部朝向。导引的 `openPadDepth` 属性用于放松手指后的指垫厚度；修改后须复查掌侧皮肤到封面或书底的接触。
+
+`scripts/bake-cardigan-library-hands.py` 从 Blender 导引导出 `cardiganPalms.ts`，供开合、阅读和翻页 IK 使用；三层手臂旋转导出到 `cardiganPickup.ts`，由 `libraryMotion.ts` 按原 GLB 时钟采样，归还倒放。书本和未涉及的骨骼仍使用原动作。验证以变形后的掌侧三角面判断朝向，分别检查指垫、拇指与承重掌面；不能仅用手骨到中指指根的方向代替真实手掌。
+
+从可编辑源重导到仓库外，核对两份数据后再替换对应 `src/scene/orbital/library/` 文件：
+
+```powershell
+blender --background --factory-startup --python-exit-code 1 --python scripts/bake-cardigan-library-hands.py -- --from-blend assets/models/resident/Luna-Cardigan-Book-Hands.blend --palm-output "$env:PI_SCRATCH_DIR/cardiganPalms.ts" --pickup-output "$env:PI_SCRATCH_DIR/cardiganPickup.ts"
+node --test src/scene/orbital/library/bookMotion.test.mjs src/scene/orbital/library/library.test.mjs
+```
 
 ### 翻页曲线制作与运行时对照
 

@@ -1068,7 +1068,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
     if (rig.current && im.rig !== rig.current) {
       im.rig = rig.current;
-      im.player = createIdlePlayer(rig.current.mesh, yawnClip ?? undefined, lookClip ?? undefined, cabin.apply);
+      im.player = createIdlePlayer(rig.current.mesh, yawnClip ?? undefined, lookClip ?? undefined, cabin.apply, rig.current.relaxed?.standing);
     }
     if (rig.current) {
       const playingChair = p.sceneId === 'habitat' && s.posture === 'chair';
@@ -1114,11 +1114,12 @@ export function OrbitalResidents(props: ResidentsProps) {
         plushGrip.current.visible = deckFrame.current?.visible ?? true;
         plushPose.current.apply(root, plushGrip.current, performance?.kind === 'plush' ? performance.time : cabin.clips.pickUp.duration, PICKUP_GRIP_TIME);
       }
+      const lapWeight = s.posture === 'sofa' && sofaClip && !sofaSteps
+        ? THREE.MathUtils.smoothstep(sofa.time - SOFA_STEPS, sofaClip.duration * .62, sofaClip.duration * .94) : 0;
+      rig.current.applySeatedIdle?.(seatIdle, lapWeight);
       if (seatIdle.overlay) {
         const weight = seatedIdleWeight(seatIdle);
         if (weight > 0) cabin.apply?.(seatIdle.overlay, seatIdle.time, weight);
-      } else {
-        rig.current.applySeatedIdle?.(seatIdle);
       }
       // Add the offsets after authored animation, only when there is no contact pose to preserve.
       rig.current.followMotion(rawDelta,
