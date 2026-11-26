@@ -28,7 +28,7 @@
 }
 .orbital-dust-keycap {
   position: absolute; transform: translate(-50%, -50%);
-  color: #f5ecda; border-color: currentColor;
+  color: #f9e7c0; border-color: currentColor;
 }
 .orbital-cabin-controls button:active:not(:disabled) kbd {
   transform: translateY(1px);
