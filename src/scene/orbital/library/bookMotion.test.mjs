@@ -1,3 +1,4 @@
+import * as assetQueue from '../assetQueue.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,7 +12,7 @@ import { load } from '../load-for-validation.mjs';
 function loadTS(relativePath, deps = {}) {
   const source = fs.readFileSync(new URL(relativePath, import.meta.url), 'utf8');
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
-  const mod = { exports: {}, require: id => id === 'three' ? THREE : deps[id] };
+  const mod = { exports: {}, require: id => id === '../assetQueue.ts' ? assetQueue : id === 'three' ? THREE : deps[id] };
   vm.runInNewContext(compiled, mod);
   return mod.exports;
 }

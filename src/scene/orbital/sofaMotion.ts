@@ -1,3 +1,4 @@
+import { loadSceneAsset } from './assetQueue.ts';
 import { AnimationClip, MathUtils, Object3D, PropertyBinding } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FLOOR_SOFA } from './cabinLayout';
@@ -15,7 +16,7 @@ export const SOFA_ENTRY: [number, number] = [
 export const SOFA_STEPS = (approachDepth - standingDepth) / WALK_SPEED;
 let pending: Promise<AnimationClip> | undefined;
 export function loadSofaClip() {
-  return pending ??= new GLTFLoader().loadAsync('./models/resident/luna-sofa-low-sit.glb').then(asset => {
+  return pending ??= loadSceneAsset('./models/resident/luna-sofa-low-sit.glb', () => new GLTFLoader().loadAsync('./models/resident/luna-sofa-low-sit.glb')).then(asset => {
     const clip = asset.animations.find(animation => animation.name === 'Luna_CMU_75_20');
     if (!clip) throw new Error('Missing CMU 75_20');
     return clip;

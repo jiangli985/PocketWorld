@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useRef, type RefObject } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from './useSceneGLTF';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';

@@ -1,5 +1,5 @@
 import React, { Component, Suspense, useMemo } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from './useSceneGLTF';
 import * as THREE from 'three';
 import { cloneSuppliedModel } from './supplied-model';
 

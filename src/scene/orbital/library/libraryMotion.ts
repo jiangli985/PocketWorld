@@ -1,3 +1,4 @@
+import { loadSceneAsset } from '../assetQueue.ts';
 import * as THREE from 'three';
 import { RESIDENT_SCALE } from '../residentRig';
 import { shelfRotation, AUTHORED_BOOK_RETREAT, smooth } from './bookMotion';
@@ -62,7 +63,7 @@ let pending: Promise<LibraryMotion> | undefined;
 
 export function loadLibraryMotion() {
   return pending ??= import('three/examples/jsm/loaders/GLTFLoader.js')
-    .then(({ GLTFLoader }) => new GLTFLoader().loadAsync(ASSET))
+    .then(({ GLTFLoader }) => loadSceneAsset(ASSET, () => new GLTFLoader().loadAsync(ASSET)))
     .then(({ animations }) => readLibraryMotion(animations))
     .catch(error => { pending = undefined; throw error; });
 }
