@@ -76,7 +76,8 @@ function sampleGlyphs(
       let left = (width - rowWidth) / 2;
       for (const { key, label, width: itemWidth } of row) {
         const { actualBoundingBoxAscent, actualBoundingBoxDescent } = ctx.measureText(label);
-        const centerY = y + (actualBoundingBoxDescent - actualBoundingBoxAscent) / 2;
+        // Lift the outline slightly to align with the text's visual center.
+        const centerY = y + (actualBoundingBoxDescent - actualBoundingBoxAscent) / 2 - 1;
         const labelWidth = itemWidth - PROMPT_KEYCAP_GAP - PROMPT_KEYCAP_SIZE;
         glyphs.push({ label, x: left + labelWidth / 2, y });
         keycaps.push({ key, x: left + itemWidth - PROMPT_KEYCAP_SIZE / 2 - width / 2, y: centerY });
