@@ -1,11 +1,11 @@
 """Export the two deck sets and the observatory shell from open-cabin.blend."""
 from pathlib import Path
-from math import cos, pi, sin, tau
+from math import asin, cos, dist, hypot, pi, sin, tau
 
 import bmesh
 import bpy
 import numpy as np
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -168,6 +168,173 @@ def bedroom_return(inner_x, outer_x, back, front, window, material):
     return link_mesh(name, mesh, material)
 
 
+def knit_normal_map():
+    size = 128
+    y, x = np.mgrid[:size, :size].astype(np.float32) / size
+    stitch = tau * (6 * x + .21 * np.sin(tau * 9 * y))
+    height = np.cos(stitch) ** 6 * (.70 + .30 * np.cos(tau * 9 * y)) + .09 * np.cos(tau * (18 * x + 12 * y))
+    normal = np.ones((size, size, 3), dtype=np.float32)
+    for component, axis in enumerate((1, 0)):
+        normal[..., component] = .42 * (np.roll(height, 1, axis) - np.roll(height, -1, axis))
+    normal /= np.linalg.norm(normal, axis=-1, keepdims=True)
+    rgba = np.ones((size, size, 4), dtype=np.float32)
+    rgba[..., :3] = normal * .5 + .5
+    image = bpy.data.images.new("Cardigan_Knit_Normal", width=size, height=size, alpha=False, is_data=True)
+    image.pixels.foreach_set(rgba.ravel())
+    image.pack()
+    return image
+
+
+def bedroom_wall_clothes(maple):
+    parts = []
+    brass = finish("Wall clothes | aged brass", "ae8857", .42)
+    blue = finish("Wall clothes | mist blue knit", "6c8da9", .93)
+    blue_rib = finish("Wall clothes | blue rib knit", "5b7994", .92)
+    clay = finish("Wall clothes | rose clay cotton", "bf7c75", .92)
+    clay_band = finish("Wall clothes | rose clay waistband", "ae706a", .90)
+    button = finish("Wall clothes | horn buttons", "c8ac87", .62)
+    next(node for node in brass.node_tree.nodes if node.type == "BSDF_PRINCIPLED").inputs["Metallic"].default_value = .55
+    knit = knit_normal_map()
+    for material in (blue, blue_rib):
+        nodes = material.node_tree.nodes
+        texture = nodes.new("ShaderNodeTexImage")
+        texture.image = knit
+        normal = nodes.new("ShaderNodeNormalMap")
+        normal.inputs["Strength"].default_value = .28
+        shader = next(node for node in nodes if node.type == "BSDF_PRINCIPLED")
+        material.node_tree.links.new(texture.outputs["Color"], normal.inputs["Color"])
+        material.node_tree.links.new(normal.outputs["Normal"], shader.inputs["Normal"])
+
+    def surface(name, rings, material, caps=False, knit_uv=False):
+        width = len(rings[0])
+        faces = []
+        for row in range(len(rings) - 1):
+            start = row * width
+            for i in range(width):
+                j = (i + 1) % width
+                faces.append((start + i, start + i + width, start + j + width, start + j))
+        if caps:
+            faces.extend((tuple(range(width)), tuple(reversed(range((len(rings) - 1) * width, len(rings) * width)))))
+        mesh = bpy.data.meshes.new(name)
+        mesh.from_pydata([(x, -z, y) for ring in rings for x, y, z in ring], [], faces)
+        for polygon in mesh.polygons[:(len(rings) - 1) * width]:
+            polygon.use_smooth = True
+        if knit_uv:
+            # Meter-based repeats keep stitch scale similar on the body, hem and cuffs.
+            tile = .12
+            middle = rings[len(rings) // 2]
+            arc = [0]
+            for i, point in enumerate(middle):
+                arc.append(arc[-1] + dist(point, middle[(i + 1) % width]))
+            uv = mesh.uv_layers.new(name="UVMap")
+            for face in mesh.polygons:
+                seam = face.index % width == width - 1
+                for index in face.loop_indices:
+                    row, column = divmod(mesh.loops[index].vertex_index, width)
+                    u = arc[width if seam and column == 0 else column]
+                    uv.uv[index].vector = (u / tile, rings[row][column][1] / tile)
+        parts.append(link_mesh(name, mesh, material))
+
+    def tube(name, points, radius, material, across=(0, 0, 1), loop=False):
+        # Sweep round trim along the hook or sewn edge in room coordinates.
+        path = [Vector(point) for point in points]
+        rings = []
+        for i, point in enumerate(path):
+            before = (i - 1) % len(path) if loop else max(0, i - 1)
+            after = (i + 1) % len(path) if loop else min(len(path) - 1, i + 1)
+            tangent = (path[after] - path[before]).normalized()
+            side = Vector(across).cross(tangent).normalized()
+            depth = tangent.cross(side)
+            rings.append([point + radius * (side * cos(tau * j / 8) - depth * sin(tau * j / 8))
+                          for j in range(8)])
+        surface(name, rings + rings[:1] if loop else rings, material, caps=not loop)
+
+    cardigan_x, skirt_x = -6.46, -5.66
+    rail_y, hanger_z = 2.68, -3.035
+    parts.append(bedroom_box("Oak wall peg rail", (-6.06, rail_y, -3.173), (1.25, .126, .053), maple, .020))
+    for x in (cardigan_x, skirt_x):
+        tube("Brass wall peg", [(x, rail_y - .012, -3.150), (x, rail_y + .016, -3.051),
+                                (x, rail_y + .025, -3.014)], .027, brass, across=(1, 0, 0))
+        hook = [(x + .045 * cos(a), rail_y + .019 + .045 * sin(a), hanger_z)
+                for a in (pi * (1.70 - i * .107) for i in range(15))]
+        tube("Coat hanger hook", [(x + .020, rail_y - .165, hanger_z), *hook], .008, brass)
+
+    tube("Maple shoulder hanger", [(cardigan_x - .202, 2.399, hanger_z - .013), (cardigan_x - .114, 2.448, hanger_z - .008),
+                                   (cardigan_x, 2.530, hanger_z), (cardigan_x + .107, 2.451, hanger_z - .008),
+                                   (cardigan_x + .196, 2.401, hanger_z - .013)], .018, maple)
+    parts.append(bedroom_box("Maple clip hanger", (skirt_x, 2.499, hanger_z), (.348, .040, .032), maple, .009))
+    for x in (skirt_x - .125, skirt_x + .125):
+        parts.append(bedroom_box("Brass skirt clip", (x, 2.460, hanger_z + .019), (.049, .080, .034), brass, .009))
+
+    def cardigan_body(t, a):
+        side, face = sin(a), cos(a)
+        width = .212 + .013 * sin(pi * t) - .013 * t
+        shoulder = 2.471 - .068 * abs(side) - .156 * max(face, 0) ** 7 - .025 * max(-face, 0) ** 6 - .011 * side
+        hem = 1.632 + .024 * sin(a + .38) + .011 * sin(a * 5 + .9)
+        depth = .035 + .014 * sin(pi * t)
+        folds = (.010 + .011 * t) * (sin(5 * a + 1.8 * t) + .37 * sin(9 * a - 3.7 * t))
+        x = cardigan_x + width * side - .034 * t + .009 * sin(pi * t)
+        z = hanger_z + .020 * t + depth * face + folds * (.35 + .65 * abs(face)) - .017 * t * side
+        return x, shoulder * (1 - t) + hem * t, z
+
+    angles = [tau * i / 48 for i in range(48)]
+    body = [[cardigan_body(.949 * i / 20, a) for a in angles] for i in range(21)]
+    surface("Hanging cardigan body", body, blue, knit_uv=True)
+    blue_seam = finish("Wall clothes | blue seam binding", "5f7e98", .91)
+    tube("Cardigan neckline binding", body[0], .007, blue_seam, across=(0, 1, 0), loop=True)
+    surface("Cardigan rib hem", [[cardigan_body(t, a) for a in angles] for t in (.949, .969, .988, 1)], blue_rib, knit_uv=True)
+    for side in (-1, 1):
+        placket = [cardigan_body(.01 + .94 * i / 17, side * .058) for i in range(18)]
+        placket = [(x, y, z + .002) for x, y, z in placket]
+        tube("Cardigan button band edge", placket, .004, blue_seam)
+        pocket = [cardigan_body(.68 + .046 * i / 8, side * asin(.36 + .27 * i / 8)) for i in range(9)]
+        pocket = [(x, y, z + .002) for x, y, z in pocket]
+        tube("Cardigan pocket welt", pocket, .0045, blue_seam)
+    for t in (.22, .39, .56, .73, .89):
+        x, y, z = cardigan_body(t, 0)
+        tube("Horn button", [(x, y, z + .001), (x, y, z + .010)], .009, button, across=(1, 0, 0))
+
+    for side in (-1, 1):
+        def sleeve(t, a):
+            # Tuck the top ring into the shoulder. The elbow bends out and the cuff hangs inward.
+            shoulder_tuck = .056 * (1 - t) ** 5
+            elbow = .74 * pi * t
+            dx = side * (.059 * .74 * pi * cos(elbow) - .025 + .280 * (1 - t) ** 4) - .018
+            dy = -.746 - .011 * side
+            norm = hypot(dx, dy)
+            radius = .072 - .029 * t - .026 * (1 - t) ** 7 + .004 * sin(3 * pi * t + a * 3)
+            x = cardigan_x + side * (.181 + .059 * sin(elbow) - .025 * t - shoulder_tuck) - .018 * t
+            y = 2.383 + .006 * side + dy * t
+            z = hanger_z + .024 * sin(pi * t / 2) - side * .016 * t
+            wrinkles = .006 * sin(13 * t - 4 * a) * sin(pi * t)
+            return x - dy / norm * radius * sin(a), y + dx / norm * radius * sin(a), z + radius * .58 * cos(a) + wrinkles
+
+        sleeve_angles = angles[::2]
+        surface("Hanging cardigan sleeve", [[sleeve(i / 18 * .93, a) for a in sleeve_angles] for i in range(19)], blue, knit_uv=True)
+        surface("Cardigan rib cuff", [[sleeve(t, a) for a in sleeve_angles] for t in (.93, .95, .98, 1)], blue_rib, knit_uv=True)
+        tube("Cardigan cuff lip", [sleeve(1, a) for a in sleeve_angles], .004, blue_seam, across=(0, 1, 0), loop=True)
+
+    def skirt(t, a):
+        side, face = sin(a), cos(a)
+        # The clipped waistband sags between the grips. Irregular vertical folds grow below it.
+        sag = .014 * max(0, 1 - (side / .85) ** 2)
+        fold_phase = 3.1 * pi * side + .8 * t + .55 * sin(4 * a + t)
+        pleat = (.010 + .021 * t) * (cos(fold_phase) + .26 * cos(2 * fold_phase + .6))
+        width = .146 + .090 * t ** 1.12
+        depth = .023 + .026 * t
+        x = skirt_x + (width + pleat * .22) * side + .038 * t
+        y = 2.436 - .807 * t - sag * (1 - t) + t * (.029 * sin(a + .5) + .011 * cos(fold_phase))
+        z = hanger_z + .025 * t + depth * face + pleat * (.26 + .74 * abs(face)) - .028 * t * side
+        return x, y, z
+
+    pleat_angles = [tau * i / 72 for i in range(72)]
+    surface("Hanging pleated cotton skirt", [[skirt(t, a) for a in pleat_angles]
+                                            for t in (.047 + .953 * i / 18 for i in range(19))], clay)
+    surface("Skirt waistband", [[skirt(t, a) for a in pleat_angles] for t in (0, .018, .034, .047)], clay_band)
+    tube("Stitched skirt hem", [skirt(.985, a) for a in pleat_angles], .0028, clay_band, across=(0, 1, 0), loop=True)
+    return parts
+
+
 def bedroom_walls():
     parts = []
 
@@ -253,6 +420,7 @@ def bedroom_walls():
         mesh = bpy.data.meshes.new(name)
         mesh.from_pydata([(print_x + x, 3.138, print_y + y) for x, y in points], [], [tuple(range(len(points)))])
         parts.append(link_mesh(name, mesh, tint))
+    parts.extend(bedroom_wall_clothes(maple))
     return parts
 
 
