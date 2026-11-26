@@ -201,15 +201,63 @@ export function readLibrary(storage: Pick<Storage, 'getItem'>): LibraryData {
     || data.books.some(b => b.source === 'builtin' && !BUILTIN_BOOKS.some(preset => preset.id === b.id))) throw new Error('藏书配置异常，未覆盖原记录。');
   return reconcileBuiltinBooks(data);
 }
+export const USER_BOOK_LIMIT = CAPACITY - BUILTIN_BOOKS.length;
+export const userBookCount = (data: LibraryData) => data.books.filter(book => book.source === 'user').length;
+export const userBookBytes = (data: LibraryData) => data.books.filter(book => book.source === 'user').reduce((total, book) => total + byteLength(book.text), 0);
+export function remainingBookCapacity(data: LibraryData) {
+  const slotsLeft = Math.max(0, CAPACITY - data.books.length);
+  const usedBytes = userBookBytes(data);
+  const bytesLeft = Math.max(0, TOTAL_LIMIT - usedBytes);
+  const fullReason = slotsLeft === 0
+    ? `书柜已满（${CAPACITY}/${CAPACITY}），请先移除一本自添书籍。`
+    : bytesLeft === 0
+      ? '自添书空间已满（512 / 512 KiB），请先移除一本自添书籍。'
+      : null;
+  return { slotsLeft, usedBytes, bytesLeft, canAdd: slotsLeft > 0 && bytesLeft > 0, fullReason };
+}
+export const formatBookBytes = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(bytes % 1024 === 0 ? 0 : 1)} KiB`;
+export const isSupportedBookFileName = (name: string) => /\.(txt|md)$/i.test(name.trim());
+export const titleFromBookFileName = (name: string) => name.trim().replace(/\.(txt|md)$/i, '').slice(0, 80);
+export interface ParsedBookFile { title: string; text: string; bytes: number; fileName: string }
+export function validateBookFileMeta(file: { name: string; size?: number }, data: LibraryData): string | null {
+  const capacity = remainingBookCapacity(data);
+  if (capacity.fullReason) return capacity.fullReason;
+  if (!isSupportedBookFileName(file.name)) return '仅支持 UTF-8 编码的 .txt 或 .md 本地文件。';
+  if (typeof file.size === 'number') {
+    if (file.size <= 0) return '文件为空，请选择有正文的文件。';
+    if (file.size > INPUT_LIMIT * 4) return '文件超过 128 KiB 上限，请缩短后重试。';
+  }
+  return null;
+}
+export function parseBookFileBytes(file: { name: string; buffer: ArrayBuffer | Uint8Array }, data: LibraryData): ParsedBookFile {
+  const bytes = file.buffer instanceof Uint8Array ? file.buffer : new Uint8Array(file.buffer);
+  const metaError = validateBookFileMeta({ name: file.name, size: bytes.byteLength }, data);
+  if (metaError) throw new Error(metaError);
+  let decoded: string;
+  try {
+    decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error('文件不是有效的 UTF-8 纯文本，请重新导出后再上传。');
+  }
+  if (decoded.includes('\0')) throw new Error('文件不是有效的 UTF-8 纯文本，请重新导出后再上传。');
+  const text = normalizeText(decoded);
+  if (!text) throw new Error('文件为空，请选择有正文的文件。');
+  const textBytes = byteLength(text);
+  if (textBytes > INPUT_LIMIT) throw new Error('单本正文不能超过 128 KiB，请缩短后重试。');
+  if (data.books.some(book => normalizeText(book.text) === text)) throw new Error('这份正文已在书柜中，请直接阅读已有书籍。');
+  const { usedBytes } = remainingBookCapacity(data);
+  if (usedBytes + textBytes > TOTAL_LIMIT) throw new Error('自添正文合计不能超过 512 KiB，请先移除一本或选择更小的文件。');
+  return { title: titleFromBookFileName(file.name) || '未命名书籍', text, bytes: textBytes, fileName: file.name };
+}
 export function makeUserBook(data: LibraryData, title: string, author: string, input: string, id = `visitor-${crypto.randomUUID()}`): LibraryBook {
   const text = normalizeText(input);
-  if (!title.trim() || !text) throw new Error('请填写书名和非空正文。');
+  if (!title.trim() || !text) throw new Error('请上传有效的本地文本文件并填写书名。');
   if (title.trim().length > 80 || author.trim().length > 60) throw new Error('书名最多 80 字，作者最多 60 字。');
   if (byteLength(text) > INPUT_LIMIT) throw new Error('单本正文不能超过 128 KiB，请缩短后重试。');
   if (data.books.some(book => normalizeText(book.text) === text)) throw new Error('这份正文已在书柜中，请直接阅读已有书籍。');
-  if (data.books.filter(b => b.source === 'user').reduce((n, b) => n + byteLength(b.text), 0) + byteLength(text) > TOTAL_LIMIT) throw new Error('自添正文合计不能超过 512 KiB，请先移除一本。');
+  if (userBookBytes(data) + byteLength(text) > TOTAL_LIMIT) throw new Error('自添正文合计不能超过 512 KiB，请先移除一本。');
   const slot = BOOK_SLOTS.find(slot => !data.books.some(book => book.slotId === slot.id));
-  if (!slot) throw new Error('书柜已满，请先移除一本自添书籍。');
+  if (!slot) throw new Error(`书柜已满（${CAPACITY}/${CAPACITY}），请先移除一本自添书籍。`);
   return { id, source: 'user', title: title.trim(), author: author.trim() || '访客', text, slotId: slot.id, color: colors[slot.column % colors.length], anchor: 0 };
 }
 export async function mutateLibrary(change: (data: LibraryData) => LibraryData, allowed: () => boolean = () => true): Promise<LibraryData> {

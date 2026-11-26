@@ -8,7 +8,7 @@ import { webcrypto } from 'node:crypto';
 function fixture({ fail = false } = {}) {
   const memory = new Map(); let tail = Promise.resolve();
   const storage = { getItem: k => memory.get(k) ?? null, setItem(k, v) { if (fail) throw new Error('QuotaExceededError'); memory.set(k, v); } };
-  const globals = { TextEncoder, crypto: webcrypto, localStorage: storage, navigator: { locks: { request: (_, fn) => { const next = tail.then(fn); tail = next.catch(() => {}); return next; } } } };
+  const globals = { TextEncoder, TextDecoder, crypto: webcrypto, localStorage: storage, navigator: { locks: { request: (_, fn) => { const next = tail.then(fn); tail = next.catch(() => {}); return next; } } } };
   const exports = {};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('./catalog.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports, ...globals });
   return { ...exports, globals, memory, storage };
@@ -198,4 +198,64 @@ test('书柜取书、展开、翻页、合书、插回及新书上架按阶段�
   c.openForm();
   await c.add('有声藏书', '测试', '正文内容');
   assert.deepEqual(sfx, ['book-shelf-add']);
+  assert.deepEqual(sfx, ['book-shelf-add']);
+});
+
+test('本地上传解析支持 UTF-8 .txt 与 .md，并严格拦截格式、编码、容量及满柜', () => {
+  const m = fixture();
+  let d = m.freshLibrary();
+  const cap0 = m.remainingBookCapacity(d);
+  assert.equal(cap0.slotsLeft, 15);
+  assert.equal(cap0.bytesLeft, m.TOTAL_LIMIT);
+  assert.equal(cap0.canAdd, true);
+
+  const mdBytes = new TextEncoder().encode('\uFEFF# 第一章\r\n\r\n窗外的星海。');
+  const parsedMd = m.parseBookFileBytes({ name: '星海手记.MD', buffer: mdBytes }, d);
+  assert.equal(parsedMd.title, '星海手记');
+  assert.equal(parsedMd.text, '# 第一章\n\n窗外的星海。');
+  assert.equal(parsedMd.bytes, m.byteLength('# 第一章\n\n窗外的星海。'));
+
+  const parsedTxt = m.parseBookFileBytes({ name: '短篇.txt', buffer: new TextEncoder().encode('一页故事。') }, d);
+  assert.equal(parsedTxt.title, '短篇');
+
+  assert.match(m.validateBookFileMeta({ name: 'book.pdf', size: 120 }, d), /\.txt 或 \.md/);
+  assert.match(m.validateBookFileMeta({ name: 'empty.txt', size: 0 }, d), /空/);
+  assert.match(m.validateBookFileMeta({ name: 'huge.txt', size: m.INPUT_LIMIT * 4 + 1 }, d), /128 KiB/);
+
+  assert.throws(() => m.parseBookFileBytes({ name: 'bad.md', buffer: new Uint8Array([0xff, 0xfe]) }, d), /UTF-8/);
+  assert.throws(() => m.parseBookFileBytes({ name: 'nul.txt', buffer: new TextEncoder().encode('abc\0def') }, d), /UTF-8/);
+  assert.throws(() => m.parseBookFileBytes({ name: 'blank.md', buffer: new TextEncoder().encode('  \n\t ') }, d), /空/);
+  assert.throws(() => m.parseBookFileBytes({ name: 'dup.txt', buffer: new TextEncoder().encode(d.books[0].text) }, d), /已在书柜中/);
+  assert.throws(() => m.parseBookFileBytes({ name: 'over.txt', buffer: new TextEncoder().encode('a'.repeat(m.INPUT_LIMIT + 1)) }, d), /128 KiB/);
+
+  // 18 槽满柜拦截
+  for (let i = 0; i < 15; i++) d.books.push(m.makeUserBook(d, `自添 ${i}`, '', `自添正文 ${i}`));
+  const fullSlots = m.remainingBookCapacity(d);
+  assert.equal(fullSlots.slotsLeft, 0);
+  assert.equal(fullSlots.canAdd, false);
+  assert.match(m.validateBookFileMeta({ name: 'next.txt', size: 16 }, d), /书柜已满（18\/18）/);
+  assert.throws(() => m.parseBookFileBytes({ name: 'next.md', buffer: new TextEncoder().encode('第 19 本') }, d), /18\/18/);
+
+  // 512 KiB 空间上限拦截
+  let dSpace = m.freshLibrary();
+  for (let i = 0; i < 4; i++) dSpace.books.push(m.makeUserBook(dSpace, `大书 ${i}`, '', `${i}` + 'x'.repeat(131071)));
+  const fullSpace = m.remainingBookCapacity(dSpace);
+  assert.equal(fullSpace.bytesLeft, 0);
+  assert.equal(fullSpace.canAdd, false);
+  assert.match(m.validateBookFileMeta({ name: 'more.md', size: 16 }, dSpace), /512 \/ 512 KiB/);
+});
+
+test('书柜满槽后 openForm 被拦截并报告满柜原因', async () => {
+  const { c, m, errors, enter } = controller();
+  enter();
+  for (let i = 0; i < 15; i++) {
+    assert.equal(c.openForm(), true);
+    await c.add(`自添 ${i}`, '', `内容 ${i}`);
+    // 手动回到 catalog 阶段以继续下一本
+    c.flow.current.phase = 'catalog';
+  }
+  assert.equal(c.openForm(), false);
+  assert.equal(c.flow.current.phase, 'catalog');
+  assert.match(errors.at(-1), /18\/18/);
+  assert.equal(m.readLibrary(m.storage).books.length, 18);
 });
