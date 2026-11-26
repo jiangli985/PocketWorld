@@ -38,6 +38,7 @@ export const DUST_TONES = ['#fffaf0', '#f5ebd6', '#e6d1a7', '#ffffff', '#d4e2db'
 // Match the shared keycap size in orbital.css.
 export const PROMPT_KEYCAP_SIZE = 23;
 export const PROMPT_KEYCAP_GAP = 9;
+export const PROMPT_ADJACENT_KEY_GAP = 4;
 export const PROMPT_SHORTCUT_GAP = 16;
 
 const SPRING_STIFFNESS = 155;
@@ -106,28 +107,58 @@ export function splitPromptLines(text: string, measure: (value: string) => numbe
   return [trimmed.slice(0, mid), trimmed.slice(mid)];
 }
 
-interface PromptShortcut {
-  key: string;
+export interface PromptEntry {
   label: string;
+  keys?: readonly string[];
+}
+
+export type PromptText = string | readonly PromptEntry[];
+
+interface PromptShortcut {
+  label: string;
+  labelWidth: number;
+  keycaps: { key: string; width: number }[];
   width: number;
 }
 
-export function layoutPromptShortcuts(text: string, measure: (label: string) => number, maxWidth: number): PromptShortcut[][] {
+export function formatPromptText(text: PromptText): string {
+  if (typeof text === 'string') return text;
+  return text.map(({ label, keys }) => keys?.length ? `${label} ${keys.join(' / ')}` : label).join(' · ');
+}
+
+export function layoutPromptShortcuts(text: PromptText, measure: (label: string) => number, maxWidth: number): PromptShortcut[][] {
+  let entries: readonly PromptEntry[];
+  if (typeof text === 'string') {
+    const nearby: PromptEntry[] = [];
+    for (const entry of text.trim().split('　')) {
+      const match = /^([EQT]) · (.+)$/.exec(entry);
+      if (!match) return [];
+      const [, key, label] = match;
+      nearby.push({ label, keys: [key] });
+    }
+    entries = nearby;
+  } else {
+    entries = text;
+  }
+  if (!entries.length) return [];
+
   const rows: PromptShortcut[][] = [[]];
   let row = rows[0];
   let rowWidth = 0;
-  for (const entry of text.trim().split('　')) {
-    const match = /^([EQT]) · (.+)$/.exec(entry);
-    if (!match) return [];
-    const [, key, label] = match;
-    const width = PROMPT_KEYCAP_SIZE + PROMPT_KEYCAP_GAP + measure(label);
+  for (const { label, keys = [] } of entries) {
+    const keycaps = keys.map(key => ({ key, width: Math.max(PROMPT_KEYCAP_SIZE, 10 + key.length * 7) }));
+    const labelWidth = measure(label);
+    const keysWidth = keycaps.length
+      ? PROMPT_KEYCAP_GAP + keycaps.reduce((sum, cap) => sum + cap.width, 0) + (keycaps.length - 1) * PROMPT_ADJACENT_KEY_GAP
+      : 0;
+    const width = labelWidth + keysWidth;
     if (row.length && rowWidth + PROMPT_SHORTCUT_GAP + width > maxWidth) {
       row = [];
       rows.push(row);
       rowWidth = 0;
     }
     if (row.length) rowWidth += PROMPT_SHORTCUT_GAP;
-    row.push({ key, label, width });
+    row.push({ label, labelWidth, keycaps, width });
     rowWidth += width;
   }
   return rows;

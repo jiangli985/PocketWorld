@@ -719,12 +719,12 @@ export function OrbitalScene(props: OrbitalSceneProps) {
     </Canvas>
     {showCabinControls && (quickTarget || props.onLeaveCabin) && (
       <nav className="orbital-cabin-controls" aria-label="生活舱导航">
-        {quickTarget && <button type="button" className="orbital-flight-pill is-primary" aria-keyshortcuts="R"
+        {quickTarget && <button type="button" className="orbital-flight-pill" aria-keyshortcuts="R"
           disabled={!canQuickTravel} onClick={() => setQuickDeck(quickTarget)}>
-          {quickTarget === 'upper' ? '快速上楼' : '快速下楼'}<kbd aria-hidden="true">R</kbd>
+          {quickTarget === 'upper' ? '快速上楼' : '快速下楼'}<kbd className="orbital-keycap" aria-hidden="true">R</kbd>
         </button>}
         {props.onLeaveCabin && <button type="button" className="orbital-flight-pill" aria-keyshortcuts="F" onClick={props.onLeaveCabin}>
-          出舱巡航<kbd aria-hidden="true">F</kbd>
+          出舱巡航<kbd className="orbital-keycap" aria-hidden="true">F</kbd>
         </button>}
       </nav>
     )}

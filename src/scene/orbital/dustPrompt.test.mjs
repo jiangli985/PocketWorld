@@ -18,6 +18,7 @@ const {
   stepDustKeycapProgress,
   dustPromptCoreProgress,
   decimatePoints,
+  formatPromptText,
   layoutPromptShortcuts,
   splitPromptLines,
   setDustTargets,
@@ -52,7 +53,7 @@ test('nearby shortcuts wrap between actions and keep the key paired with its lab
   const text = 'E · 查看藏书　Q · 打开柜门　T · 和团子互动';
   const measure = value => value.length * 10;
   const rows = width => Array.from(layoutPromptShortcuts(text, measure, width), row =>
-    Array.from(row, ({ key, label }) => [key, label]));
+    Array.from(row, ({ keycaps, label }) => [keycaps[0].key, label]));
   const actions = [['E', '查看藏书'], ['Q', '打开柜门'], ['T', '和团子互动']];
   assert.deepEqual(rows(260), [actions]);
   assert.deepEqual(rows(165), [actions.slice(0, 2), actions.slice(2)]);
@@ -64,6 +65,29 @@ test('plain flight and focused-object status text stays on its original path', (
   for (const text of ['长按空格加速绕地 · 按 E 或点击飞船进入舱室', '点击书页书写 · Esc 返回', '请靠近书柜']) {
     assert.equal(layoutPromptShortcuts(text, measure, 260).length, 0);
   }
+});
+
+test('focused prompts keep both arrows together and give wide keys room', () => {
+  const entries = [
+    { label: '翻页', keys: ['←', '→'] },
+    { label: '撕下这页', keys: ['X'] },
+    { label: '切换视角', keys: ['V'] },
+    { label: '返回', keys: ['Esc'] },
+  ];
+  const rows = layoutPromptShortcuts(entries, value => value.length * 15, 180);
+  assert.equal(rows.length, 3);
+  assert.deepEqual(Array.from(rows[0][0].keycaps, ({ key, width }) => [key, width]), [['←', 23], ['→', 23]]);
+  assert.equal(rows[2][1].keycaps[0].key, 'Esc');
+  assert.ok(rows[2][1].keycaps[0].width > 23);
+  assert.equal(formatPromptText(entries), '翻页 ← / → · 撕下这页 X · 切换视角 V · 返回 Esc');
+});
+
+test('mixed instructions preserve unbound text and Space fits in one keycap', () => {
+  const entries = [{ label: '点击书页书写' }, { label: '长按加速', keys: ['Space'] }];
+  const [row] = layoutPromptShortcuts(entries, value => value.length * 10, 250);
+  assert.equal(row[0].keycaps.length, 0);
+  assert.ok(row[1].keycaps[0].width >= 40);
+  assert.equal(formatPromptText(entries), '点击书页书写 · 长按加速 Space');
 });
 
 test('particles converge onto glyph targets and disperse away when cleared', () => {

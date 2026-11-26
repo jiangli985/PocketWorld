@@ -10,8 +10,24 @@ import { useWorldController } from './scene/orbital/useWorldController';
 import { WardrobeSurface } from './scene/orbital/wardrobe/WardrobeSurface';
 import { readOutfit } from './scene/orbital/wardrobe/outfit';
 import { DustPrompt } from './scene/orbital/OrbitalDustPrompt';
+import type { PromptEntry } from './scene/orbital/dustPromptEngine';
 import { readInitialViewMode, type SpacecraftViewMode } from './scene/orbital/spacecraftFlight';
 import './scene/orbital/orbital.css';
+
+const BACK_HINT = { label: '返回', keys: ['Esc'] };
+const PAGE_TURN_HINT = { label: '翻页', keys: ['←', '→'] };
+const CHANGE_VIEW_HINT = { label: '切换视角', keys: ['V'] };
+const FOCUS_GUIDES: Record<string, readonly PromptEntry[] | undefined> = {
+  journal: [{ label: '点击书页书写' }, PAGE_TURN_HINT, { label: '自动保存' }, BACK_HINT],
+  schedule: [PAGE_TURN_HINT, { label: '撕下这页', keys: ['X'] }, CHANGE_VIEW_HINT, BACK_HINT],
+  'schedule-glass': [{ label: '浏览', keys: ['←', '→'] }, CHANGE_VIEW_HINT, BACK_HINT],
+  clock: [{ label: '设定闹钟或倒计时' }, { label: '试听经典版与特供版铃声' }, BACK_HINT],
+};
+const FOCUSED_OBJECT_GUIDE = [{ label: '操作物品继续探索' }, { label: '双指轻触退回' }, BACK_HINT];
+const ORBIT_GUIDE = [
+  { label: '长按加速绕地', keys: ['Space'] },
+  { label: '点击飞船或按键进入舱室', keys: ['E'] },
+];
 
 export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters }) => {
   const baseWorld = useWorldController(adapters);
@@ -144,16 +160,13 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     else void roomAudio.startMusic(current.disc);
   }, []);
   const onToggleMute = useCallback(() => { roomAudio.setMuted(!roomAudio.getSnapshot().isMuted); }, []);
-  const focusGuide = world.focusedObject === 'journal' ? '点击书页书写 · ← / → 翻页 · 自动保存 · Esc 返回'
-    : world.focusedObject === 'schedule' ? '← / → 翻页 · X 撕下这页 · V 切换视角 · Esc 返回'
-    : world.focusedObject === 'schedule-glass' ? '左右键浏览 · V 切换视角 · Esc 返回'
-    : world.focusedObject === 'clock' ? '设定闹钟或倒计时 · 可试听经典版与特供版铃声 · Esc 返回' : '';
+  const focusGuide = world.focusedObject && FOCUS_GUIDES[world.focusedObject];
   const orbitGuide = viewMode === 'approach' ? '宇宙很大。这里，刚刚好。'
-    : viewMode === 'orbit' ? (boosting ? '推进加速中 · 绕地巡航与时间加速' : '长按空格加速绕地 · 按 E 或点击飞船进入舱室')
+    : viewMode === 'orbit' ? (boosting ? '推进加速中 · 绕地巡航与时间加速' : ORBIT_GUIDE)
     : '';
   const status = viewMode !== 'cabin'
     ? orbitGuide
-    : (announcement || world.error || audio.error || focusGuide || world.hover?.hint || (world.focusedObject ? '操作物品继续探索 · Esc / 双指轻触退回' : ''));
+    : (announcement || world.error || audio.error || focusGuide || world.hover?.hint || (world.focusedObject ? FOCUSED_OBJECT_GUIDE : ''));
   const showFlightControls = !world.focusedObject && !activeGame && library.flow.current.phase === 'idle' && (viewMode === 'orbit' || viewMode === 'approach' || viewMode === 'cabin');
   return <main className={`orbital-app${draggingFile ? ' is-importing' : ''}${world.focusedObject ? ' is-focused' : ''}${viewMode !== 'cabin' ? ' is-orbit' : ''}`} aria-label="PocketWorld 轨道居住舱"
     onDragEnter={event => { if (viewMode !== 'cabin' || world.focusedObject !== 'music-player' || !event.dataTransfer.types.includes('Files')) return; event.preventDefault(); inputDepth.current += 1; setDraggingFile(true); }}
@@ -183,8 +196,11 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
         onPointerLeave={() => activateBoost(false)}
         onPointerCancel={() => activateBoost(false)}
         aria-pressed={boosting}
-      >{boosting ? '加速巡航中' : '长按加速 · Space'}</button>
-      <button type="button" className="orbital-flight-pill is-primary" onClick={enterCabin}>进入舱室 · E</button>
+        aria-keyshortcuts="Space"
+      >{boosting ? '加速巡航中' : '长按加速'}<kbd className="orbital-keycap" aria-hidden="true">Space</kbd></button>
+      <button type="button" className="orbital-flight-pill" aria-keyshortcuts="E Enter" onClick={enterCabin}>
+        进入舱室<kbd className="orbital-keycap" aria-hidden="true">E</kbd>
+      </button>
     </nav>}
     {audio.isPlaying && <aside className="orbital-now-playing"><span className="orbital-record-dot" /><div><small>NOW PLAYING</small><p>{audio.disc.title}</p></div></aside>}
     {draggingFile && <div className="orbital-drop-message"><span className="orbital-drop-disc" /><p>让这段音乐，留在这里。</p><small>松手制作一张自己的唱片</small></div>}

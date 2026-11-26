@@ -334,7 +334,7 @@ export function AlarmClock3D(world: WorldSceneProps) {
       onPointerOver={event => {
         if (!world.focusedObject) {
           event.stopPropagation();
-          world.onHover('clock', snapshot.ringingSource ? '点击关闭闹钟响铃' : '点击或靠近按 E · 设置闹钟');
+          world.onHover('clock', snapshot.ringingSource ? '点击关闭闹钟响铃' : 'E · 点击或靠近设置闹钟');
         }
       }}
       onPointerOut={() => {
