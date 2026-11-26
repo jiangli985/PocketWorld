@@ -103,6 +103,7 @@ function mount(kind, overrides = {}, idleLibrary) {
       './seatedIdleFrames': load('./orbital/seatedIdleFrames.ts', {}),
     }),
     './scene/audioEngine': { roomAudio: audio, PRESET_MUSIC_DISCS: [] },
+    './scene/orbital/media/record-motion': load('./orbital/media/record-motion.ts', {}),
     './scene/orbital/OrbitalScene': { OrbitalScene: 'OrbitalScene' },
     './scene/orbital/library/useLibrary': { useLibrary: options => ({ dispatch: options.onAction, back: options.onReturn, data: { books: [] }, flow: { current: { phase: 'idle' } }, view: { phase: 'idle' }, motion: { current: null } }) },
     './scene/orbital/library/LibrarySurface': { LibrarySurface: 'LibrarySurface' },

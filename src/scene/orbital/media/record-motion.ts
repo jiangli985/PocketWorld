@@ -6,6 +6,9 @@ export const PLAYER: Point = [-.35, 1.2, -2.25];
 export const PLATTER: Point = [-.48, 1.295, -2.25];
 export const RECORD_CENTER: Point = [PLATTER[0], PLATTER[1] + .0125 + .007, PLATTER[2]];
 export const DISC_RADIUS = .17;
+export const RACK_SLOT_COUNT = 6;
+export const MAX_IMPORT_AUDIO_BYTES = 100 * 1024 * 1024;
+export const RACK_FULL_MESSAGE = `唱片架的 ${RACK_SLOT_COUNT} 个卡槽已满，无法继续导入。`;
 export const RACK_ORIGIN: Point = [-1.135, 1.12, -2.815];
 export const RACK_SLOT_X0 = -.380;
 export const RACK_SLOT_PITCH_X = .146;
@@ -22,10 +25,17 @@ export const RACK_UP: Point = [
 ];
 // Six angled felt-lined grooves centered symmetrically inside vinyl-rack.glb.
 export const discPosition = (slot: number): Point => [
-  RACK_ORIGIN[0] + RACK_SLOT_X0 + (slot % 6) * RACK_SLOT_PITCH_X,
+  RACK_ORIGIN[0] + RACK_SLOT_X0 + (slot % RACK_SLOT_COUNT) * RACK_SLOT_PITCH_X,
   RACK_ORIGIN[1] + RACK_SLOT_CENTER_Y,
   RACK_ORIGIN[2],
 ];
+
+export function validateMusicImport(file: { name: string; type: string; size: number }, currentDiscCount: number): string | null {
+  if (currentDiscCount >= RACK_SLOT_COUNT) return RACK_FULL_MESSAGE;
+  if (!file.type.startsWith('audio/') && !/\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(file.name)) return '请放入一个音频文件。';
+  if (file.size > MAX_IMPORT_AUDIO_BYTES) return '这张唱片太大了，请选择 100 MB 以内的音频。';
+  return null;
+}
 export const smooth = (t: number) => { const x = Math.max(0, Math.min(1, t)); return x * x * x * (x * (x * 6 - 15) + 10); };
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 const lerp = (a: Point, b: Point, t: number): Point => a.map((v, i) => mix(v, b[i], t)) as Point;

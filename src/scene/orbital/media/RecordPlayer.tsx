@@ -9,7 +9,7 @@ import { ObjectHandle } from '../ObjectHandle';
 import { SoftBox } from '../Primitives';
 import { AssetBoundary } from '../ReusableAsset';
 import { SuppliedAsset } from '../SuppliedAsset';
-import { RecordTransport, PLAYER, PLATTER, RACK_ORIGIN, DISC_YAW, DISC_LEAN, DISC_RADIUS, discPosition, type Point } from './record-motion';
+import { RecordTransport, PLAYER, PLATTER, RACK_ORIGIN, RACK_SLOT_COUNT, DISC_YAW, DISC_LEAN, DISC_RADIUS, discPosition, type Point } from './record-motion';
 
 const IMPORT_DISC: Point = [.28, 1.128, -2.44];
 const rackRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(DISC_LEAN, DISC_YAW, 0, 'YXZ'));
@@ -66,8 +66,10 @@ export function RecordPlayer(props: WorldSceneProps) {
   const [transport] = useState(() => new RecordTransport(props.activeDisc, Math.max(0, order.current.indexOf(props.activeDisc.id)), props.isMusicPlaying));
   const [, redraw] = useState(0);
   const [page, setPage] = useState(0);
-  const pages = Math.max(1, Math.ceil(records.length / 6));
+  const pages = Math.max(1, Math.ceil(records.length / RACK_SLOT_COUNT));
   const visiblePage = Math.min(page, pages - 1);
+  const remainingSlots = Math.max(0, RACK_SLOT_COUNT - records.length);
+  const rackFull = remainingSlots === 0;
   const imported = useRef<MusicDisc | null>(null);
   const known = useRef(new Set(props.discs.map(disc => disc.id)));
   const platter = useRef<THREE.Group>(null), seated = useRef<THREE.Group>(null), flying = useRef<THREE.Group>(null), flyingSpin = useRef<THREE.Group>(null);
@@ -128,7 +130,7 @@ export function RecordPlayer(props: WorldSceneProps) {
     if (armLift.current) armLift.current.rotation.x = -.15 * pose.lift;
     if (transport.phase !== before) {
       // Show the original shelf when returning, then the incoming shelf during pickup.
-      if (transport.phase === 'return' || transport.phase === 'extract') setPage(Math.floor(transport.slot / 6));
+      if (transport.phase === 'return' || transport.phase === 'extract') setPage(Math.floor(transport.slot / RACK_SLOT_COUNT));
       redraw(value => value + 1);
     }
   });
@@ -181,13 +183,13 @@ export function RecordPlayer(props: WorldSceneProps) {
         </Suspense>
       </AssetBoundary>
     </group>
-    {records.slice(visiblePage * 6, visiblePage * 6 + 6).map((disc, index) => disc.id === transport.disc.id ? null : <ObjectHandle key={disc.id} id={`music-disc-${disc.id}`} action="insert" hint={`拿取《${disc.title}》${disc.isUserUploaded ? ' · 我的唱片' : ''}`} world={world} payload={{ itemId: disc.id }} position={discPosition(index)}>
+    {records.slice(visiblePage * RACK_SLOT_COUNT, visiblePage * RACK_SLOT_COUNT + RACK_SLOT_COUNT).map((disc, index) => disc.id === transport.disc.id ? null : <ObjectHandle key={disc.id} id={`music-disc-${disc.id}`} action="insert" hint={`拿取《${disc.title}》${disc.isUserUploaded ? ' · 我的唱片' : ''}`} world={world} payload={{ itemId: disc.id }} position={discPosition(index)}>
       <group quaternion={rackRotation}><Disc colors={disc.discThemeColor} /></group>
     </ObjectHandle>)}
     {[-1, 1].map(direction => <ObjectHandle key={direction} id="music-rack" action="select" hint={pages > 1 ? '翻动唱片架，查看更多唱片' : '胡桃木黄铜唱片架'} payload={{ direction }} world={world} position={[RACK_ORIGIN[0] + direction * .594, RACK_ORIGIN[1] + .165, RACK_ORIGIN[2]]}>
       <mesh><boxGeometry args={[.044, .29, .30]} /><meshBasicMaterial visible={false} /></mesh>
     </ObjectHandle>)}
-    <ObjectHandle id="music-import" action="insert" hint="空白唱片 · 导入本地音乐" world={world} position={IMPORT_DISC} onClick={event => {
+    <ObjectHandle id="music-import" action="insert" hint={rackFull ? `空白唱片 · 唱片架已满（${records.length}/${RACK_SLOT_COUNT}）` : `空白唱片 · 导入本地音乐（还可导入 ${remainingSlots} 张）`} world={world} position={IMPORT_DISC} onClick={event => {
       event.stopPropagation(); if (!enabled || transport.busy || event.delta >= 9) return;
       props.onImportMusic();
     }}><group rotation={[-Math.PI / 2, 0, 0]}><Disc colors={['#efe4c7', '#c8a879']} radius={.145} /></group></ObjectHandle>
@@ -198,7 +200,7 @@ export function RecordPlayer(props: WorldSceneProps) {
     </group>
     {moving && <group ref={flying} name="MovingRecord" position={pose.position} quaternion={rackRotation.clone().slerp(flatRotation, pose.tilt)}><group ref={flyingSpin}><Disc colors={transport.disc.discThemeColor} /></group></group>}
     {enabled && props.focusedObject === 'music-player' && <Html center position={[-.35, 1.95, -2.25]} distanceFactor={4} style={{ pointerEvents: 'none', width: 260, textAlign: 'center', color: '#f3e6c9', font: '12px monospace', textShadow: '0 1px 3px #242723' }}>
-      {transport.disc.title} · {phaseText[transport.phase]}<br />拿取唱片换曲 · 空白唱片导入音乐{pages > 1 ? ` · 唱片架 ${visiblePage + 1}/${pages}` : ''}
+      {transport.disc.title} · {phaseText[transport.phase]}<br />{rackFull ? `拿取唱片换曲 · 唱片架已满（${records.length}/${RACK_SLOT_COUNT}）` : `拿取唱片换曲 · 空白唱片导入音乐（${records.length}/${RACK_SLOT_COUNT}）`}{pages > 1 ? ` · 唱片架 ${visiblePage + 1}/${pages}` : ''}
     </Html>}
   </group>
   </ObjectHandle>;

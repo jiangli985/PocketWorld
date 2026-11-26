@@ -3,6 +3,7 @@ import type { MusicDisc } from './types/interactable';
 import type { GameId } from './types/game';
 import type { WorldFeatureAdapters } from './types/world';
 import { PRESET_MUSIC_DISCS, generateDiscColorsFromName, roomAudio } from './scene/audioEngine';
+import { RACK_FULL_MESSAGE, RACK_SLOT_COUNT, validateMusicImport } from './scene/orbital/media/record-motion';
 import { OrbitalScene } from './scene/orbital/OrbitalScene';
 import { useLibrary } from './scene/orbital/library/useLibrary';
 import { LibrarySurface } from './scene/orbital/library/LibrarySurface';
@@ -37,6 +38,9 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
   );
   const [boosting, setBoosting] = useState(false);
   const [discs, setDiscs] = useState<MusicDisc[]>(PRESET_MUSIC_DISCS);
+  const discCountRef = useRef(discs.length);
+  discCountRef.current = discs.length;
+  const isRackFull = discs.length >= RACK_SLOT_COUNT;
   const [activeGame, setActiveGame] = useState<GameId | null>(null);
   const [draggingFile, setDraggingFile] = useState(false);
   const [announcement, setAnnouncement] = useState('');
@@ -136,20 +140,33 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     ownedUrls.current = [];
   }, []);
 
-  const onImportMusic = useCallback(() => { void roomAudio.unlock(); fileInput.current?.click(); }, []);
+  const onImportMusic = useCallback(() => {
+    if (discCountRef.current >= RACK_SLOT_COUNT) {
+      onFeatureError(RACK_FULL_MESSAGE);
+      return;
+    }
+    void roomAudio.unlock();
+    fileInput.current?.click();
+  }, [onFeatureError]);
   const importFiles = useCallback((files: FileList | null) => {
     if (world.focusedObject !== 'music-player' || library.flow.current.phase !== 'idle') return;
     const file = files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('audio/') && !/\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(file.name)) { onFeatureError('请放入一个音频文件。'); return; }
-    if (file.size > 100 * 1024 * 1024) { onFeatureError('这张唱片太大了，请选择 100 MB 以内的音频。'); return; }
+    const error = validateMusicImport(file, discCountRef.current);
+    if (error) {
+      onFeatureError(error);
+      if (fileInput.current) fileInput.current.value = '';
+      return;
+    }
     const title = file.name.replace(/\.[^.]+$/, '');
     const url = URL.createObjectURL(file);
     ownedUrls.current.push(url);
+    const nextCount = discCountRef.current + 1;
+    discCountRef.current = nextCount;
     const disc: MusicDisc = { id: `local-${Date.now()}-${ownedUrls.current.length}`, title, artist: '私人唱片收藏', audioUrl: url, discThemeColor: generateDiscColorsFromName(title), isUserUploaded: true };
-    setDiscs(current => [disc, ...current]);
+    setDiscs(current => (current.length >= RACK_SLOT_COUNT ? current : [disc, ...current]));
     roomAudio.prepareMusic(disc);
-    onFeatureError(`《${title}》已放进唱片架`);
+    onFeatureError(`《${title}》已放进唱片架（${nextCount}/${RACK_SLOT_COUNT}）`);
     if (fileInput.current) fileInput.current.value = '';
   }, [world.focusedObject, library.flow, onFeatureError]);
   const onSelectDisc = useCallback((disc: MusicDisc) => { void roomAudio.startMusic(disc); }, []);
@@ -203,7 +220,9 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
       </button>
     </nav>}
     {audio.isPlaying && <aside className="orbital-now-playing"><span className="orbital-record-dot" /><div><small>NOW PLAYING</small><p>{audio.disc.title}</p></div></aside>}
-    {draggingFile && <div className="orbital-drop-message"><span className="orbital-drop-disc" /><p>让这段音乐，留在这里。</p><small>松手制作一张自己的唱片</small></div>}
+    {draggingFile && <div className="orbital-drop-message"><span className="orbital-drop-disc" />{isRackFull
+      ? <><p>唱片架已满（{discs.length}/{RACK_SLOT_COUNT}）</p><small>所有 {RACK_SLOT_COUNT} 个卡槽均已放入唱片</small></>
+      : <><p>让这段音乐，留在这里。</p><small>松手制作一张自己的唱片（还可放 {RACK_SLOT_COUNT - discs.length} 张）</small></>}</div>}
     <input ref={fileInput} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac" hidden onChange={event => importFiles(event.target.files)} />
     <span className="sr-only">键盘：舱外视角长按空格或 Shift 加速绕地飞行与时间流逝，E 或回车进入舱室；舱内 F 返回舱外视角，WASD 行走，R 快速上下楼，E、Q、T 依次与身边最近的物品互动，M 静音，Esc 返回。</span>
   </main>;
