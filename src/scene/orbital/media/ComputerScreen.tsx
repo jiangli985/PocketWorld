@@ -42,8 +42,21 @@ export function ComputerScreen({ visible, interactive, expanded = false, collaps
           {collapsed && allowEmbeddedResume && <button onClick={onResume}>在电脑上继续</button>}
           <button onClick={onEject}>拔出卡带</button>
         </nav>}
-      <div ref={surface} data-computer-display="native" style={{ position: 'absolute', display: 'none', overflow: 'hidden', borderRadius: expanded ? 0 : 10, background: '#142d27', color: '#d8e6b9', fontFamily: 'system-ui, sans-serif', fontSize: 16, pointerEvents: interactive ? 'auto' : 'none', touchAction: 'auto' }}>
+      <div ref={surface} data-computer-display="native" style={{ position: 'absolute', display: 'none', overflow: 'hidden', borderRadius: expanded ? 0 : 10, background: '#142d27', color: '#d8e6b9', fontFamily: 'system-ui, sans-serif', fontSize: 16, pointerEvents: interactive || (controls && collapsed && !expanded) ? 'auto' : 'none', touchAction: 'auto' }}>
         {children}
+        {controls && collapsed && !expanded && (
+          <button
+            type="button"
+            className="computer-game-resume-surface"
+            aria-label={allowEmbeddedResume ? '在电脑上继续游戏' : '放大继续游戏'}
+            title={allowEmbeddedResume ? '在电脑上继续' : '放大游戏'}
+            onClick={event => {
+              event.stopPropagation();
+              if (allowEmbeddedResume) onResume?.();
+              else onExpand?.();
+            }}
+          />
+        )}
       </div>
       </div>
     </Html>
