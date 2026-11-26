@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WorldAction, WorldSceneId } from '../../../types/world';
-import { BOOK_SLOTS, CAPACITY, freshLibrary, LIBRARY_KEY, makeUserBook, mutateLibrary, readLibrary, type LibraryBook, type TextPage } from './catalog';
+import { BOOK_SLOTS, freshLibrary, LIBRARY_KEY, makeUserBook, mutateLibrary, readLibrary, remainingBookCapacity, type LibraryBook, type TextPage } from './catalog';
 import { libraryMotionDuration, type LibraryMotion } from './libraryMotion';
 import { PAGE_TURN_SECONDS } from './bookMotion';
 import { roomAudio, type RoomSfxType } from '../../audioEngine';
@@ -154,7 +154,16 @@ export function useLibrary(options: { sceneId: WorldSceneId; reducedMotion: bool
       dataRef.current = next; setData(next);
     } catch (e) { live.current.error((e as Error).message); } finally { saving.current = false; }
   }, []);
-  const openForm = useCallback(() => { if (flow.current.phase === 'catalog' && dataRef.current.books.length < CAPACITY && !saving.current) update({ phase: 'form' }); }, [update]);
+  const openForm = useCallback(() => {
+    if (flow.current.phase !== 'catalog' || saving.current) return false;
+    const capacity = remainingBookCapacity(dataRef.current);
+    if (!capacity.canAdd) {
+      live.current.error(capacity.fullReason!);
+      return false;
+    }
+    update({ phase: 'form' });
+    return true;
+  }, [update]);
   const fail = useCallback(() => { live.current.error('人物加载失败，已将书籍恢复在架；请重试人物加载或刷新页面。'); update(initialFlow()); live.current.onReturn(); }, [update]);
   return { fail, cameraView, setCameraView, data, view, flow, motion, tick, arrived, choose, turn, setPages, add, remove, openForm, closeForm: () => { if (!saving.current && flow.current.phase === 'form') update({ phase: 'catalog' }); }, back, dispatch, slots: BOOK_SLOTS };
 }
