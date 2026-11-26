@@ -1,3 +1,4 @@
+import * as assetQueue from './assetQueue.ts';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
@@ -10,7 +11,7 @@ import { FLOOR_SOFA } from './cabinLayout.ts';
 
 function module(file, dependencies) {
   const source = fs.readFileSync(new URL(file, import.meta.url), 'utf8');
-  const context = { exports: {}, require: id => dependencies[id] };
+  const context = { exports: {}, require: id => id === './assetQueue.ts' ? assetQueue : dependencies[id] };
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, context);
   return context.exports;
 }

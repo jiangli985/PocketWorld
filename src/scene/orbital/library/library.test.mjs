@@ -1,3 +1,4 @@
+import * as assetQueue from '../assetQueue.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -129,7 +130,7 @@ test('移除用户书释放原书位，其他内容、进度及刷新恢复保�
 function controller(reducedMotion = false) {
   const m = fixture(), effects = [], errors = [], actions = [], frames = [], sfx = [];
   const react = { useRef: current => ({ current }), useState: v => [typeof v === 'function' ? v() : v, () => {}], useCallback: fn => fn, useEffect: fn => effects.push(fn) };
-  const dependencies = { react, three: THREE, './catalog': m, '../../audioEngine': { roomAudio: { playSfx: type => sfx.push(type) } } };
+  const dependencies = { react, three: THREE, '../assetQueue.ts': assetQueue, './catalog': m, '../../audioEngine': { roomAudio: { playSfx: type => sfx.push(type) } } };
   const loadModule = filename => {
     const exports = {};
     const require = name => {

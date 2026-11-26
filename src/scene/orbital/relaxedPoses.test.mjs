@@ -11,7 +11,7 @@ const modules = new Map([['three', THREE], ['three/examples/jsm/loaders/GLTFLoad
 function local(name) {
   if (!modules.has(name)) {
     const scope = { exports: {}, require: local };
-    vm.runInNewContext(ts.transpileModule(readFileSync(new URL(name + '.ts', import.meta.url), 'utf8'),
+    vm.runInNewContext(ts.transpileModule(readFileSync(new URL(name.endsWith('.ts') ? name : name + '.ts', import.meta.url), 'utf8'),
       { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, scope);
     modules.set(name, scope.exports);
   }

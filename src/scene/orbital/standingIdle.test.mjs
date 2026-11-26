@@ -1,3 +1,4 @@
+import * as assetQueue from './assetQueue.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -9,7 +10,7 @@ import { load } from './load-for-validation.mjs';
 
 function compile(file) {
   const source = readFileSync(new URL(file, import.meta.url), 'utf8');
-  const context = { exports: {}, require: name => name === 'three' ? THREE : { GLTFLoader } };
+  const context = { exports: {}, require: name => name === './assetQueue.ts' ? assetQueue : name === 'three' ? THREE : { GLTFLoader } };
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, context);
   return context.exports;
 }
