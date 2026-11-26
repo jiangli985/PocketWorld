@@ -26,7 +26,10 @@
   color: #fff4dd; border: 2px solid; border-radius: 6px; letter-spacing: 0; text-shadow: none;
   border-color: #fff5e0 #ecd9b5 #bea57d #f2e3c3; background: transparent;
 }
-.orbital-dust-keycap { position: absolute; transform: translate(-50%, -50%); }
+.orbital-dust-keycap {
+  position: absolute; transform: translate(-50%, -50%);
+  color: #fff; border-color: currentColor;
+}
 .orbital-cabin-controls button:active:not(:disabled) kbd {
   transform: translateY(1px);
 }
