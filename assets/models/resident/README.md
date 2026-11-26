@@ -40,6 +40,16 @@ node scripts/bake-luna-stairs.mjs /path/to/MotionSmith_walk_upstairs_take1.glb /
 
 [Blender 制作源](./Luna-Cardigan.blend)内置贴图、骨架、袖侧修形与动作。[运行模型](../../public/models/resident/luna-cardigan.glb)使用 Luna 的 115 根骨骼。制作源打开时显示自然站姿，上臂外展约 18°。领口主要随胸廓，袖山向锁骨和上臂逐渐过渡，侧腰略收以留出袖口间距。行走时，左右臂按日常装的肩肘轨迹与对侧脚交替摆动，手掌朝向按开衫网格上的指根定位。手臂靠近衣身时才触发对应侧的衣料修形。后腰罗纹和下摆褶边以骨盆为支撑，平滑分配左右腿的影响。两侧袖子和手指独立绑定，发束随头部和发链运动，袜底保存步态支撑点。固定椅的[接触缓存](../../public/models/resident/luna-cardigan-seat.bin)按新网格对坐垫和扶手采样 98 帧。编辑网格或坐姿时须同时更新缓存及 `_CONTACT_ID`。
 
+肘上袖筒以同侧上臂为支撑，在肘弯附近平滑过渡到前臂。袖筒中段原先混入的胸椎权重会在抬手时把布面拉向身体，产生塌陷与扭曲；当前绑定已在 Blender 中修正，肩口、领口和袖口保留原有过渡。三层取还书的真实蒙皮回归见 `src/scene/orbital/cardiganElbow.test.mjs`。
+
+重新导出手动编辑后的权重：
+
+```powershell
+blender --background --factory-startup --python-exit-code 1 --python scripts/repair-luna-cardigan-elbows.py
+```
+
+脚本读取上述制作源，首次处理未标记的旧源时重建两侧袖部权重；已修正的源只导出当前编辑值，不重复叠加修复。导出时逐点核对 Blender 与 GLB 的绑定坐标，并处理 UV 接缝副本，只更新 `JOINTS_0` / `WEIGHTS_0`。顶点顺序、拓扑、贴图、形态键、骨架、动画和 `_CONTACT_ID` 保持不变，原座椅缓存继续使用。`--source`、`--base`、`--blend`、`--output` 可用于仓库外对照导出。
+
 ## 云朵连帽衫制作源（已下架）
 
 [Blender 制作源](./Luna-CloudHoodie.blend)采用用户提供的 Tripo 模型 `1115d436-5d3e-444c-be63-a6141e1f346c.glb`。用户未附独立角色许可声明。蓝发、云朵发饰、五官、连帽衫和短裤沿用这份模型。底色图在原 UV 上调整了唇线与眼部高光。袖子与衣身粘连的部分沿腋下拆开，补入两侧布面，以便抬臂取书。下颌尖端已收短并拓圆，主要随头骨运动。贴臂站姿下，衣侧在前臂压到的位置内收，袖子前后两侧的衣料保留蓬度，长袖在肘部上下保留椭圆截面，袖口权重从前臂渐变至手腕，使手腕弯曲时袖口保持开口。制作源包含 115 根骨骼、10 个角色动作和 4 张打包贴图。
