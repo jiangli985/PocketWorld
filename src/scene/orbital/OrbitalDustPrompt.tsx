@@ -56,7 +56,7 @@ function sampleGlyphs(
   if (!ctx) return empty;
 
   const fontSize = width < 480 ? 15 : 18;
-  const font = `600 ${fontSize}px ${FONT_FAMILY}`;
+  const font = `400 ${fontSize}px ${FONT_FAMILY}`;
   ctx.scale(scale, scale);
   ctx.font = font;
   ctx.textAlign = 'center';
@@ -101,7 +101,7 @@ function sampleGlyphs(
   for (const { x, y } of keycaps) ctx.roundRect(x + (width - maskSize) / 2, y - maskSize / 2, maskSize, maskSize, 5);
   ctx.stroke();
   ctx.fillStyle = '#ff0000';
-  ctx.font = `600 12px ${FONT_FAMILY}`;
+  ctx.font = `400 12px ${FONT_FAMILY}`;
   for (const { key, x, y } of keycaps) ctx.fillText(key, x + width / 2, y);
 
   const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
@@ -199,17 +199,17 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
             ctx.restore();
           }
 
-          const coreProgress = dustPromptCoreProgress(state.settleProgress);
+          const coreProgress = coreRef.current ? dustPromptCoreProgress(state.settleProgress) : 0;
           if (coreRef.current && coreProgress > 0) {
             ctx.save();
-            ctx.globalAlpha = coreProgress * 0.28;
+            ctx.globalAlpha = coreProgress;
             ctx.drawImage(coreRef.current, 0, 0, width, CANVAS_HEIGHT);
             ctx.restore();
           }
 
           const sprites = spritesRef.current ?? (spritesRef.current = createDustSprites());
           for (const p of state.particles) {
-            const alpha = p.keycap ? p.alpha * (1 - keycapProgress) : p.alpha;
+            const alpha = p.alpha * (1 - (p.keycap ? keycapProgress : coreProgress));
             if (alpha <= 0.01) continue;
             const settled = p.mode === 'converge' && Math.abs(p.tx - p.x) < 0.6 && Math.abs(p.ty - p.y) < 0.6;
             const shimmer = p.mode === 'converge' && !settled && !propsRef.current.reducedMotion
@@ -279,7 +279,7 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
     syncLayout();
     window.addEventListener('resize', syncLayout);
     let active = true;
-    void document.fonts.load(`600 18px ${ROUNDED_FONT}`).then(() => {
+    void document.fonts.load(`400 18px ${ROUNDED_FONT}`).then(() => {
       if (active && propsRef.current.text) {
         syncPrompt(propsRef.current.text, widthRef.current, propsRef.current.reducedMotion);
       }
