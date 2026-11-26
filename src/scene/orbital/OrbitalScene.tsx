@@ -46,6 +46,8 @@ import catMeowUrl from '../../../assets/audio/cat/tuanzi-meow.mp3';
 import { shelfPoint, shelfVector } from './library/catalog';
 import { sideLibraryCamera } from './library/sideCamera';
 import { JOURNAL_PAGE_POSITION } from './journalLayout';
+import { AdaptiveQuality } from './SceneQuality';
+import { SCENE_QUALITY, type QualityLevel } from './adaptiveQuality';
 
 const FOCUS: Record<string, { target: [number, number, number]; offset: [number, number, number] }> = {
   computer: { target: [1.77, 1.68, -2.30], offset: [0, 0.30, 3.5] },
@@ -399,7 +401,7 @@ const ORBIT_SUN_INTENSITY = 2.25;
 const CABIN_EARTHSHINE_POS = new THREE.Vector3(-11, 4.5, -10);
 const ORBIT_EARTHSHINE_POS = new THREE.Vector3(7.5, -4.8, 13.5);
 
-function OrbitalLighting({ objects, sceneId, sun }: Pick<WorldSceneProps, 'objects' | 'sceneId'> & { sun: SunState }) {
+function OrbitalLighting({ objects, sceneId, sun, shadowSize }: Pick<WorldSceneProps, 'objects' | 'sceneId'> & { sun: SunState; shadowSize: number }) {
   const lamp = useRef<THREE.PointLight>(null);
   const roomWarm = useRef<THREE.PointLight>(null);
   const ambient = useRef<THREE.HemisphereLight>(null);
@@ -409,6 +411,7 @@ function OrbitalLighting({ objects, sceneId, sun }: Pick<WorldSceneProps, 'objec
   const sunTarget = useMemo(() => new THREE.Object3D(), []);
   const [lampX, lampY] = sceneId === 'habitat' ? UPPER_DECK_OFFSET : [0, 0];
   useEffect(() => () => { scene.environmentIntensity = 1; }, [scene]);
+  useEffect(() => { key.current?.shadow.map?.setSize(shadowSize, shadowSize); }, [shadowSize]);
   useFrame((_, delta) => {
     const daylight = sun.daylight.value;
     const warmth = sun.warmth;
@@ -444,7 +447,7 @@ function OrbitalLighting({ objects, sceneId, sun }: Pick<WorldSceneProps, 'objec
     <primitive object={sunTarget} />
     <hemisphereLight ref={ambient} args={['#f6f2eb', '#d4c7b8', 0.58]} />
     <directionalLight ref={key} target={sunTarget} color="#fff2e2" intensity={SUN_INTENSITY} position={sun.light.toArray().map(n => n * 18) as [number, number, number]} castShadow
-      shadow-mapSize={[2048, 2048]} shadow-camera-left={-8} shadow-camera-right={8} shadow-camera-top={8} shadow-camera-bottom={-8}
+      shadow-mapSize={[shadowSize, shadowSize]} shadow-camera-left={-8} shadow-camera-right={8} shadow-camera-top={8} shadow-camera-bottom={-8}
       shadow-camera-near={0.1} shadow-camera-far={60} shadow-normalBias={0.012} shadow-bias={-0.0001} />
     <directionalLight ref={earthshine} target={sunTarget} color="#9ec4ee" intensity={0.38} position={[-11, 4.5, -10]} />
     <pointLight ref={lamp} position={[LAMP_POSITION[0] + lampX + .08, 1.74 + lampY, LAMP_POSITION[2] + .07]} color="#ffdf98" intensity={4.8} distance={9.5} decay={1.85} />
@@ -469,7 +472,7 @@ function useCabinLoadStage(open: boolean, residentSettled: boolean) {
   return { furniture: stage >= 1, equipment: stage >= 2, plush: stage >= 3, cat: stage >= 4 };
 }
 
-function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpen: boolean; outfitPreview: boolean }) {
+function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpen: boolean; outfitPreview: boolean; shadowSize: number }) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
   const [upperVisible, setUpperVisible] = useState(!props.outfitPreview);
   const residentView = useRef<CabinResidentView>({ deck: 'lower', stairAscent: null });
@@ -557,7 +560,7 @@ function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpe
         walkTo(id, [x, 0, z]);
       };
       return <group key={id} position={SCENE_ORIGINS[id]} visible={id === props.sceneId || isTravelling}>
-        {id === props.sceneId && <OrbitalLighting objects={world.objects} sceneId={id} sun={sun} />}
+        {id === props.sceneId && <OrbitalLighting objects={world.objects} sceneId={id} sun={sun} shadowSize={props.shadowSize} />}
         {id === 'habitat' && (!inCabin || hullReady) && <SpacecraftHull flight={flight} sun={sun} reducedMotion={props.reducedMotion}
           onEnterCabin={props.onEnterCabin} onReady={onHullReady} />}
         {(showInterior || visitedCabin) && <group visible={showInterior}>
@@ -613,6 +616,8 @@ const CABIN_VIEWS: [CabinView, string][] = [['overview', '全景'], ['lower', '�
 export function OrbitalScene(props: OrbitalSceneProps) {
   const container = useRef<HTMLDivElement>(null);
   const [catMenu, setCatMenu] = useState<WorldAction | null>(null);
+  const [qualityLevel, setQualityLevel] = useState<QualityLevel>(2);
+  const quality = SCENE_QUALITY[qualityLevel];
   const outfitPreview = useMemo(() => props.viewMode === 'cabin' && !!previewOutfit(window.location.search), []);
   const [view, setView] = useState<{ mode: CabinView; revision: number; cut: boolean }>({ cut: false, mode: outfitPreview ? 'lower' : 'overview', revision: 0 });
   const selectView = (mode: CabinView, cut = false) => setView(current => ({ mode, cut, revision: current.revision + 1 }));
@@ -663,9 +668,10 @@ export function OrbitalScene(props: OrbitalSceneProps) {
     onPointerCancel={() => props.onGesture(false)}
     onWheel={e => { if (props.focusedObject && !props.activeGame && e.deltaY > 45) props.onReturn(); }}
     onDoubleClick={e => { if ((e.target as HTMLElement).tagName === 'CANVAS' && props.focusedObject && !props.activeGame) props.onReturn(); }}>
-    <Canvas events={visibleSceneEvents} shadows dpr={[1, 1.6]} gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.0 }}
+    <Canvas events={visibleSceneEvents} shadows dpr={[1, quality.dpr]} gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.0 }}
       onCreated={({ gl }) => { gl.outputColorSpace = THREE.SRGBColorSpace; gl.shadowMap.type = THREE.PCFSoftShadowMap; }}>
-      <WorldContent {...props} catMenuOpen={!!catMenu} outfitPreview={outfitPreview}
+      <AdaptiveQuality paused={!!props.activeGame || !['cabin', 'orbit'].includes(props.viewMode)} onChange={setQualityLevel} />
+      <WorldContent {...props} catMenuOpen={!!catMenu} outfitPreview={outfitPreview} shadowSize={quality.shadowSize}
         cutToDeck={view.cut} cabinView={view.mode} viewRevision={view.revision} onCabinViewChange={selectView} onAction={action => {
         if (action.kind === 'pet' && action.objectId === 'pet') setCatMenu(action);
         else props.onAction(action);
