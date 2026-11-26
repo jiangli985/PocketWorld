@@ -1,9 +1,9 @@
-import React, { Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { PLUSH_DOLLS, UPPER_DECK_OFFSET, deckFromAuthoredX, type PlushDollPlacement } from './cabinLayout';
-import { UpperDeckVisibility } from './CabinUpperDeck';
+import { CabinFadeGroup } from './CabinUpperDeck';
 import { AssetBoundary } from './ReusableAsset';
 import { isValidPlushBody, plushFloorY, plushSupportHeight, type PlushBody } from './plushMotion';
 import { ObjectHandle } from './ObjectHandle';
@@ -23,7 +23,6 @@ function LoadedPlushDoll({ doll, index, bodies, grip, shapes, world }: PlushDoll
   const gltf = useGLTF(`${import.meta.env.BASE_URL}models/${doll.path}`);
   const group = useRef<THREE.Group>(null);
 
-  const upperVisible = useContext(UpperDeckVisibility);
   const hand = useMemo(() => new THREE.Vector3(), []);
   const prepared = useMemo(() => {
     const clone = gltf.scene.clone(true);
@@ -69,20 +68,25 @@ function LoadedPlushDoll({ doll, index, bodies, grip, shapes, world }: PlushDoll
     root.position.set(x + (upper ? UPPER_DECK_OFFSET[0] : 0),
       plushFloorY(x, z) + support + body.y + (upper ? UPPER_DECK_OFFSET[1] : 0), z);
     if (held && held.lift > 0) root.position.copy(root.parent!.worldToLocal(hand.copy(held.center)));
-    root.visible = held ? held.visible : !upper || upperVisible;
+    root.visible = held ? held.visible : true;
     if (held) root.rotation.copy(held.rotation);
     else root.rotation.set(body.pitch, body.yaw, body.roll, 'YXZ');
 
   });
 
-  return <group ref={group} name={doll.name}
+  const fadePart = () => {
+    const body = bodies.current[index];
+    if (body && grip.current?.body === body) return 'resident';
+    return deckFromAuthoredX(body?.x ?? doll.position[0]);
+  };
+  return <CabinFadeGroup part={fadePart}><group ref={group} name={doll.name}
     position={[doll.position[0], plushFloorY(doll.position[0], doll.position[2]) + prepared.shape.half.y, doll.position[2]]}
     rotation={[0, doll.yaw, 0]} dispose={null}>
     <ObjectHandle id={doll.id} action="inspect" hint={`拿起或放下${plushLabels[doll.id]}`} panorama world={world}
       acceptsHit={() => !!group.current?.visible} onClick={event => event.stopPropagation()}>
       <primitive object={prepared.model} />
     </ObjectHandle>
-  </group>;
+  </group></CabinFadeGroup>;
 }
 
 export function PlushDolls(props: Omit<PlushDollItemProps, 'doll' | 'index'>) {

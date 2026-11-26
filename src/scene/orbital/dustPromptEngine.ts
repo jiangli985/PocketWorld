@@ -1,6 +1,7 @@
 export interface DustPoint {
   x: number;
   y: number;
+  keycap?: boolean;
 }
 
 export interface DustParticle {
@@ -11,6 +12,7 @@ export interface DustParticle {
   tx: number;
   ty: number;
   alpha: number;
+  keycap?: boolean;
   size: number;
   tone: number;
   mode: 'converge' | 'disperse';
@@ -33,9 +35,30 @@ export interface DustPromptState {
 
 export const MAX_DUST_PARTICLES = 3800;
 export const DUST_TONES = ['#fffaf0', '#f5ebd6', '#e6d1a7', '#ffffff', '#d4e2db'] as const;
+// Match the shared keycap size in orbital.css.
+export const PROMPT_KEYCAP_SIZE = 23;
+export const PROMPT_KEYCAP_GAP = 9;
+export const PROMPT_ADJACENT_KEY_GAP = 4;
+export const PROMPT_SHORTCUT_GAP = 16;
 
 const SPRING_STIFFNESS = 155;
 const SPRING_DAMPING = 24.5;
+
+function decayDustProgress(progress: number, dt: number, reducedMotion: boolean): number {
+  return Math.max(0, progress - dt * (reducedMotion ? 10 : 6));
+}
+
+export function stepDustKeycapProgress(previous: number, settleProgress: number, targeted: boolean, rawDt: number, reducedMotion: boolean): number {
+  return targeted ? settleProgress : decayDustProgress(previous, Math.min(Math.max(rawDt, 0), 0.05), reducedMotion);
+}
+
+export function dustPromptCoreProgress(settleProgress: number): number {
+  const start = .4;
+  const end = .95;
+  const progress = Math.min(1, Math.max(0, (settleProgress - start) / (end - start)));
+  return progress * progress * (3 - 2 * progress);
+}
+
 export function createDustPromptState(): DustPromptState {
   return {
     text: '',
@@ -82,6 +105,63 @@ export function splitPromptLines(text: string, measure: (value: string) => numbe
   }
   const mid = Math.ceil(trimmed.length / 2);
   return [trimmed.slice(0, mid), trimmed.slice(mid)];
+}
+
+export interface PromptEntry {
+  label: string;
+  keys?: readonly string[];
+}
+
+export type PromptText = string | readonly PromptEntry[];
+
+interface PromptShortcut {
+  label: string;
+  labelWidth: number;
+  keycaps: { key: string; width: number }[];
+  width: number;
+}
+
+export function formatPromptText(text: PromptText): string {
+  if (typeof text === 'string') return text;
+  return text.map(({ label, keys }) => keys?.length ? `${label} ${keys.join(' / ')}` : label).join(' · ');
+}
+
+export function layoutPromptShortcuts(text: PromptText, measure: (label: string) => number, maxWidth: number): PromptShortcut[][] {
+  let entries: readonly PromptEntry[];
+  if (typeof text === 'string') {
+    const nearby: PromptEntry[] = [];
+    for (const entry of text.trim().split('　')) {
+      const match = /^([EQT]) · (.+)$/.exec(entry);
+      if (!match) return [];
+      const [, key, label] = match;
+      nearby.push({ label, keys: [key] });
+    }
+    entries = nearby;
+  } else {
+    entries = text;
+  }
+  if (!entries.length) return [];
+
+  const rows: PromptShortcut[][] = [[]];
+  let row = rows[0];
+  let rowWidth = 0;
+  for (const { label, keys = [] } of entries) {
+    const keycaps = keys.map(key => ({ key, width: Math.max(PROMPT_KEYCAP_SIZE, 10 + key.length * 7) }));
+    const labelWidth = measure(label);
+    const keysWidth = keycaps.length
+      ? PROMPT_KEYCAP_GAP + keycaps.reduce((sum, cap) => sum + cap.width, 0) + (keycaps.length - 1) * PROMPT_ADJACENT_KEY_GAP
+      : 0;
+    const width = labelWidth + keysWidth;
+    if (row.length && rowWidth + PROMPT_SHORTCUT_GAP + width > maxWidth) {
+      row = [];
+      rows.push(row);
+      rowWidth = 0;
+    }
+    if (row.length) rowWidth += PROMPT_SHORTCUT_GAP;
+    row.push({ label, labelWidth, keycaps, width });
+    rowWidth += width;
+  }
+  return rows;
 }
 
 function toDisperse(
@@ -132,6 +212,7 @@ export function setDustTargets(
 
   const bounded = decimatePoints(points, MAX_DUST_PARTICLES);
   const hadActive = state.particles.length > 0;
+  if (state.text !== normalized) state.settleProgress = 0;
   state.text = normalized;
 
   let minX = Infinity;
@@ -151,6 +232,7 @@ export function setDustTargets(
     if (reused) {
       reused.tx = target.x;
       reused.ty = target.y;
+      reused.keycap = target.keycap;
       reused.mode = 'converge';
       reused.life = 0;
       reused.delay = reducedMotion ? 0 : random() * 0.06;
@@ -176,6 +258,7 @@ export function setDustTargets(
         tx: target.x,
         ty: target.y,
         alpha: reducedMotion ? 1 : 0,
+        keycap: target.keycap,
         size: 0.52 + random() * 0.34,
         tone,
         mode: 'converge',
@@ -273,7 +356,7 @@ export function stepDustPrompt(
     const blend = reducedMotion ? 1 : Math.min(1, dt * 7);
     state.settleProgress += (ratio - state.settleProgress) * blend;
   } else {
-    state.settleProgress = Math.max(0, state.settleProgress - dt * (reducedMotion ? 10 : 6));
+    state.settleProgress = decayDustProgress(state.settleProgress, dt, reducedMotion);
   }
 
   state.active = state.text !== '' || state.particles.length > 0;

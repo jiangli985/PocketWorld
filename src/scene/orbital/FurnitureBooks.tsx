@@ -13,7 +13,7 @@ export function FurnitureBookcase({ world }: { world: WorldModelProps }) {
   const cabinet = world.objects.cabinet ?? CLOSED_OBJECT;
   const item = world.objects['cabinet-item'] ?? CLOSED_OBJECT;
   return <><LibraryBooks world={world} /><group position={shelfOrigin(world.sceneId)} rotation-y={shelfYaw(world.sceneId)} name="Furniture_OpenBookcase">
-    <ObjectHandle id="book-01" action="inspect" panorama hint="查看书柜 · 靠近按 E" world={world}>
+    <ObjectHandle id="book-01" action="inspect" panorama hint="E · 靠近查看书柜" world={world}>
     <SuppliedAsset name="cabinet.parts" part="body" size={[1.18, 1.59, .54]} fit="contact" fallback={<>    <SoftBox dims={[1.18, 0.08, 0.54]} position={[0, 0.12, 0]} color={C.edge} />
     {[-0.47, 0.47].flatMap(x => [-0.17, 0.17].map(z => <SoftBox key={`${x}/${z}`} dims={[0.09, 0.1, 0.09]} position={[x, 0.05, z]} color={C.edge} radius={0.012} />))}
     <SoftBox dims={[1.18, 0.08, 0.54]} position={[0, 1.55, 0]} color={C.wood} />
