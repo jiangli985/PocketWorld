@@ -222,6 +222,14 @@ export function hullOpacityForTransition(mode: SpacecraftViewMode, progress: num
   return smoothstep01(0.14, 0.78, progress);
 }
 
+/** Let the two models overlap while the camera passes between exterior and interior framing. */
+export function cabinOpacityForTransition(mode: SpacecraftViewMode, progress: number): number {
+  if (mode === 'approach' || mode === 'orbit') return 0;
+  if (mode === 'cabin') return 1;
+  if (mode === 'entering-cabin') return smoothstep01(0.16, 0.72, progress);
+  return 1 - smoothstep01(0.25, 0.80, progress);
+}
+
 /** Advance orbital cruise, boost inertia, time acceleration, and Earth sweep by dt seconds. */
 export function stepFlightState(flight: SpacecraftFlightState, dt: number, reducedMotion: boolean): boolean {
   const step = Math.max(0, Math.min(dt, 0.1));

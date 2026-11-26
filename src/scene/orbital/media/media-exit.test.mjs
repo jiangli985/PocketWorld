@@ -391,3 +391,128 @@ test('desktop explicitly expands and resumes embedded without replacing the cart
     host().props.onResume(); view.render(); assert.equal(host().props.expanded, false); assert.equal(view.find(node => node.type === Game).props.isActive, true);
   } finally { view.dispose(); }
 });
+
+test('computer overview handles yield to close-up interaction so focused clicks cannot re-inspect', () => {
+  const view = mount();
+  try {
+    const computerHandle = view.find(node => node.props?.id === 'computer');
+    assert.equal(computerHandle.props.panoramaOnly, true);
+    const deskSource = fs.readFileSync(new URL('../FurnitureDesk.tsx', import.meta.url), 'utf8');
+    assert.match(deskSource, /<ObjectHandle\s+id="computer"\s+action="inspect"\s+panoramaOnly\b/);
+  } finally { view.dispose(); }
+});
+
+test('collapsed ComputerScreen captures clicks on the CRT display to resume or re-expand', () => {
+  const screenSource = fs.readFileSync(new URL('./ComputerScreen.tsx', import.meta.url), 'utf8');
+  const compiledScreen = ts.transpileModule(screenSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
+  }).outputText;
+  const hooks = {
+    useRef: value => ({ current: value }),
+    useMemo: fn => fn(),
+  };
+  const react = {
+    ...hooks,
+    createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
+  };
+  const ctx = {
+    exports: {},
+    require(name) {
+      if (name === 'react') return react;
+      if (name === '@react-three/drei') return { Html: 'Html' };
+      if (name === '@react-three/fiber') return { useFrame() {} };
+      if (name === 'three') return { Vector3: class { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; } } };
+      if (name === './computerLayout') return computerLayout;
+      if (name === './screen-layout') return { fitComputerDisplay() {}, fitExpandedDisplay() {} };
+      throw new Error(`Unexpected dependency: ${name}`);
+    },
+  };
+  vm.runInNewContext(compiledScreen, ctx);
+  const collect = node => {
+    if (!node || typeof node !== 'object') return [];
+    if (Array.isArray(node)) return node.flatMap(collect);
+    return [node, ...collect(node.props?.children)];
+  };
+  const renderScreen = props => collect(ctx.exports.ComputerScreen({
+    visible: true, interactive: false, controls: true, children: null, ...props,
+  }));
+
+  let resumed = 0, expanded = 0, stopped = 0;
+  const desktopNodes = renderScreen({
+    collapsed: true, allowEmbeddedResume: true,
+    onResume: () => resumed++, onExpand: () => expanded++,
+  });
+  const desktopSurface = desktopNodes.find(n => n.props?.['data-computer-display'] === 'native');
+  assert.equal(desktopSurface.props.style.pointerEvents, 'auto');
+  const resumeBtn = desktopNodes.find(n => n.props?.className === 'computer-game-resume-surface');
+  assert.ok(resumeBtn);
+  resumeBtn.props.onClick({ stopPropagation() { stopped++; } });
+  assert.equal(resumed, 1);
+  assert.equal(expanded, 0);
+  assert.equal(stopped, 1);
+
+  const narrowNodes = renderScreen({
+    collapsed: true, allowEmbeddedResume: false,
+    onResume: () => resumed++, onExpand: () => expanded++,
+  });
+  narrowNodes.find(n => n.props?.className === 'computer-game-resume-surface')
+    .props.onClick({ stopPropagation() { stopped++; } });
+  assert.equal(resumed, 1);
+  assert.equal(expanded, 1);
+  assert.equal(stopped, 2);
+
+  const expandedNodes = renderScreen({ expanded: true, collapsed: true, interactive: true });
+  assert.equal(expandedNodes.find(n => n.props?.className === 'computer-game-resume-surface'), undefined);
+
+  const idleNodes = renderScreen({ controls: false, collapsed: false, interactive: false });
+  assert.equal(idleNodes.find(n => n.props?.['data-computer-display'] === 'native').props.style.pointerEvents, 'none');
+  assert.equal(idleNodes.find(n => n.props?.className === 'computer-game-resume-surface'), undefined);
+});
+
+test('useWorldController ignores duplicate inspect on an already-active focused object', async () => {
+  const controllerSource = fs.readFileSync(new URL('../useWorldController.ts', import.meta.url), 'utf8');
+  const compiledCtrl = ts.transpileModule(controllerSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
+  }).outputText;
+  const slots = [];
+  let cursor = 0, dirty = true, value;
+  const same = (a, b) => a && b && a.length === b.length && a.every((item, i) => Object.is(item, b[i]));
+  const hooks = {
+    useRef: init => { const i = cursor++; return slots[i] ??= { current: init }; },
+    useState: init => {
+      const i = cursor++;
+      const slot = slots[i] ??= { value: typeof init === 'function' ? init() : init };
+      slot.set ??= next => {
+        const v = typeof next === 'function' ? next(slot.value) : next;
+        if (!Object.is(v, slot.value)) { slot.value = v; dirty = true; }
+      };
+      return [slot.value, slot.set];
+    },
+    useCallback: (cb, deps) => { const i = cursor++; if (!same(slots[i]?.deps, deps)) slots[i] = { deps, cb }; return slots[i].cb; },
+    useEffect: () => {},
+  };
+  const ctx = {
+    exports: {},
+    AbortController,
+    require(name) {
+      if (name === 'react') return hooks;
+      if (name === 'gsap') return { __esModule: true, default: { timeline: ({ onComplete }) => ({ to() { onComplete?.(); return this; }, call() { return this; }, kill() {} }) } };
+      if (name === '../audioEngine') return { roomAudio: { playSfx() {} } };
+      if (name === './wardrobe/outfit') return { initialOutfit: () => 'everyday', isOutfit: () => false, rememberOutfit() {} };
+      if (name === '../../types/world') return { CLOSED_OBJECT: { open: false, active: false, page: 0, value: 0 } };
+      throw new Error(`Unexpected dependency: ${name}`);
+    },
+  };
+  vm.runInNewContext(compiledCtrl, ctx);
+  const pump = () => { while (dirty) { dirty = false; cursor = 0; value = ctx.exports.useWorldController(); } };
+  pump();
+  await value.onAction({ sceneId: 'habitat', objectId: 'computer', kind: 'inspect' });
+  pump();
+  assert.equal(value.focusedObject, 'computer');
+  assert.equal(value.transition.phase, 'active');
+  const settledId = value.transition.id;
+  await value.onAction({ sceneId: 'habitat', objectId: 'computer', kind: 'inspect' });
+  pump();
+  assert.equal(value.transition.id, settledId);
+  assert.equal(value.transition.phase, 'active');
+});
