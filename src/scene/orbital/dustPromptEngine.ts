@@ -52,8 +52,10 @@ export function stepDustKeycapProgress(previous: number, settleProgress: number,
 }
 
 export function dustPromptCoreProgress(settleProgress: number): number {
-  const start = .55;
-  return Math.max(0, (settleProgress - start) / (1 - start));
+  const start = .4;
+  const end = .95;
+  const progress = Math.min(1, Math.max(0, (settleProgress - start) / (end - start)));
+  return progress * progress * (3 - 2 * progress);
 }
 
 export function createDustPromptState(): DustPromptState {

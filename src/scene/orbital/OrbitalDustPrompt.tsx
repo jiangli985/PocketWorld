@@ -22,7 +22,7 @@ type PromptKeycap = DustPoint & { key: string };
 
 function paintPromptGlyph(ctx: CanvasRenderingContext2D, text: string, x: number, y: number) {
   ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = .2;
+  ctx.lineWidth = .5;
   ctx.lineJoin = 'round';
   ctx.strokeText(text, x, y);
   ctx.fillText(text, x, y);
@@ -216,6 +216,8 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
           }
 
           const sprites = spritesRef.current ?? (spritesRef.current = createDustSprites());
+          // Tighten the glow as the particles approach the strokes they came from.
+          const convergeScale = 1.32 - state.settleProgress * .46;
           for (const p of state.particles) {
             const alpha = p.alpha * (1 - (p.keycap ? keycapProgress : coreProgress));
             if (alpha <= 0.01) continue;
@@ -223,7 +225,7 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
             const shimmer = p.mode === 'converge' && !settled && !propsRef.current.reducedMotion
               ? Math.sin(p.age * 3.1 + p.tx * 0.13) * 0.08
               : 0;
-            const drawRadius = p.size * (p.mode === 'disperse' ? 1.55 : 1.32);
+            const drawRadius = p.size * (p.mode === 'disperse' ? 1.55 : convergeScale);
             const sprite = sprites[p.tone] ?? sprites[0];
             ctx.globalAlpha = alpha * (settled ? 0.94 + Math.sin(p.age * 3.2) * 0.06 : 0.86 + Math.sin(p.age * 4.4) * 0.14);
             ctx.drawImage(

@@ -175,11 +175,14 @@ test('new actions settle from zero and reduced motion settles both in one step',
 
 test('the solid parts of the prompt wait for the dust and fade on the same curve', () => {
   assert.equal(dustPromptCoreProgress(0), 0);
-  assert.equal(dustPromptCoreProgress(.55), 0);
-  assert.ok(Math.abs(dustPromptCoreProgress(.775) - .5) < .0001);
+  assert.equal(dustPromptCoreProgress(.4), 0);
+  assert.ok(dustPromptCoreProgress(.4375) > 0 && dustPromptCoreProgress(.4375) < .02);
+  assert.ok(Math.abs(dustPromptCoreProgress(.675) - .5) < .0001);
+  assert.ok(dustPromptCoreProgress(.9125) > .98 && dustPromptCoreProgress(.9125) < 1);
+  assert.equal(dustPromptCoreProgress(.95), 1);
   assert.equal(dustPromptCoreProgress(1), 1);
   const departing = stepDustKeycapProgress(1, 0, false, .05, false);
-  assert.ok(dustPromptCoreProgress(departing) > 0 && dustPromptCoreProgress(departing) < .5);
+  assert.ok(dustPromptCoreProgress(departing) > .5 && dustPromptCoreProgress(departing) < 1);
   assert.equal(dustPromptCoreProgress(stepDustKeycapProgress(departing, 0, false, .05, false)), 0);
 });
 

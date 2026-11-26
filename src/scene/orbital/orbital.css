@@ -28,7 +28,7 @@
   display: inline-grid; place-items: center;
   width: 23px; height: 23px; box-sizing: border-box;
   font: 400 12px/1 'PocketWorld Prompt Rounded', 'YouYuan', system-ui, sans-serif;
-  -webkit-text-stroke: .2px currentColor;
+  -webkit-text-stroke: .5px currentColor;
   color: #fff4dd; border: 2px solid; border-radius: 6px; letter-spacing: 0; text-shadow: none;
   border-color: #fff5e0 #ecd9b5 #bea57d #f2e3c3; background: transparent;
 }
@@ -45,7 +45,7 @@
   display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 4px;
   border: 0; border-radius: 4px; background: transparent; backdrop-filter: none;
   color: #fff9ec; font: 400 18px/1.2 'PocketWorld Prompt Rounded', 'YouYuan', sans-serif;
-  -webkit-text-stroke: .2px currentColor;
+  -webkit-text-stroke: .5px currentColor;
   letter-spacing: 0; white-space: nowrap; pointer-events: auto;
   text-shadow: 0 1px 2px #080714, 0 0 4px #080714e6, 0 0 1px #080714;
 }
