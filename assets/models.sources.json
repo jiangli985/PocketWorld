@@ -7,9 +7,9 @@
       "file": "resident/luna-ribbon.glb",
       "source": "User-supplied bf6b5b5d-a86b-4f38-b940-dc6e2a2a05dd.glb. Face references Luna's everyday outfit.",
       "used": true,
-      "bytes": 8994796,
-      "sha256": "055e3da63f68a59890673b59cc6568dfc87d83859d1adcc61d97b6426cece3bd",
-      "processing": "91-joint fitted skeleton, retouched face, original 4K albedo and the everyday outfit’s full-atlas fill, skin tint and normal strength, grounded walk, desk chair, sofa and three book pickups. Editable source: assets/models/resident/Luna-Ribbon.blend.",
+      "bytes": 7195312,
+      "sha256": "d679148bd5599b064270e7fffcb55b9ee068d68b2a1757df4e6d1c65013b55fe",
+      "processing": "91-joint fitted skeleton, retouched face and rounded chin, 2K albedo resized from the original 4K texture in Blender, with the everyday outfit’s full-atlas fill, skin tint and normal strength, grounded walk, desk chair, sofa and three book pickups. Editable source: assets/models/resident/Luna-Ribbon.blend. Rebuild texture limit with scripts/resize-luna-textures.py.",
       "license": "User supplied the model for this project. No separate model license was provided."
     },
     {
@@ -34,8 +34,8 @@
       "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
       "used": true,
       "bytes": 7789564,
-      "sha256": "c476937bdfbaf692b2573e43d9c11c77446f9e42d7d82bfb4649445294b81eb8",
-      "processing": "Transferred everyday facial landmarks onto the cardigan UV atlas. Fitted 115-joint Luna skin with independent sleeves, hand and hair weights, graded collar and shoulder-cap weights, a closer arm stance and a walk retargeted from the everyday shoulder, elbow and palm trajectories, independent contact shapes, continuous rear hem weights, sock sole contacts and nine existing animation clips."
+      "sha256": "0673ebdace44086b073731bfd0f69e2da0d91105e67d313fe381893b5bc85729",
+      "processing": "Transferred everyday facial landmarks onto the cardigan UV atlas and rounded the lower chin mesh. Fitted 115-joint Luna skin with independent sleeves, hand and hair weights, graded collar and shoulder-cap weights, a closer arm stance and a walk retargeted from the everyday shoulder, elbow and palm trajectories, independent contact shapes, continuous rear hem weights, sock sole contacts and nine existing animation clips."
     },
     {
       "file": "resident/luna-cardigan-seat.bin",
@@ -173,9 +173,9 @@
       "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the arm-supported scoot from the cushion edge to the resting pose; Walk and 2K data maps from repository commit 6f6df88; original 4K base color from the user-supplied Tripo GLB, also preserved in commit 2e1ff72.",
       "license": "User-supplied; no separate license declaration supplied.",
       "used": true,
-      "bytes": 10506732,
-      "sha256": "46a09d5ea671caee8ebb25d1597af6430874247cff0d787ea58a7470d38e2dcd",
-      "processing": "The seated clip and detailed contact mesh are baked from Blender. Luna-ArmContact.blend adds independent sparse skirt and underarm morph targets driven by arm pose. The original vertex mapping, walk channels and existing compressed textures are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. See assets/models/resident/README.md."
+      "bytes": 10123612,
+      "sha256": "9039e3de3718482d529474e3f06f4ebe9485761ed1b2aefd702dc124200fb176",
+      "processing": "The seated clip and detailed contact mesh are baked from Blender. Luna-ArmContact.blend adds independent sparse skirt and underarm morph targets driven by arm pose. Blender resizes the original 4K base color to 2K; vertex mapping, walk channels and all other image bytes are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. Rebuild with scripts/resize-luna-textures.py. See assets/models/resident/README.md."
     },
     {
       "file": "resident/luna-seat-contact.bin",
