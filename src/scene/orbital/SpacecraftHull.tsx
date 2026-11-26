@@ -4,7 +4,7 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { AssetBoundary } from './ReusableAsset';
 import type { SunState } from './Cosmos';
-import type { SpacecraftFlightState } from './spacecraftFlight';
+import { SHIP_TARGET, type SpacecraftFlightState } from './spacecraftFlight';
 
 interface MaterialSlot {
   material: THREE.MeshStandardMaterial;
@@ -29,7 +29,6 @@ interface SpacecraftHullProps {
 }
 
 const HULL_MODEL_URL = `${import.meta.env.BASE_URL}models/cabin/spacecraft-hull.glb`;
-useGLTF.preload(HULL_MODEL_URL);
 
 function classifyMaterial(name: string): MaterialSlot['kind'] {
   if (name.includes('CabinWarmGlow')) return 'window';
@@ -53,6 +52,13 @@ function SpacecraftHullMesh({ flight, sun, reducedMotion, onEnterCabin, onReady 
     const plumes: PlumeTarget[] = [];
     let dish: THREE.Object3D | null = null;
     let dishBaseRot: THREE.Euler | null = null;
+    const rimUniforms = {
+      uSunViewDir: { value: new THREE.Vector3(-0.3, 0.6, -0.7).normalize() },
+      uEarthViewDir: { value: new THREE.Vector3(0.1, -0.8, 0.5).normalize() },
+      uDaylight: sun.daylight,
+      uWarmth: sun.warmthUniform,
+      uRimStrength: { value: 1 },
+    };
 
     copy.traverse(node => {
       if (node.name === 'Comms_ParabolicDish') {
@@ -88,6 +94,34 @@ function SpacecraftHullMesh({ flight, sun, reducedMotion, onEnterCabin, onReady 
             cloned.color.set('#3cb2ff');
             cloned.emissive.set('#4ac8ff');
             cloned.emissiveIntensity = 1.6;
+          } else if (kind === 'default') {
+            cloned.customProgramCacheKey = () => 'spacecraft-hull-orbital-rim-v1';
+            cloned.onBeforeCompile = shader => {
+              shader.uniforms.uSunViewDir = rimUniforms.uSunViewDir;
+              shader.uniforms.uEarthViewDir = rimUniforms.uEarthViewDir;
+              shader.uniforms.uDaylight = rimUniforms.uDaylight;
+              shader.uniforms.uWarmth = rimUniforms.uWarmth;
+              shader.uniforms.uRimStrength = rimUniforms.uRimStrength;
+              shader.fragmentShader = `
+                uniform vec3 uSunViewDir;
+                uniform vec3 uEarthViewDir;
+                uniform float uDaylight;
+                uniform float uWarmth;
+                uniform float uRimStrength;
+              ` + shader.fragmentShader.replace(
+                '#include <opaque_fragment>',
+                /* glsl */ `
+                vec3 rimViewDir = normalize(vViewPosition);
+                float rimFresnel = pow(clamp(1.0 - abs(dot(normal, rimViewDir)), 0.0, 1.0), 3.1);
+                float sunRimAlign = smoothstep(-0.16, 0.72, dot(normal, uSunViewDir));
+                float earthRimAlign = smoothstep(-0.15, 0.75, dot(normal, uEarthViewDir));
+                vec3 solarRim = mix(vec3(1.0, 0.94, 0.82), vec3(1.0, 0.62, 0.32), uWarmth * 0.8) * rimFresnel * sunRimAlign * (0.48 * uDaylight);
+                vec3 earthRim = vec3(0.42, 0.72, 1.0) * rimFresnel * earthRimAlign * (0.22 + 0.16 * uDaylight);
+                outgoingLight += (solarRim + earthRim) * uRimStrength;
+                #include <opaque_fragment>
+                `,
+              );
+            };
           }
           const slot: MaterialSlot = {
             material: cloned,
@@ -113,21 +147,23 @@ function SpacecraftHullMesh({ flight, sun, reducedMotion, onEnterCabin, onReady 
       plumes,
       dish: dish as THREE.Object3D | null,
       dishBaseRot: dishBaseRot as THREE.Euler | null,
+      rimUniforms,
     };
-  }, [scene]);
+  }, [scene, sun]);
 
   useEffect(() => () => {
     for (const slot of rig.slots) slot.material.dispose();
     if (hovering.current && typeof document !== 'undefined') document.body.style.cursor = '';
   }, [rig]);
 
-  useFrame(() => {
+  useFrame(({ camera }) => {
     const group = groupRef.current;
     if (!group) return;
 
     const opacity = flight.hullOpacity;
     if (opacity <= 0.004) {
       group.visible = false;
+      rig.rimUniforms.uRimStrength.value = 0;
       if (hovering.current) {
         hovering.current = false;
         document.body.style.cursor = '';
@@ -136,6 +172,9 @@ function SpacecraftHullMesh({ flight, sun, reducedMotion, onEnterCabin, onReady 
     }
 
     group.visible = true;
+    rig.rimUniforms.uSunViewDir.value.copy(sun.direction).transformDirection(camera.matrixWorldInverse);
+    rig.rimUniforms.uEarthViewDir.value.copy(sun.earthDirection).negate().transformDirection(camera.matrixWorldInverse);
+    rig.rimUniforms.uRimStrength.value = opacity * opacity;
     const t = flight.clock;
     const boost = flight.boost;
     const daylight = sun.daylight.value;
@@ -146,15 +185,19 @@ function SpacecraftHullMesh({ flight, sun, reducedMotion, onEnterCabin, onReady 
     const bobY = Math.sin(t * 0.85) * 0.095 * hoverWeight;
     const surgeX = boost * 0.26 * hoverWeight;
     const vibe = boost > 0.05 ? Math.sin(t * 42) * 0.012 * boost * hoverWeight : 0;
-    group.position.set(surgeX, bobY + vibe, 0);
+    // Subtle outward architectural expansion around the duplex hull center as the shell opens into the interior cutaway
+    const cutawayScale = 1 + (1 - opacity) * 0.045;
+    const expandOffset = 1 - cutawayScale;
+    group.position.set(
+      surgeX + SHIP_TARGET.x * expandOffset,
+      bobY + vibe + SHIP_TARGET.y * expandOffset,
+      SHIP_TARGET.z * expandOffset,
+    );
     group.rotation.set(
       Math.sin(t * 0.52) * 0.014 * hoverWeight,
       Math.sin(t * 0.37) * 0.010 * hoverWeight,
       boost * 0.032 * hoverWeight,
     );
-
-    // Subtle outward architectural expansion as the shell opens into the interior cutaway
-    const cutawayScale = 1 + (1 - opacity) * 0.045;
     group.scale.setScalar(cutawayScale);
 
     // Animate twin engine exhaust plumes smoothly with boost + lively flicker

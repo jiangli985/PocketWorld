@@ -4,6 +4,49 @@
   "runtimeNetwork": "All models are self-hosted under assets/public/models/.",
   "assets": [
     {
+      "file": "resident/luna-ribbon.glb",
+      "source": "User-supplied bf6b5b5d-a86b-4f38-b940-dc6e2a2a05dd.glb. Face references Luna's everyday outfit.",
+      "used": true,
+      "bytes": 7195312,
+      "sha256": "d679148bd5599b064270e7fffcb55b9ee068d68b2a1757df4e6d1c65013b55fe",
+      "processing": "91-joint fitted skeleton, retouched face and rounded chin, 2K albedo resized from the original 4K texture in Blender, with the everyday outfit’s full-atlas fill, skin tint and normal strength, grounded walk, desk chair, sofa and three book pickups. Editable source: assets/models/resident/Luna-Ribbon.blend. Rebuild texture limit with scripts/resize-luna-textures.py.",
+      "license": "User supplied the model for this project. No separate model license was provided."
+    },
+    {
+      "file": "resident/luna-ribbon-seat.bin",
+      "source": "PocketWorld ribbon jacket skinned surface and fixed desk chair cushion.",
+      "used": true,
+      "bytes": 167012,
+      "sha256": "66b704e1bdc8706b01650a95ea68797efcdad094d4767d75ef81bee0c6688766",
+      "processing": "98-frame sparse pre-skin cushion corrections for the ribbon shorts and thighs."
+    },
+    {
+      "file": "resident/luna-cabin-actions-ribbon.glb",
+      "source": "PocketWorld everyday cabin actions, derived from the MotionSmith takes registered under resident/luna-cabin-actions-everyday.glb.",
+      "used": true,
+      "bytes": 761452,
+      "sha256": "406c2661b7b363ecc1fa54ee8430db93f369d5b50d9981c9d8982f36383d4fd2",
+      "processing": "Bind-relative retargeting to the ribbon skeleton with sock and floor-contact calibration."
+    },
+    {
+      "file": "resident/luna-cardigan.glb",
+      "source": "User-supplied anime girl 3d model.glb (Tripo, SHA-256 c37b76be9566ab6034357e8c4545e393a181f85154962ad272a45af862fd3eda). Face paint sampled from Luna everyday. Existing Luna motion sources are listed with their respective assets.",
+      "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
+      "used": true,
+      "bytes": 7789564,
+      "sha256": "0673ebdace44086b073731bfd0f69e2da0d91105e67d313fe381893b5bc85729",
+      "processing": "Transferred everyday facial landmarks onto the cardigan UV atlas and rounded the lower chin mesh. Fitted 115-joint Luna skin with independent sleeves, hand and hair weights, graded collar and shoulder-cap weights, a closer arm stance and a walk retargeted from the everyday shoulder, elbow and palm trajectories, independent contact shapes, continuous rear hem weights, sock sole contacts and nine existing animation clips."
+    },
+    {
+      "file": "resident/luna-cardigan-seat.bin",
+      "source": "Cardigan mesh, fitted Luna chair action and the PocketWorld fixed desk chair.",
+      "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
+      "used": true,
+      "bytes": 215228,
+      "sha256": "795e8e1b100315608ac873d18c9cbd5431fda78dfaa00a55abf20e6d371f6cba",
+      "processing": "98 frames of pre-skin cushion and armrest corrections with a per-vertex contact map."
+    },
+    {
       "file": "furniture/floor-sofa.glb",
       "source": "Original PocketWorld model and woven textures, authored in Blender from the user's visual reference.",
       "used": true,
@@ -126,49 +169,13 @@
       "processing": "Existing locally packaged glTF binary; runtime clones the scene and normalizes scale. Packaging recipe from the earlier work session is not retained."
     },
     {
-      "file": "resident/luna-cloudhoodie.glb",
-      "source": "User-supplied Tripo model 1115d436-5d3e-444c-be63-a6141e1f346c.glb. Motion sources are shared with the existing Luna walk, chair, low-sofa, bed and library assets.",
-      "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
-      "used": true,
-      "bytes": 9968848,
-      "sha256": "8b41d7f2b2e56a30258cae8e9c27251df54b551dbe4df0146a335426c96aab06",
-      "processing": "Fitted Luna skeleton, rounded jaw with head-led skinning, relaxed arm poses, wrist weights and independent sparse SleeveContact_L/R morph targets baked from a 72-frame Blender cloth simulation of the torso and both sleeves, with clearance for the decorated mesh. Reworked flat sock feet, retouched facial albedo and grounded walk. Includes chair contact IDs, support vertices and book markers."
-    },
-    {
-      "file": "resident/luna-cloudhoodie-seat.bin",
-      "source": "Cloud hoodie mesh, its fitted Luna chair action, and the PocketWorld fixed desk chair.",
-      "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
-      "used": true,
-      "bytes": 437492,
-      "sha256": "b69110852a09e6555e44d4616e380a0c9eb9de0173363c8a4026dae2c92b8578",
-      "processing": "98 frames of pre-skin corrections to the seat cushion and armrest tops. 744 contact IDs on the hoodie mesh."
-    },
-    {
-      "file": "resident/luna-snowflower.glb",
-      "source": "User-supplied Tripo model ab1c7402-ed3c-428e-bf63-d4d73a8b9d7d.glb and 蓝发少女与雪花裙装.png. Animation sources are shared with the Luna wardrobe, book, bed and low-sofa assets.",
-      "license": "User-supplied character and artwork; no separate license declaration supplied.",
-      "used": true,
-      "bytes": 10028804,
-      "sha256": "d7b2bcc3393f30ae6cd984df804469f55874254a718b348f3603f06e2e9803cf",
-      "processing": "Fitted Luna skeleton, closed sock feet with matched ankle shading, sculpted and repainted face, and authored hair drape and sway weights. Embeds the fitted motions, book marker channels and outfit-specific chair contact IDs. See assets/models/resident/README.md."
-    },
-    {
-      "file": "resident/luna-snowflower-seat.bin",
-      "source": "Derived from the user-supplied snowflower character, Luna chair action and PocketWorld fixed-desk-chair geometry.",
-      "license": "User-supplied character and artwork; no separate license declaration supplied.",
-      "used": true,
-      "bytes": 1023140,
-      "sha256": "c4443578d5240bcaf3784dfed9657be6a44d41a6ef69f98dddda15d3e279af16",
-      "processing": "98 frames of quantized pre-skin correction for 1,740 mapped vertices, fitted to the seat cushion and padded armrests."
-    },
-    {
       "file": "resident/luna-walk-room.glb",
       "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the arm-supported scoot from the cushion edge to the resting pose; Walk and 2K data maps from repository commit 6f6df88; original 4K base color from the user-supplied Tripo GLB, also preserved in commit 2e1ff72.",
       "license": "User-supplied; no separate license declaration supplied.",
       "used": true,
-      "bytes": 10506732,
-      "sha256": "46a09d5ea671caee8ebb25d1597af6430874247cff0d787ea58a7470d38e2dcd",
-      "processing": "The seated clip and detailed contact mesh are baked from Blender. Luna-ArmContact.blend adds independent sparse skirt and underarm morph targets driven by arm pose. The original vertex mapping, walk channels and existing compressed textures are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. See assets/models/resident/README.md."
+      "bytes": 10123612,
+      "sha256": "9039e3de3718482d529474e3f06f4ebe9485761ed1b2aefd702dc124200fb176",
+      "processing": "The seated clip and detailed contact mesh are baked from Blender. Luna-ArmContact.blend adds independent sparse skirt and underarm morph targets driven by arm pose. Blender resizes the original 4K base color to 2K; vertex mapping, walk channels and all other image bytes are preserved. Normal scale 0.18, metallic factor 0, and base-color emission factor 0.55. Rebuild with scripts/resize-luna-textures.py. See assets/models/resident/README.md."
     },
     {
       "file": "resident/luna-seat-contact.bin",
@@ -309,6 +316,43 @@
       "sha256": "519fcea80093b9ea1d397fcee19bef3fdf67273381142f9aa60f44f59c9f1f46",
       "processing": "scripts/bake-luna-stairs.mjs samples consecutive right and left steps from the original GLBs. The shipped profiles contain ankle travel, pitch, torso lean, knee flexion, hip offsets and upper arm, forearm and hand directions. Both directions store pelvis travel relative to the planted ankle, vertical travel and head pitch through each toe-off. Character meshes and original clips are not bundled.",
       "descentSourcePage": "https://cosindra.ai/motionsmith/motions/walk-downstairs"
+    },
+    {
+      "file": "assets/public/models/resident/luna-cabin-actions-everyday.glb",
+      "source": "Cosindra MotionSmith gallery, eleven UE5 Manny clips fitted to Luna at 15 or 30 fps.",
+      "sourcePage": "https://cosindra.ai/motionsmith/motions/sit-floor",
+      "sourcePages": {
+        "MotionSmith_sit_floor_take2.glb": "https://cosindra.ai/motionsmith/motions/sit-floor",
+        "MotionSmith_stand_up_floor_take1.glb": "https://cosindra.ai/motionsmith/motions/stand-up-floor",
+        "MotionSmith_pick_up_take1.glb": "https://cosindra.ai/motionsmith/motions/pick-up",
+        "MotionSmith_rub_eye_take1.glb": "https://cosindra.ai/motionsmith/motions/rub-eye",
+        "MotionSmith_thinking_take1.glb": "https://cosindra.ai/motionsmith/motions/thinking",
+        "MotionSmith_reach_high_take1.glb": "https://cosindra.ai/motionsmith/motions/reach-high",
+        "MotionSmith_idle_feminine_take1.glb": "https://cosindra.ai/motionsmith/motions/idle-feminine",
+        "MotionSmith_idle_neck_stretch_take2.glb": "https://cosindra.ai/motionsmith/motions/idle-neck-stretch",
+        "MotionSmith_seated_dozing_idle_take1.glb": "https://cosindra.ai/motionsmith/motions/seated-dozing-idle",
+        "MotionSmith_sit_chair_idle_take5.glb": "https://cosindra.ai/motionsmith/motions/sit-chair-idle",
+        "MotionSmith_sit_floor_idle_take1.glb": "https://cosindra.ai/motionsmith/motions/sit-floor-idle"
+      },
+      "sourceSha256": {
+        "MotionSmith_sit_floor_take2.glb": "9627ea368f5e88dc50ff4b128dc8d911c0272f250f7b56a2b3d30df8b9593ad7",
+        "MotionSmith_stand_up_floor_take1.glb": "ef437ec9152752e6fdd26410194efc4a40a3fb167ae983b3000c6df390385601",
+        "MotionSmith_pick_up_take1.glb": "4cfe5bec54742ad408ecb13ea0887758a7dbb1fd6fbbf977ede8d7129ac8a411",
+        "MotionSmith_rub_eye_take1.glb": "5eb1c241e3ce8955e426467b0f2d74fb0adae0d8a64c614377e8d06a94ce6d05",
+        "MotionSmith_thinking_take1.glb": "58f8fddf3880997ad35037d41582bf0fa014a17377b8b1f8f5b9d245b5cc71a8",
+        "MotionSmith_reach_high_take1.glb": "be8fbb3994ebaa2d5fbc08dd2700374bdb222e0809040b75cf311b606336a7a9",
+        "MotionSmith_idle_feminine_take1.glb": "78ab31313c54ff26de4f5750bca86746d9b1eca93500f4cf38a936984aa09167",
+        "MotionSmith_idle_neck_stretch_take2.glb": "0972a23a29d0c383749d8ab4bf269adda744b0730edf3ba2f8ac105c8c5bfe34",
+        "MotionSmith_seated_dozing_idle_take1.glb": "361e214fee5ddb4fffcc7c5177a5021e5b63b908fbba2c2b5f8fb7d9e84a16e0",
+        "MotionSmith_sit_chair_idle_take5.glb": "c9452ecde98b5f0a0f7055feec5b45368592551f61d232afa8b619f96c0f9214",
+        "MotionSmith_sit_floor_idle_take1.glb": "2fd5791517056e3fddb0a20f74507ef75c96296ea6b70c89fe4d382cf3e12d97"
+      },
+      "license": "The MotionSmith gallery permits commercial game use without attribution.",
+      "licensePage": "https://cosindra.ai/license",
+      "used": true,
+      "bytes": 1013604,
+      "sha256": "2966d4f116d6e160ac5e2bfab39e55a9931fa3fae06cdd4eac6a5ea652983971",
+      "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, fits hand gestures to the face or waist, and exports masked idle rotations and action tracks without meshes or textures."
     }
   ]
 }

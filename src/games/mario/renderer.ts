@@ -1,559 +1,435 @@
-import { terrainY, terrainAngle } from './engine';
-import { TRAILS, type Feature, type Partner, type RenderOptions, type SkiState, type Trail } from './model';
-import type { NaiwaAction, SkiAssets, SpriteClip } from './assets';
-import { bodyPose, playerPivot, NAIWA_SCALE, rideHeight, rideOffsetX } from './character';
-export type { RenderOptions } from './model';
+import type { FishId, RodLevel } from './catalog.ts';
+import { drawFish, FISH_SPRITE_HEIGHT, FISH_SPRITE_WIDTH } from './fishArt.ts';
+import { ROD_ART } from './rodArt.ts';
+import { paintDockSigns } from './dockSigns.ts';
 
-const W = 800;
-const H = 600;
-const TAU = Math.PI * 2;
-const clamp = (n: number, a = 0, b = 1) => Math.max(a, Math.min(b, n));
-const mod = (n: number, d: number) => ((n % d) + d) % d;
-
-function ellipse(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, fill: string) {
-  ctx.fillStyle = fill;
-  ctx.beginPath();
-  ctx.ellipse(x, y, Math.max(.1, rx), Math.max(.1, ry), 0, 0, TAU);
-  ctx.fill();
-}
-function line(ctx: CanvasRenderingContext2D, x: number, y: number, xx: number, yy: number, color: string, width: number) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(xx, yy); ctx.stroke();
-}
-function sprite(ctx: CanvasRenderingContext2D, clip: SpriteClip, time: number, scale: number, phase = 0, attached = false) {
-  const frame = Math.floor(mod(time * clip.fps + phase, clip.frameCount));
-  const anchor = attached ? clip.rideAnchors?.[frame] || clip.anchor : clip.anchor;
-  ctx.drawImage(clip.image, frame * clip.frameWidth, clip.row * clip.frameHeight,
-    clip.frameWidth, clip.frameHeight, -anchor[0] * scale, -anchor[1] * scale,
-    clip.frameWidth * scale, clip.frameHeight * scale);
+export const BAY_WIDTH = 800;
+export const BAY_HEIGHT = 600;
+export const CATCH_EFFECT_MS = 1500;
+export const LAND_HOLD_MS = 240;
+export const IMPULSE_MS = 520;
+export type FishingImpulse = 'tap' | 'splash' | 'nibble' | 'bite' | 'strike' | 'reel' | 'slip' | 'locked' | 'escape';
+export interface FishingScene {
+  readonly timeMs: number;
+  readonly rodLevel?: RodLevel;
+  readonly phase: 'idle' | 'waiting' | 'bite' | 'fight' | 'full';
+  readonly progress?: number;
+  readonly castAgeMs?: number;
+  readonly reducedMotion?: boolean;
+  readonly reelingFish?: FishId;
+  readonly impulse?: Readonly<{ kind: FishingImpulse; ageMs: number; id: number }>;
+  readonly catchEffect?: Readonly<{ fishId: FishId; ageMs: number }>;
+  readonly crossing?: Readonly<{ destination: 'dock' | 'boat'; progress: number }>;
 }
 
-function pine(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string, snow: string) {
-  ctx.save(); ctx.translate(x, y); ctx.scale(size, size);
-  line(ctx, 0, 0, 0, -114, '#655C4D', 7);
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(0, -145);
-  ctx.bezierCurveTo(-8, -116, -12, -112, -23, -99);
-  ctx.quadraticCurveTo(-15, -100, -12, -101);
-  ctx.quadraticCurveTo(-22, -80, -37, -65);
-  ctx.quadraticCurveTo(-28, -66, -23, -67);
-  ctx.quadraticCurveTo(-37, -42, -52, -26);
-  ctx.quadraticCurveTo(-25, -14, 0, -18);
-  ctx.quadraticCurveTo(25, -14, 52, -26);
-  ctx.quadraticCurveTo(35, -44, 23, -67);
-  ctx.quadraticCurveTo(30, -65, 37, -65);
-  ctx.quadraticCurveTo(23, -82, 12, -101);
-  ctx.lineTo(23, -99); ctx.quadraticCurveTo(8, -119, 0, -145); ctx.fill();
-  ctx.fillStyle = snow;
-  for (let tier = 0; tier < 3; tier++) {
-    const yy = -128 + tier * 35;
-    const span = 12 + tier * 13;
-    ctx.beginPath(); ctx.moveTo(0, yy - 12);
-    ctx.quadraticCurveTo(-span * .6, yy + 10, -span, yy + 20);
-    ctx.quadraticCurveTo(-span * .4, yy + 25, 0, yy + 15);
-    ctx.quadraticCurveTo(span * .35, yy + 23, span, yy + 20);
-    ctx.quadraticCurveTo(span * .6, yy + 10, 0, yy - 12); ctx.fill();
-  }
-  ctx.restore();
-}
-
-function mountains(ctx: CanvasRenderingContext2D, scroll: number, trail: Trail) {
-  const night = trail.id === 'night';
-  for (let layer = 0; layer < 2; layer++) {
-    const shift = mod(scroll * (.055 + layer * .035), 850);
-    ctx.fillStyle = layer ? trail.mountain : night ? '#344A6B' : '#B6D1DC';
-    if (trail.id === 'forest' && !layer) ctx.fillStyle = '#D5B7C4';
-    const base = 370 + layer * 35;
-    ctx.beginPath(); ctx.moveTo(-850 - shift, base);
-    for (let repeat = -1; repeat < 2; repeat++) {
-      const xx = repeat * 850 - shift;
-      ctx.bezierCurveTo(xx + 45, base, xx + 60, 272, xx + 130, 204 + layer * 35);
-      ctx.quadraticCurveTo(xx + 149, 185 + layer * 35, xx + 165, 212 + layer * 35);
-      ctx.bezierCurveTo(xx + 225, 286, xx + 260, 279, xx + 315, 334);
-      ctx.bezierCurveTo(xx + 375, 260, xx + 434, 223, xx + 490, 165 + layer * 52);
-      ctx.quadraticCurveTo(xx + 506, 145 + layer * 52, xx + 527, 173 + layer * 52);
-      ctx.bezierCurveTo(xx + 620, 285, xx + 670, 267, xx + 730, 328);
-      ctx.bezierCurveTo(xx + 775, 355, xx + 815, base, xx + 850, base);
-    }
-    ctx.lineTo(1700 - shift, H + 1); ctx.lineTo(-850 - shift, H + 1); ctx.closePath(); ctx.fill();
-    for (let repeat = -1; repeat < 2; repeat++) {
-      const xx = repeat * 850 - shift;
-      ctx.fillStyle = night ? '#819DAF' : '#EEF6F6';
-      ctx.beginPath(); ctx.moveTo(xx + 96, 242 + layer * 35);
-      ctx.lineTo(xx + 130, 204 + layer * 35); ctx.quadraticCurveTo(xx + 149, 185 + layer * 35, xx + 165, 212 + layer * 35);
-      ctx.lineTo(xx + 200, 253 + layer * 35); ctx.lineTo(xx + 164, 233 + layer * 35);
-      ctx.lineTo(xx + 150, 245 + layer * 35); ctx.lineTo(xx + 139, 226 + layer * 35); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(xx + 446, 215 + layer * 52);
-      ctx.lineTo(xx + 490, 165 + layer * 52); ctx.quadraticCurveTo(xx + 506, 145 + layer * 52, xx + 527, 173 + layer * 52);
-      ctx.lineTo(xx + 566, 220 + layer * 52); ctx.lineTo(xx + 523, 197 + layer * 52);
-      ctx.lineTo(xx + 506, 213 + layer * 52); ctx.lineTo(xx + 491, 193 + layer * 52); ctx.closePath(); ctx.fill();
-    }
-  }
-}
-
-function sky(ctx: CanvasRenderingContext2D, trail: Trail, scroll: number, time: number, reduced: boolean) {
-  const night = trail.id === 'night';
-  const wash = ctx.createLinearGradient(0, 0, 0, 440);
-  wash.addColorStop(0, trail.sky);
-  wash.addColorStop(1, night ? '#6C91A6' : trail.id === 'forest' ? '#F9E2CB' : '#ECF7FA');
-  ctx.fillStyle = wash; ctx.fillRect(0, 0, W, H);
-  ellipse(ctx, 657, 147, night ? 27 : 35, night ? 27 : 35, night ? '#FFF2CD' : '#FFF8DA');
-  if (night) {
-    ellipse(ctx, 670, 137, 25, 25, trail.sky);
-    for (let i = 0; i < 44; i++) {
-      const x = mod(i * 179.3 + 23, W);
-      const y = 29 + mod(i * 61.7, 231);
-      ellipse(ctx, x, y, i % 7 === 0 ? 1.8 : .9, i % 7 === 0 ? 1.8 : .9, '#E0F3ED');
-    }
-    ctx.save(); ctx.globalAlpha = .21;
-    for (let band = 0; band < 3; band++) {
-      ctx.strokeStyle = band === 1 ? '#BDCEEF' : '#8CE2CC';
-      ctx.lineWidth = 14 + band * 7; ctx.beginPath();
-      for (let x = -30; x <= 830; x += 14) {
-        const y = 116 + band * 20 + Math.sin(x / 145 + (reduced ? 0 : time * .06)) * 39;
-        if (x === -30) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    }
-    ctx.restore();
-  } else {
-    ctx.save(); ctx.globalAlpha = .65;
-    for (let i = 0; i < 4; i++) {
-      const x = mod(i * 269 - scroll * .025, 1080) - 140;
-      const y = 100 + i % 2 * 63;
-      ellipse(ctx, x, y, 62, 9, '#FFFFFF');
-      ellipse(ctx, x - 15, y - 9, 33, 12, '#FFFFFF');
-      ellipse(ctx, x + 23, y - 5, 35, 11, '#FFFFFF');
-    }
-    ctx.restore();
-  }
-  mountains(ctx, scroll, trail);
-  const forestScroll = scroll * .29;
-  const forestY = (x: number) => 382 + Math.sin(x / 180) * 12 + Math.sin(x / 67) * 5;
-  ctx.fillStyle = night ? '#7296AD' : trail.id === 'forest' ? '#E8D8DB' : '#D5E6ED';
-  ctx.beginPath(); ctx.moveTo(-8, H + 1);
-  for (let x = -8; x <= W + 8; x += 8) ctx.lineTo(x, forestY(x + forestScroll));
-  ctx.lineTo(W + 8, H + 1); ctx.closePath(); ctx.fill();
-  const firstTree = Math.floor(forestScroll / 83) - 2;
-  for (let i = firstTree; i < firstTree + 15; i++) {
-    const worldX = i * 83;
-    pine(ctx, worldX - forestScroll, forestY(worldX) + 4, .35 + mod(i * .13, .3), trail.pine, night ? '#94BBC8' : '#DAEAF0');
-  }
-}
-
-function cabin(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number, time: number, reduced: boolean) {
-  ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
-  ellipse(ctx, 8, 7, 100, 13, '#BCD1D8');
-  ctx.fillStyle = '#A46E48'; ctx.fillRect(-69, -94, 138, 94);
-  ctx.fillStyle = '#77543C'; ctx.beginPath(); ctx.moveTo(-79, -90); ctx.lineTo(0, -154); ctx.lineTo(79, -90); ctx.closePath(); ctx.fill();
-  for (let i = 0; i < 7; i++) line(ctx, -67, -82 + i * 13, 67, -82 + i * 13, '#855A3D', 2);
-  ctx.fillStyle = '#6E5142'; ctx.fillRect(34, -161, 17, 43);
-  ctx.fillStyle = '#F7FCFF'; ctx.fillRect(30, -165, 25, 8);
-  ctx.beginPath(); ctx.moveTo(-88, -93); ctx.lineTo(-4, -166); ctx.quadraticCurveTo(0, -169, 6, -164);
-  ctx.lineTo(88, -94); ctx.quadraticCurveTo(70, -85, 60, -100); ctx.lineTo(1, -147);
-  ctx.lineTo(-62, -94); ctx.quadraticCurveTo(-77, -82, -88, -93); ctx.fill();
-  ctx.fillStyle = '#4C4238'; ctx.fillRect(-19, -64, 38, 64);
-  ctx.fillStyle = '#F8CF73'; ctx.fillRect(-14, -57, 28, 57);
-  ctx.fillStyle = '#E7AB57'; ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(-45, 10); ctx.lineTo(58, 10); ctx.lineTo(14, 0); ctx.fill();
-  for (const xx of [-49, 44]) {
-    ctx.fillStyle = '#4C4238'; ctx.fillRect(xx - 13, -69, 27, 31);
-    ctx.fillStyle = '#FFE3A1'; ctx.fillRect(xx - 10, -66, 21, 25);
-    line(ctx, xx, -66, xx, -41, '#A7784D', 3);
-    line(ctx, xx - 10, -53, xx + 11, -53, '#A7784D', 3);
-    line(ctx, xx - 16, -36, xx + 17, -36, '#F7FCFF', 6);
-  }
-  if (!reduced) for (let i = 0; i < 4; i++) {
-    const p = mod(time * .22 + i / 4, 1);
-    ctx.globalAlpha = (1 - p) * .3;
-    ellipse(ctx, 43 + Math.sin(p * 5) * 12, -174 - p * 65, 8 + p * 12, 5 + p * 8, '#FFFFFF');
-  }
-  ctx.restore();
-}
-
-function snowGround(ctx: CanvasRenderingContext2D, state: SkiState, cameraX: number, cameraY: number, trail: Trail) {
-  ctx.beginPath(); ctx.moveTo(-10, H + 10);
-  for (let x = -10; x <= W + 10; x += 8) ctx.lineTo(x, terrainY(x + cameraX, state.trail) - cameraY);
-  ctx.lineTo(W + 10, H + 10); ctx.closePath();
-  const wash = ctx.createLinearGradient(0, 390, 0, 600);
-  wash.addColorStop(0, trail.snow); wash.addColorStop(1, trail.id === 'night' ? '#BDD7E5' : '#DBEBEF');
-  ctx.fillStyle = wash; ctx.fill();
-  ctx.strokeStyle = trail.snow; ctx.lineWidth = 5; ctx.stroke();
-  for (let row = 0; row < 3; row++) {
-    ctx.strokeStyle = row === 0 ? '#C3DCE5' : '#CBDDE4';
-    ctx.globalAlpha = .55 - row * .12; ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    for (let x = -10; x <= W + 10; x += 12) {
-      const y = terrainY(x + cameraX, state.trail) - cameraY + 29 + row * 49 + Math.sin((x + cameraX) / 170 + row) * 8;
-      if (x === -10) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-  for (let i = 0; i < 31; i++) {
-    const worldX = Math.floor(cameraX / 37) * 37 + i * 37;
-    const x = worldX - cameraX;
-    const y = terrainY(worldX, state.trail) - cameraY + 18 + mod(worldX * 1.71, 155);
-    line(ctx, x, y, x + 3 + mod(worldX * 3, 6), y - 1, '#C1D7DF', 1);
-  }
-}
-
-function fallbackNaiwa(ctx: CanvasRenderingContext2D, time: number, skis: boolean) {
-  ctx.lineWidth = 1.8; ctx.strokeStyle = '#85602B';
-  const body = ctx.createLinearGradient(-10, -65, 16, -13);
-  body.addColorStop(0, '#FFF08A'); body.addColorStop(.65, '#F2C244'); body.addColorStop(1, '#CE9226');
-  ctx.fillStyle = body; ctx.beginPath(); ctx.moveTo(0, -68);
-  ctx.bezierCurveTo(18, -70, 23, -58, 13, -52); ctx.bezierCurveTo(14, -42, 29, -30, 18, -18);
-  ctx.bezierCurveTo(4, -6, -22, -13, -19, -30); ctx.bezierCurveTo(-17, -47, -7, -66, 0, -68);
-  ctx.fill(); ctx.stroke();
-  ellipse(ctx, 8, -31, 12, 16, '#F9E7BF');
-  ellipse(ctx, 10, -61, 5, 5, '#98B983'); ellipse(ctx, 12, -61, 2, 3, '#24312A');
-  line(ctx, 10, -52, 17, -53, '#6E4B2F', 1.5);
-  line(ctx, -8, -16, -8, -3, '#8B652E', 5); line(ctx, 9, -15, 13, -3, '#8B652E', 5);
-  line(ctx, -10, -2, -2, -2, '#60472C', 4); line(ctx, 11, -2, 19, -2, '#60472C', 4);
-  line(ctx, -9, -43, -25, -39 + Math.sin(time * 9) * 2, '#B74740', 6);
-  if (skis) line(ctx, -35, 2, 36, 0, '#3C5962', 3);
-}
-
-function drawNaiwa(ctx: CanvasRenderingContext2D, assets: SkiAssets | null, action: NaiwaAction, time: number) {
-  const rig = assets?.rig;
-  if (rig?.body && rig.legs && rig.skis) {
-    ctx.save();
-    if (action === 'idle') ctx.rotate(Math.sin(time * 2) * .025);
-    if (action !== 'ride' && action !== 'idle') sprite(ctx, rig.skis, time, NAIWA_SCALE);
-    sprite(ctx, rig.legs, time, NAIWA_SCALE);
-    sprite(ctx, rig.body, time, NAIWA_SCALE);
-    ctx.restore();
+type Ctx = CanvasRenderingContext2D;
+const atlases = new WeakMap<HTMLCanvasElement, HTMLImageElement>();
+type DockImage = HTMLImageElement | HTMLCanvasElement;
+const dockImages = new WeakMap<HTMLCanvasElement, DockImage>();
+export function setFishingAtlas(canvas: HTMLCanvasElement, atlas: HTMLImageElement) { atlases.set(canvas, atlas); }
+export function setDockImage(canvas: HTMLCanvasElement, image: HTMLImageElement) {
+  const street = canvas.ownerDocument.createElement('canvas');
+  street.width = image.naturalWidth;
+  street.height = image.naturalHeight;
+  const context = street.getContext('2d');
+  if (!context) {
+    dockImages.set(canvas, image);
     return;
   }
-  const clip = assets?.naiwa[action];
-  if (clip) sprite(ctx, clip, time, .36);
-  else {
-    ctx.save();
-    if (action === 'tuck') ctx.scale(1.3, .52);
-    fallbackNaiwa(ctx, time, action !== 'ride' && action !== 'idle');
-    ctx.restore();
-  }
+  context.drawImage(image, 0, 0);
+  paintDockSigns(context);
+  dockImages.set(canvas, street);
+}
+const paths = new Map<string, Path2D>();
+const rnd = (n: number) => ((n * 811 + 17) % 997 * 613 % 997) / 997;
+function rect(c: Ctx, color: string, x: number, y: number, w: number, h: number) { c.fillStyle = color; c.fillRect(x,y,w,h); }
+function poly(c: Ctx, color: string, d: string) {
+  let p = paths.get(d);
+  if (!p) paths.set(d, p = new Path2D(d));
+  c.fillStyle = color; c.fill(p);
 }
 
-function fallbackDoubao(ctx: CanvasRenderingContext2D, time: number) {
-  const swing = Math.sin(time * 14) * 11;
-  ctx.lineCap = 'round';
-  line(ctx, -3, -29, -8 + swing, -4, '#F1EBDD', 8);
-  line(ctx, 3, -29, 7 - swing, -3, '#E9E0CC', 8);
-  ellipse(ctx, 0, -56, 12, 15, '#3C302B');
-  ellipse(ctx, 4, -55, 8, 10, '#F5CDB1'); ellipse(ctx, 8, -57, 1.5, 2, '#322B2A');
-  ctx.fillStyle = '#292D30'; ctx.beginPath(); ctx.moveTo(-9, -43); ctx.lineTo(7, -43);
-  ctx.lineTo(10, -26); ctx.quadraticCurveTo(0, -22, -11, -27); ctx.closePath(); ctx.fill();
-  line(ctx, -7, -40, -13 - swing * .2, -28, '#F5CDB1', 4);
-  line(ctx, 7, -40, 13 + swing * .2, -32, '#F5CDB1', 4);
-  line(ctx, -8 + swing, -3, -3 + swing, -3, '#4E5359', 4);
-  line(ctx, 7 - swing, -2, 13 - swing, -2, '#4E5359', 4);
+const fx = 172, fy = 132;
+function swell(c: Ctx,x:number,y:number,r:number,alpha:number) {
+  const old=c.globalAlpha;
+  c.globalAlpha=alpha;
+  c.strokeStyle='#c9e7f2';c.lineWidth=.45;c.beginPath();c.ellipse(x,y,r,Math.max(1,r*.28),0,0,Math.PI*2);c.stroke();
+  c.globalAlpha=old;
 }
-
-function partner(ctx: CanvasRenderingContext2D, assets: SkiAssets | null, type: Partner, time: number, attached = false) {
-  const clip = assets?.niulai[type];
-  if (clip) {
-    const frame = Math.floor(mod(time * clip.fps, clip.frameCount));
-    const seat = clip.rideAnchors?.[frame];
-    // Normalize the saddle-to-ground span to the existing gameplay height.
-    const scale = attached && seat ? (type === 'slide' ? 22 : 42) / (clip.anchor[1] - seat[1]) : type === 'slide' ? .32 : .245;
-    sprite(ctx, clip, time, scale, 0, attached);
-  }
-  else {
-    const slide = type === 'slide';
-    ellipse(ctx, 0, slide ? -18 : -31, slide ? 34 : 22, slide ? 16 : 28, '#F4AD39');
-    ellipse(ctx, slide ? 27 : 4, slide ? -36 : -65, 16, 18, '#FCD660');
-    ellipse(ctx, slide ? 32 : 7, slide ? -31 : -59, 12, 8, '#F9E6BD');
-    ellipse(ctx, slide ? 31 : 10, slide ? -41 : -71, 2, 2, '#473827');
-    for (const side of [-1, 1]) line(ctx, side * 13, -15, side * 17 + Math.sin(time * 12 + side) * 3, -3, '#CA8B3E', 7);
+function stars(c:Ctx,x:number,y:number,time:number,splash:boolean) {
+  for(let i=0;i<7;i++){
+    const dx=(rnd(i+5)-.5)*(splash?24:19)*time;
+    const dy=splash?-rnd(i+15)*10*Math.sin(Math.PI*time):-rnd(i+12)*12*time;
+    const px=Math.round(x+dx),py=Math.round(y+dy);
+    rect(c,i%2?'#fff4ba':'#dcfff1',px,py,i%3?1:2,1);
   }
 }
+const unit = (value: number) => Math.max(0, Math.min(1, value));
+const ease = (value: number) => {
+  const p = unit(value);
+  return p * p * (3 - 2 * p);
+};
+const RELEASE_MS = 270;
+const FLIGHT_MS = 380;
+export const CAST_LAND_MS = RELEASE_MS + FLIGHT_MS;
 
-function feature(ctx: CanvasRenderingContext2D, f: Feature, state: SkiState, assets: SkiAssets | null, cameraX: number, cameraY: number) {
-  if (f.used && f.kind !== 'ramp' && f.kind !== 'ice') return;
-  const x = f.x + f.width / 2 - cameraX;
-  const y = f.y - cameraY;
-  if (x + f.width < -100 || x - f.width > W + 100) return;
-  ctx.save(); ctx.translate(x, y);
-  if (f.kind === 'coin') {
-    const width = 6 + Math.abs(Math.cos(state.time * 3.5 + f.id)) * 4;
-    ellipse(ctx, 0, 2, width + 2, 12, '#B87D2B'); ellipse(ctx, 0, 0, width, 11, '#F7CD67');
-    ellipse(ctx, -1, -1, Math.max(2, width - 3), 7, '#FCE7A5');
-    line(ctx, 0, -4, 0, 4, '#C18B36', 2);
-  } else if (f.kind === 'rock') {
-    ellipse(ctx, 0, 3, f.width * .6, 5, '#BED1D9');
-    ctx.fillStyle = '#6D8793'; ctx.beginPath(); ctx.moveTo(-f.width / 2, 0);
-    ctx.bezierCurveTo(-f.width * .6, -18, -f.width * .24, -38, 4, -34);
-    ctx.bezierCurveTo(f.width * .4, -36, f.width * .55, -18, f.width / 2, 0); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#94AAB3'; ctx.beginPath(); ctx.moveTo(-f.width * .4, -13); ctx.lineTo(-5, -30);
-    ctx.lineTo(9, -25); ctx.lineTo(4, -7); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#F8FCFC'; ctx.beginPath(); ctx.moveTo(-f.width * .4, -22); ctx.quadraticCurveTo(-5, -44, f.width * .37, -24);
-    ctx.quadraticCurveTo(6, -18, 0, -24); ctx.quadraticCurveTo(-9, -18, -f.width * .4, -22); ctx.fill();
-  } else if (f.kind === 'branch') {
-    line(ctx, f.width / 2 - 5, 1, f.width / 2 + 2, -110, '#6E6051', 12);
-    line(ctx, -f.width / 2, -57, f.width / 2, -62, '#74604A', 11);
-    line(ctx, -f.width / 2 + 2, -65, f.width / 2, -70, '#EFF9FA', 7);
-    line(ctx, -14, -58, -28, -81, '#74604A', 5);
-    pine(ctx, f.width / 2 + 3, -93, .46, '#3D6166', '#E7F1F2');
-    ctx.fillStyle = '#B65040'; ctx.fillRect(-f.width / 2 + 8, -57, 7, 17);
-  } else if (f.kind === 'ramp') {
-    ctx.fillStyle = '#D1E5EA'; ctx.beginPath(); ctx.moveTo(-f.width / 2, 0);
-    ctx.quadraticCurveTo(3, -6, f.width / 2, -27); ctx.lineTo(f.width / 2, 0); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#FAFEFF'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-f.width / 2, 0);
-    ctx.quadraticCurveTo(3, -6, f.width / 2, -27); ctx.stroke();
-    line(ctx, f.width / 2 + 4, 0, f.width / 2 + 4, -48, '#778D91', 2);
-    ctx.fillStyle = '#BB5C44'; ctx.beginPath(); ctx.moveTo(f.width / 2 + 4, -48); ctx.lineTo(f.width / 2 + 23, -43); ctx.lineTo(f.width / 2 + 4, -36); ctx.fill();
-  } else if (f.kind === 'ice') {
-    ctx.fillStyle = '#9FD4E2';
-    ctx.beginPath();
-    for (let xx = -f.width / 2; xx <= f.width / 2; xx += 5) {
-      const yy = terrainY(f.x + f.width / 2 + xx, state.trail) - f.y;
-      if (xx === -f.width / 2) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
-    }
-    ctx.lineTo(f.width / 2, 6); ctx.quadraticCurveTo(0, 12, -f.width / 2, 6); ctx.closePath(); ctx.fill();
-    for (let i = 0; i < 4; i++) line(ctx, -f.width * .35 + i * f.width / 5, 2, -f.width * .25 + i * f.width / 5, -3, '#EAFBFF', 2);
+const ANGLER_X = 128;
+const DECK_Y = 107;
+
+function angler(c: Ctx, bob: number, lean: number, handX: number, handY: number) {
+  const x = ANGLER_X + Math.round(lean * .6);
+  const feet = DECK_Y + bob;
+  const head = feet - 11 - Math.round(lean / 3);
+  const outline = '#212739';
+  const skin = '#ffd0a5';
+  const linen = '#f3e4cf';
+  for (const bootX of [ANGLER_X - 2.5, ANGLER_X + 1]) {
+    rect(c, skin, bootX + .5, feet - 4, 1.5, 2);
+    rect(c, outline, bootX, feet - 2.5, 2.5, 2.5);
+    rect(c, linen, bootX + .5, feet - 2.5, 1.5, .5);
+    rect(c, '#8a624d', bootX + .5, feet - 1.5, 2, 1);
+  }
+  rect(c, outline, x - 3.5, feet - 7, 7, 3.5);
+  rect(c, '#526b8d', x - 2.5, feet - 7, 5, 2.5);
+  rect(c, '#425675', x + .5, feet - 7, 1, 2.5);
+  rect(c, '#7da0ad', x - 2, feet - 4.5, 4.5, .5);
+  rect(c, outline, x - 3.5, head + 4, 7, 3.5);
+  rect(c, linen, x - 3, head + 4.5, 5.5, 2.5);
+  rect(c, '#6a919d', x - .5, head + 4.5, 2, .75);
+  rect(c, '#506985', x, head + 5.25, 1, 1.5);
+  // Satchel and strap follow the shifting torso, while the boots stay fixed to the deck.
+  rect(c, '#92715f', x - 2, head + 5, .5, 2);
+  rect(c, '#65453e', x - 4.5, feet - 7, 2.5, 3);
+  rect(c, '#af8061', x - 4, feet - 6.75, 1.5, 2);
+  rect(c, '#e8b67a', x - 3.5, feet - 6.5, .5, .5);
+
+  rect(c, outline, x - 4.5, head - 1.5, 9, 4.5);
+  rect(c, outline, x - 3, head - 3, 6.5, 1.5);
+  rect(c, outline, x - 4, head + 2.5, 3.5, 1.5);
+  rect(c, '#3c4f6e', x - 3.5, head - 2, 7.5, 4.5);
+  rect(c, '#3c4f6e', x - 3.5, head + 2, 2, 1.5);
+  rect(c, '#7087a2', x - 2.5, head - 2.5, 4.5, 1);
+  rect(c, '#8298af', x + 1.5, head - 1.5, 2, .5);
+  rect(c, '#607894', x + 2, head - 1, 1, 1.5);
+  rect(c, skin, x - .5, head + .5, 4, 3.5);
+  rect(c, skin, x + 1, head + 3.5, 1.5, 1);
+  rect(c, '#3c4f6e', x - 1, head, 2.5, 1.5);
+  rect(c, outline, x + 2.5, head + 1.5, .5, 1);
+  rect(c, '#df977f', x + 3, head + 2.5, .5, .5);
+  rect(c, '#fff0ba', x - 3.5, head - .5, 2.5, .5);
+  rect(c, '#fff0ba', x - 2.5, head - 1.5, .5, 2.5);
+
+  const shoulder = head + 5.5;
+  c.beginPath();
+  c.moveTo(x + 1, shoulder);
+  c.lineTo((x + 1 + handX) / 2, (shoulder + handY) / 2 + 1);
+  c.lineTo(handX, handY);
+  c.strokeStyle = outline;
+  c.lineWidth = 2.1;
+  c.stroke();
+  c.strokeStyle = linen;
+  c.lineWidth = 1.35;
+  c.stroke();
+  rect(c, '#668299', Math.round(handX) - .5, Math.round(handY) - .5, 1.5, 1.5);
+  rect(c, skin, Math.round(handX), Math.round(handY), 1, 1);
+}
+
+const impulseStrength: Record<FishingImpulse, number> = {
+  tap: -.32, splash: 0, nibble: .08, bite: .67, strike: .95, reel: -.55, slip: -.32, locked: -.68, escape: -.6,
+};
+
+function fishingMotion(c: Ctx, f: FishingScene, bob: number) {
+  const still = f.reducedMotion;
+  const fight = f.phase === 'fight', bite = fight || f.phase === 'bite';
+  const waiting = f.phase === 'waiting';
+  const t = still ? 0 : f.timeMs / 1000;
+  const age = still || !waiting ? Infinity : f.castAgeMs ?? Infinity;
+  const airborne = age < CAST_LAND_MS;
+  const charge = ease(age / 170);
+  const swing = ease((age - 170) / 100);
+  const settle = ease((age - RELEASE_MS) / 420);
+  const hauling = f.reelingFish !== undefined;
+  const haulProgress = still ? .55 : unit(f.progress ?? 0);
+  const lift = hauling ? ease((haulProgress - .35) / .65) : 0;
+  const pulse = f.impulse && !still ? (1 - unit(f.impulse.ageMs / 235)) ** 2 : 0;
+  const tug = f.impulse ? impulseStrength[f.impulse.kind] * pulse : 0;
+  const resistance = still ? 0 : Math.sin((f.progress ?? 0) * 6 * Math.PI) * (.07 - .05 * lift);
+  const pull = hauling ? .58 - .42 * lift + resistance
+    : bite ? (fight ? 1 : .48) * (still ? 1 : .86 + .14 * Math.sin(t * 21)) : 0;
+  const lean = -3 * charge + 7 * swing - 4 * settle - 3 * pull - 3 * lift - 7 * tug;
+  const angle = -.8 - 1.47 * charge + 2.05 * swing - .58 * settle - .95 * lift + .38 * tug;
+  const handX = ANGLER_X + 5 + .6 * lean;
+  const handY = DECK_Y + bob - 6 + .6 * (-5 * charge + 4 * swing + settle - 4 * lift);
+  const rod = ROD_ART[f.rodLevel ?? 1];
+  const tipX = handX + rod.length * Math.cos(angle), tipY = handY + rod.length * Math.sin(angle) + 18 * pull + 6 * tug;
+  angler(c, bob, lean, handX, handY);
+
+  c.strokeStyle = rod.shaft;
+  c.lineWidth = rod.width;
+  c.beginPath();
+  c.moveTo(handX, handY);
+  c.quadraticCurveTo(handX + (rod.length - 9) * Math.cos(angle), handY + (rod.length - 7) * Math.sin(angle) - rod.bend * pull, tipX, tipY);
+  c.stroke();
+  if (rod.reel) {
+    rect(c, rod.grip, Math.round(handX) + 1, Math.round(handY), 3, 3);
+    rect(c, rod.metal, Math.round(handX) + 2, Math.round(handY) + 1, 2, 2);
+    rect(c, rod.metal, Math.round(tipX), Math.round(tipY), 1, 1);
+  }
+  if (!waiting && !bite && !hauling) return;
+
+  let x = fx + Math.sin(t * 2) * 1.3, y = fy + Math.sin(t * 4) * .55 + 3 * pull;
+  let slack = Math.max(0, 1 - pull - tug) * (bite ? 1.3 : 5);
+  if (f.impulse?.kind === 'nibble') y += Math.sin(pulse * 2 * Math.PI) * 2.1;
+  if (f.impulse?.kind === 'strike') y += 6 * pulse;
+  if (hauling) {
+    [x, y] = reelPosition(haulProgress, bob);
+    if (haulProgress < .52) swell(c, x, fy + 1, 4 + haulProgress * 10, .58 - haulProgress * .65);
+    y -= 3;
+    slack = 0;
+  } else if (age < RELEASE_MS) {
+    x = tipX + 2 * Math.sin(angle);
+    y = tipY + 5;
+    slack = 2;
+  } else if (airborne) {
+    const flight = (age - RELEASE_MS) / FLIGHT_MS;
+    // Start at the end of the forward flick before the float leaves the tip.
+    const releaseX = 156.4 + (rod.length - 22) * Math.cos(-.22);
+    const releaseY = 100.6 + (rod.length - 22) * Math.sin(-.22);
+    x = releaseX + (fx - releaseX) * flight;
+    y = releaseY + bob * (1 - flight) + (fy - releaseY) * flight - 90 * flight * (1 - flight);
+    slack = 3 + flight * 8;
   } else {
-    ellipse(ctx, 0, 3, 40, 7, '#C6DDE2');
-    partner(ctx, assets, f.kind, state.time);
-    ctx.font = '600 12px "PingFang SC", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#315863';
-    ctx.fillText(f.kind === 'slide' ? '滑行接力' : '冲撞接力', 0, -91);
+    const entry = 1 - unit((age - CAST_LAND_MS) / 440);
+    y += 5 * entry * Math.sin((1 - entry) * Math.PI * 3);
+    const ripple = still ? .4 : t % 1;
+    swell(c, x, fy + 1, 3 + ripple * 5, .7 - ripple * .46);
+    if (entry > 0 || bite) {
+      swell(c, x, fy + 1, 4 + (1 - entry) * 10, bite ? .72 : entry);
+      if (!still) stars(c, x, fy, bite ? .2 + pull * .5 : 1 - entry, true);
+    }
   }
-  ctx.restore();
-}
 
-function drawChaser(ctx: CanvasRenderingContext2D, assets: SkiAssets | null, x: number, y: number, time: number, phase: number, scale = 1) {
-  ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
-  ellipse(ctx, 0, 2, 17, 3, '#9ABAC7');
-  if (assets?.doubao) sprite(ctx, assets.doubao, time, .36, phase);
-  else fallbackDoubao(ctx, time + phase);
-  ctx.restore();
-}
-
-function snowDust(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, speed: number, reduced: boolean) {
-  if (reduced) return;
-  const count = speed > 330 ? 18 : 10;
-  for (let i = 0; i < count; i++) {
-    const p = mod(time * 1.8 + i / count, 1);
-    ctx.globalAlpha = (1 - p) * .65;
-    ellipse(ctx, x - 16 - p * (45 + speed * .09), y - p * (9 + i % 4 * 5), 1 + p * 4, 1 + p * 2, '#FFFFFF');
+  const floatTop = Math.round(y) - 3;
+  const lineY = hauling ? y : airborne ? floatTop : Math.min(floatTop, fy + 1);
+  c.strokeStyle = tug > .2 ? '#fff3c6' : '#dfebfa';
+  c.lineWidth = tug > .2 ? .9 : .55;
+  c.beginPath();
+  c.moveTo(tipX, tipY);
+  c.quadraticCurveTo((tipX + x) / 2, (tipY + lineY) / 2 + slack, x, lineY);
+  c.stroke();
+  const shown = hauling ? 0 : airborne ? 5 : Math.min(5, fy + 1 - floatTop);
+  if (shown > 0) {
+    rect(c, '#493e58', Math.round(x) - 2, floatTop, 4, shown);
+    rect(c, '#ff8d69', Math.round(x) - 1, floatTop, 2, Math.min(4, shown));
+    rect(c, '#fff4cc', Math.round(x), floatTop, 1, 1);
   }
-  ctx.globalAlpha = 1;
+  rect(c, '#202942dd', 61, 73 + bob, 27, 3);
+  rect(c, hauling ? '#ffd097' : bite ? '#ef796a' : '#79c897', 62, 74 + bob, 25 * (hauling ? f.progress ?? 0 : bite ? 1 : f.progress ?? 0), 1);
 }
 
-function boostEffects(ctx: CanvasRenderingContext2D, state: SkiState, x: number, y: number, reduced: boolean) {
-  const p = state.player;
-  if (reduced || state.over || p.boostTime <= 0) return;
-  ctx.save();
-  const strength = Math.min(1, p.boostTime / .25);
-  // Keep the middle of the snow trail clear: streaks live behind the skier
-  // and at the upper edges, while the expanding ring stays around the body.
+function reelPosition(progress: number, bob: number): [number, number] {
+  const rise = ease((progress - .35) / .65);
+  const x = fx + (113 - fx) * ease(progress);
+  const y = fy + (103 + bob - fy) * rise - 124 * rise * (1 - rise) + 3 * Math.sin(Math.PI * progress);
+  return [x, y];
+}
+
+function drawReelingFish(c: Ctx, f: FishingScene, bob: number) {
+  const landed = f.catchEffect;
+  const p = f.reducedMotion ? .55 : unit(f.progress ?? 0);
+  if (f.reelingFish) {
+    const [x, y] = reelPosition(p, bob);
+    if (!f.reducedMotion && p > .35 && p < .67) {
+      const breakSurface = unit((p - .35) / .32);
+      spray(c, x + 4, fy, breakSurface, 1.25);
+    }
+    const flip = f.reducedMotion ? 0 : -.65 * (1 - p) + .18 * Math.sin(p * 7 * Math.PI);
+    drawCatchSprite(c, f.reelingFish, x, y, ease((p - .23) / .25), flip);
+  } else if (landed && landed.ageMs >= 0 && landed.ageMs < CATCH_EFFECT_MS) {
+    const [x, y] = reelPosition(1, bob);
+    if (f.reducedMotion) {
+      drawCatchSprite(c, landed.fishId, x, y, 1, 0);
+    } else {
+      const kick = unit(landed.ageMs / 440);
+      if (kick < 1) spray(c, x, y, kick, 1.3, '#ffe2a6');
+      const launch = ease(landed.ageMs / 340);
+      drawCatchSprite(c, landed.fishId, x, y - 8 * launch,
+        unit((CATCH_EFFECT_MS - landed.ageMs) / 250) * (1 - .8 * launch), .32 * launch, .38 + .39 * launch);
+    }
+  }
+}
+
+function spray(c: Ctx, x: number, y: number, progress: number, strength: number, highlight = '#e5fbf6') {
+  c.save();
+  c.globalAlpha = (1 - progress) * .95;
+  for (let i = 0; i < 14; i++) {
+    const speed = (.35 + rnd(70 + i) * .65) * strength;
+    const dx = (rnd(91 + i) - .5) * 64 * progress * speed;
+    const dy = -Math.sin(progress * Math.PI) * (7 + 21 * rnd(111 + i)) * speed;
+    rect(c, i % 3 ? highlight : '#83c6d9', Math.round(x + dx), Math.round(y + dy), i % 4 ? 1 : 2, i % 3 ? 2 : 1);
+  }
+  c.restore();
+}
+
+function drawImpulse(c: Ctx, f: FishingScene) {
+  if (!f.impulse || f.impulse.ageMs >= IMPULSE_MS) return;
+  const { kind, ageMs } = f.impulse;
+  const progress = f.reducedMotion ? .28 : unit(ageMs / IMPULSE_MS);
+  const strike = kind === 'strike' || kind === 'bite';
+  const success = kind === 'reel' || kind === 'locked';
+  const failure = kind === 'slip' || kind === 'escape';
+  const radius = strike ? 24 : success ? 18 : kind === 'nibble' ? 9 : 14;
+  swell(c, fx, fy + 1, 4 + progress * radius, .95 * (1 - progress));
+  if (strike || success) swell(c, fx, fy + 1, 2 + progress * radius * .7, .8 * (1 - progress));
+  if (!f.reducedMotion && kind !== 'tap' && kind !== 'nibble') {
+    spray(c, fx, fy, progress, strike ? 1.6 : .88, success ? '#f4dca3' : undefined);
+  }
+  if (!strike && !success && !failure) return;
+  c.save();
+  c.globalAlpha = 1 - ease((progress - .6) / .4);
+  c.font = 'bold 10px sans-serif';
+  c.textAlign = 'center';
+  const y = Math.round(fy - 16 - 8 * progress);
+  const mark = strike ? '!' : success ? '✦' : '×';
+  c.strokeStyle = '#142d40';
+  c.lineWidth = 3;
+  c.strokeText(mark, fx, y);
+  c.fillStyle = failure ? '#ffaaa2' : '#ffe6ad';
+  c.fillText(mark, fx, y);
+  c.restore();
+}
+
+function drawCatchSprite(c: Ctx, fishId: FishId, x: number, y: number, opacity: number, angle: number, size = .38) {
+  if (opacity === 0) return;
+  c.save();
+  c.globalAlpha = opacity;
+  c.translate(Math.round(x), Math.round(y) - 3);
+  if (angle) c.rotate(angle);
+  c.scale(size, size);
+  c.translate(-FISH_SPRITE_WIDTH/2,-FISH_SPRITE_HEIGHT/2);
+  drawFish(c, fishId);
+  c.restore();
+}
+
+function dockFromWater(c: Ctx, dock: DockImage | undefined, towardDock: number) {
+  const lift = ease((towardDock - .48) / .52);
+  const top = Math.round(-40 * (1 - lift));
+  const inset = Math.round(14 * (1 - lift));
+  const width = 200 + inset * 2;
+  const bottom = top + 150;
+  if (dock) {
+    if (bottom < 150) {
+      // Carry the reflection at the bottom of the street image into the foreground.
+      c.drawImage(dock, 0, dock.height - 10, dock.width, 10, -inset, bottom, width, 150 - bottom);
+      const shade = c.createLinearGradient(0, bottom, 0, 150);
+      shade.addColorStop(0, '#18344900');
+      shade.addColorStop(1, '#183449bc');
+      c.fillStyle = shade;
+      c.fillRect(0, bottom, 200, 150 - bottom);
+    }
+    c.drawImage(dock, -inset, top, width, 150);
+    return;
+  }
+
+  rect(c, '#384665', 0, 0, 200, 150);
+  rect(c, '#233d53', 0, top + 133, 200, 150 - (top + 133));
+  rect(c, '#937d79', 0, top + 117, 200, 16);
+  rect(c, '#545062', 0, top + 132, 200, 7);
+  for (const [x, w, wall, board] of [[23, 82, '#3c5468', '#263e57'], [101, 83, '#764b44', '#603f3b']] as const) {
+    rect(c, wall, x, top + 25, w, 92);
+    rect(c, '#272f49', x - 3, top + 24, w + 6, 7);
+    rect(c, board, x + 7, top + 61, w - 14, 13);
+    rect(c, '#b47a4c', x + 14, top + 83, w - 28, 30);
+    rect(c, '#e3aa6b', x + 18, top + 86, w - 36, 17);
+    rect(c, wall, x + 32, top + 83, 3, 30);
+    rect(c, wall, x + 51, top + 83, 3, 30);
+  }
+  c.save();
+  c.translate(0, top - 2);
+  c.scale(.5, .5);
+  paintDockSigns(c);
+  c.restore();
+}
+
+function drawCrossing(c: Ctx, scene: FishingScene, crossing: NonNullable<FishingScene['crossing']>, atlas: HTMLImageElement | undefined, dock: DockImage | undefined) {
+  const toPier = crossing.destination === 'dock';
+  const p = unit(toPier ? crossing.progress : 1 - crossing.progress);
+  const travel = ease(p / .72);
+  const dockBlend = ease((p - .29) / .19);
+  const lift = ease((p - .55) / .45);
+  const bob = Math.round(Math.sin(scene.timeMs / 950 + 5 * Math.sin(Math.PI * p)));
+
+  c.imageSmoothingEnabled = false;
+  rect(c, '#18384d', 0, 0, 200, 150);
+  if (atlas && dockBlend < 1) {
+    const zoom = 1 + .25 * travel;
+    c.drawImage(atlas, 0, 0, 384, 288, Math.round(-10 * travel), Math.round(-9 * travel), Math.ceil(200 * zoom), Math.ceil(150 * zoom));
+  }
+  if (dockBlend > 0) {
+    c.save();
+    c.globalAlpha = dockBlend;
+    dockFromWater(c, dock, p);
+    c.restore();
+  }
+  if (p >= 1) return;
+
+  const size = 1 - .24 * travel;
+  const shipX = Math.round(98 + 33 * travel);
+  const shipY = Math.round(114 + 7 * travel + 66 * lift);
+  const wake = Math.sin(Math.PI * p) * ease(p / .15);
+  c.save();
+  c.globalAlpha = .58 * wake;
   for (let i = 0; i < 7; i++) {
-    const phase = mod(state.time * 2.8 + i / 7, 1);
-    const xx = x - 25 - phase * 120;
-    const yy = y - 14 - i % 3 * 16;
-    ctx.globalAlpha = (1 - phase) * .55 * strength;
-    line(ctx, xx - 15 - phase * 30, yy, xx, yy, i % 2 ? '#FFF3C3' : '#B3DFEA', 2.5);
+    const spread = ((crossing.progress * 8 + i) % 7) / 7;
+    const x = Math.round(shipX + (toPier ? -1 : 1) * (38 + 50 * spread));
+    const y = shipY + 2 + Math.round(rnd(i + 6) * (3 + 8 * spread));
+    rect(c, i % 2 ? '#9ac4c5' : '#537c94', x, y, 5 + i + Math.round(7 * spread), 1);
   }
-  for (let i = 0; i < 6; i++) {
-    const phase = mod(state.time * 1.7 + i * .23, 1);
-    const xx = i % 2 ? W - phase * 86 : phase * 95;
-    const yy = 215 + i * 16;
-    ctx.globalAlpha = .28 * strength;
-    line(ctx, xx - 22, yy, xx + 12, yy, '#FFF9E9', 2);
+  c.restore();
+
+  c.save();
+  c.translate(shipX, shipY);
+  c.scale(size, size);
+  c.translate(-98, -114);
+  if (atlas) c.drawImage(atlas, 0, 289, 260, 92, 34, 75 + bob, 128, 45);
+  const rodStowed = ease(p / .12);
+  if (rodStowed < 1) {
+    c.globalAlpha = 1 - rodStowed;
+    fishingMotion(c, scene, bob);
   }
-  if (p.boostFlash > 0) {
-    const progress = 1 - p.boostFlash / .45;
-    ctx.globalAlpha = (1 - progress) * .65;
-    ctx.strokeStyle = '#F8C966'; ctx.lineWidth = 3 * (1 - progress) + 1;
-    ctx.beginPath(); ctx.arc(x, y - 32, 25 + progress * 40, 0, TAU); ctx.stroke();
+  if (rodStowed > 0) {
+    c.globalAlpha = rodStowed;
+    angler(c, bob, 0, 130, 102 + bob);
   }
-  ctx.restore();
+  c.restore();
 }
 
-function landingEffects(ctx: CanvasRenderingContext2D, state: SkiState, x: number, ground: number, reduced: boolean) {
-  if (reduced || !state.player.grounded || state.player.crashTime > 0 || state.player.squash <= 0) return;
-  const progress = 1 - state.player.squash / .65;
-  ctx.save(); ctx.globalAlpha = (1 - progress) * .65;
-  ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.ellipse(x, ground + 2, 15 + progress * 40, 3 + progress * 5, 0, 0, TAU); ctx.stroke();
-  ctx.restore();
-}
-
-function drawPlayer(ctx: CanvasRenderingContext2D, state: SkiState, assets: SkiAssets | null, x: number, y: number, reduced: boolean) {
-  const p = state.player;
-  const caught = state.over ? clamp(state.caughtTime / 1.2) : 0;
-  const action: NaiwaAction = p.crashTime > 0 || state.over ? 'crash' : p.partner ? 'ride'
-    : p.tucked ? 'tuck' : !p.grounded ? p.flipping ? 'flip' : 'jump' : p.speed > 330 ? 'boost' : 'glide';
-  ctx.save();
-  const pivot = playerPivot(p);
-  ctx.translate(x - caught * 13, y - pivot + caught * 15);
-  ctx.rotate(p.angle + caught * 1.3);
-  ctx.scale(1 - caught * .8, 1 - caught * .8);
-  ctx.translate(0, pivot);
-  ctx.globalAlpha = 1 - clamp((caught - .7) / .3);
-  if (p.partner && caught < .8) {
-    ctx.save();
-    const clip = assets?.niulai[p.partner];
-    // The frame's saddle point is the rider's local foot origin. A shared
-    // parent transform keeps that point fixed through every roll angle.
-    if (!clip?.rideAnchors) ctx.translate(rideOffsetX(p), rideHeight(p));
-    partner(ctx, assets, p.partner, p.grounded ? state.time : 0, true);
-    if (p.shield) {
-      ctx.strokeStyle = '#D6A648'; ctx.lineWidth = 2; ctx.beginPath();
-      ctx.arc(0, -25, 48, -.7, .7); ctx.stroke();
-    }
-    ctx.restore();
+/** Paints the layered twilight atlas; all weather and fishing animation is immediate-mode. */
+export function drawFishingBay(canvas:HTMLCanvasElement,f:FishingScene):void {
+  const c=canvas.getContext('2d');if(!c)return;
+  const cache=atlases.get(canvas);
+  if (f.crossing) {
+    c.save();
+    c.scale(4, 4);
+    drawCrossing(c, f, f.crossing, cache, dockImages.get(canvas));
+    c.restore();
+    return;
   }
-  const rig = assets?.rig;
-  const fallen = p.crashTime > 0 || state.over;
-  if (fallen && rig?.body && rig.legs && rig.skis) drawFallenRig(ctx, rig.body, rig.legs, rig.skis, state.time, reduced);
-  else if (!fallen && rig?.body && rig.legs && rig.skis) {
-    const pose = bodyPose(p);
-    if (!p.partner) sprite(ctx, rig.skis, state.time, NAIWA_SCALE);
-    ctx.save();
-    const footPivot = p.partner ? 0 : -2;
-    ctx.translate(0, footPivot);
-    ctx.scale(1, 1 - pose.compression / 22);
-    ctx.translate(0, -footPivot);
-    sprite(ctx, rig.legs, state.time, NAIWA_SCALE);
-    ctx.restore();
-    ctx.save();
-    ctx.translate(0, pose.compression - 30);
-    ctx.rotate(pose.lean);
-    ctx.translate(0, 30);
-    sprite(ctx, rig.body, state.time, NAIWA_SCALE);
-    ctx.restore();
-  } else {
-    if (fallen) ctx.scale(1.2, .58);
-    drawNaiwa(ctx, assets, action, state.time);
+  if(cache){c.imageSmoothingEnabled=false;c.drawImage(cache,0,0,384,288,0,0,BAY_WIDTH,BAY_HEIGHT);}
+  c.save();c.scale(4,4);
+  if(!cache){rect(c,'#4a5080',0,0,200,94);rect(c,'#153650',0,94,200,56);}
+  if(f.phase==='fight'){
+    rect(c,'#25334bb8',0,0,200,94);rect(c,'#101e24bb',0,94,200,56);
+    poly(c,'#293247','M0 0H200V34H193V30H182V25H172V22H161V27H153V33H143V39H133V42H119V37H106V33H95V37H85V43H74V46H63V41H55V35H44V31H34V35H26V39H13V35H5V31H0Z');
+    if(!f.reducedMotion && f.impulse?.kind === 'strike' && f.impulse.ageMs < 130)poly(c,'#fff2b8','M155 32H161L151 53H159L143 75L149 56H144Z');
   }
-  ctx.restore();
-}
-
-// Sit-down crash built from the same rig layers: skis stuck in the snow behind,
-// legs flat forward from the hip and a dazed body leaning back over the hip.
-function drawFallenRig(ctx: CanvasRenderingContext2D, body: SpriteClip, legs: SpriteClip, skis: SpriteClip, time: number, reduced: boolean) {
-  const sway = reduced ? 0 : Math.sin(time * 6) * .06;
-  ctx.save(); ctx.translate(-32, -26); ctx.rotate(-1.05); sprite(ctx, skis, time, NAIWA_SCALE); ctx.restore();
-  for (const [layer, angle] of [[legs, -1.35], [body, -.3 + sway]] as const) {
-    ctx.save(); ctx.translate(0, -8); ctx.rotate(angle); ctx.translate(0, 30);
-    sprite(ctx, layer, time, NAIWA_SCALE);
-    ctx.restore();
+  const t=f.reducedMotion?0:f.timeMs/950,bob=Math.round(Math.sin(t));
+  for(let i=0;i<13;i++){const x=Math.floor((rnd(i+19)*200+t*(i%3+2))%200),y=101+Math.floor(rnd(i+57)*45);rect(c,i%3?'#7195b73a':'#cb955c40',x,y,3+(i%5)*3,1);}
+  if (cache) {
+    c.drawImage(cache, 0, 289, 260, 92, 34, 75 + bob, 128, 45);
   }
-}
-
-function caughtSwarm(ctx: CanvasRenderingContext2D, state: SkiState, assets: SkiAssets | null, x: number, y: number, reduced: boolean) {
-  const progress = clamp(state.caughtTime / 1.1);
-  for (let i = 0; i < 6; i++) {
-    const target = (i - 2.5) * 13;
-    const xx = x + target - (1 - progress) * (110 + i * 20);
-    const yy = y + 5 + i % 2 * 7 - (reduced ? 0 : Math.sin(progress * Math.PI) * 10);
-    drawChaser(ctx, assets, xx, yy, state.time + state.caughtTime, i * 1.3);
-  }
-  if (!reduced) for (let i = 0; i < 14; i++) {
-    const p = clamp(state.caughtTime / 1.7);
-    const angle = i * 2.4;
-    ctx.globalAlpha = Math.sin(p * Math.PI) * .75;
-    ellipse(ctx, x + Math.cos(angle) * (20 + p * 60), y - 20 + Math.sin(angle) * p * 35, 2 + i % 3, 2 + i % 3, '#FFFFFF');
-  }
-  ctx.globalAlpha = 1;
-}
-
-export function renderGame(ctx: CanvasRenderingContext2D, state: SkiState, assets: SkiAssets | null, options: RenderOptions): void {
-  const trail = TRAILS.find(item => item.id === state.trail) || TRAILS[0];
-  const menu = options.phase === 'home' || options.phase === 'select';
-  const cameraX = menu ? 0 : state.player.x - 240;
-  const cameraY = menu ? 0 : state.cameraY;
-  const time = state.time;
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H);
-  ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.imageSmoothingEnabled = true;
-  const scenery = assets?.scenery?.[state.trail];
-  if (scenery) {
-    drawSceneryLayer(ctx, scenery.sky, cameraX * .018);
-    drawSceneryLayer(ctx, scenery.mountains, cameraX * .075);
-    drawSceneryLayer(ctx, scenery.woodland, cameraX * .25);
-  } else sky(ctx, trail, cameraX, time, options.reducedMotion);
-  snowGround(ctx, state, cameraX, cameraY, trail);
-  if (scenery) drawSceneryLayer(ctx, scenery.decor, cameraX * .6);
-  if (menu) {
-    pine(ctx, 64, 464, .72, trail.pine, trail.snow);
-    pine(ctx, 750, 475, .83, trail.pine, trail.snow);
-    cabin(ctx, 85, 500, .58, time, options.reducedMotion);
-    ctx.save(); ctx.translate(727, 500); ctx.scale(1.1, 1.1);
-    ellipse(ctx, 0, 2, 24, 4, '#A7C5D0'); drawNaiwa(ctx, assets, 'idle', time); ctx.restore();
-    line(ctx, 760, 502, 764, 451, '#6B6050', 3);
-    line(ctx, 768, 501, 772, 451, '#6B6050', 3);
-    line(ctx, 749, 506, 780, 504, '#D36B4D', 4);
-  } else {
-    const cabinX = 65 - cameraX;
-    if (cabinX > -160 && cabinX < W + 160) cabin(ctx, cabinX, terrainY(65, state.trail) - cameraY, .72, time, options.reducedMotion);
-    for (const f of state.features) feature(ctx, f, state, assets, cameraX, cameraY);
-    for (let i = 0; i < Math.min(state.chasers.length, 12); i++) {
-      const chaser = state.chasers[i];
-      const x = chaser.x - cameraX;
-      if (x < -80 || x > W + 80) continue;
-      const y = terrainY(chaser.x, state.trail) - cameraY;
-      if (i % 3 === 0 && x > -40) {
-        ctx.save(); ctx.globalAlpha = .58;
-        drawChaser(ctx, assets, x - 24, y - 10, time, chaser.phase + 3, .85); ctx.restore();
-      }
-      snowDust(ctx, x, y, time + chaser.phase, 220, options.reducedMotion);
-      drawChaser(ctx, assets, x, y, time, chaser.phase);
-    }
-    const p = state.player;
-    const x = p.x - cameraX;
-    const y = p.y - cameraY;
-    const ground = terrainY(p.x, state.trail) - cameraY;
-    const height = Math.max(0, ground - y);
-    ctx.save(); ctx.globalAlpha = clamp(1 - height / 250, .12, .6);
-    ellipse(ctx, x + 2, ground + 3, Math.max(8, 26 - height * .04), 4, '#7298A9'); ctx.restore();
-    if (p.grounded) snowDust(ctx, x, ground, time, p.speed, options.reducedMotion);
-    landingEffects(ctx, state, x, ground, options.reducedMotion);
-    boostEffects(ctx, state, x, y, options.reducedMotion);
-    drawPlayer(ctx, state, assets, x, y, options.reducedMotion);
-    if (p.crashTime > 0 && !options.reducedMotion) {
-      ctx.save();
-      for (let i = 0; i < 3; i++) {
-        const angle = time * 5 + i * TAU / 3;
-        const xx = x + Math.cos(angle) * 25;
-        const yy = y - 42 + Math.sin(angle) * 7;
-        ctx.fillStyle = '#F3BA4D'; ctx.beginPath();
-        ctx.moveTo(xx, yy - 5); ctx.lineTo(xx + 2, yy - 1); ctx.lineTo(xx + 6, yy);
-        ctx.lineTo(xx + 2, yy + 2); ctx.lineTo(xx, yy + 6); ctx.lineTo(xx - 2, yy + 2);
-        ctx.lineTo(xx - 6, yy); ctx.lineTo(xx - 2, yy - 1); ctx.closePath(); ctx.fill();
-      }
-      ctx.restore();
-    }
-    if (state.over) caughtSwarm(ctx, state, assets, x, ground, options.reducedMotion);
-    if (!options.reducedMotion) for (let i = 0; i < Math.min(state.particles.length, 90); i++) {
-      const particle = state.particles[i];
-      ctx.globalAlpha = clamp(particle.life * 2);
-      ellipse(ctx, particle.x - cameraX, particle.y - cameraY, 2.3, 2.3, particle.color);
-    }
-    ctx.globalAlpha = 1;
-    if (p.x < 620) {
-      const signX = 470 - cameraX;
-      const signY = terrainY(470, state.trail) - cameraY;
-      line(ctx, signX, signY, signX, signY - 68, '#80735C', 5);
-      ctx.fillStyle = '#F0E5CE'; ctx.fillRect(signX - 41, signY - 72, 82, 28);
-      ctx.font = '600 13px "PingFang SC", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#37545D';
-      ctx.fillText('向雪谷出发', signX, signY - 53);
-    }
-  }
-  if (!options.reducedMotion) for (let i = 0; i < 14; i++) {
-    const x = mod(i * 89.7 - time * (7 + i % 4), W);
-    const y = mod(i * 57.1 + time * (9 + i % 5), H);
-    ctx.globalAlpha = .2 + i % 3 * .12;
-    ellipse(ctx, x, y, i % 4 === 0 ? 2 : 1, i % 4 === 0 ? 2 : 1, '#FFFFFF');
-  }
-  ctx.restore();
-}
-
-function drawSceneryLayer(ctx: CanvasRenderingContext2D, image: CanvasImageSource, scroll: number) {
-  // Native layers are 16:9; cover the 4:3 cartridge without stretching.
-  const width = H * 16 / 9;
-  const offset = mod(scroll, width);
-  for (let i = -1; i < 2; i++) ctx.drawImage(image, i * width - offset, 0, width + .5, H);
+  fishingMotion(c,f,bob);
+  drawImpulse(c, f);
+  drawReelingFish(c, f, bob);
+  c.restore();
 }

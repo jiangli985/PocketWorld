@@ -1,22 +1,29 @@
-import React, { Suspense, useEffect, useMemo, useRef } from 'react';
+import React, { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { PLUSH_DOLLS, deckFromAuthoredX, type PlushDollPlacement } from './cabinLayout';
-import { CabinFadeGroup, CabinUpperDeck } from './CabinUpperDeck';
+import { PLUSH_DOLLS, UPPER_DECK_OFFSET, deckFromAuthoredX, type PlushDollPlacement } from './cabinLayout';
+import { CabinFadeGroup } from './CabinUpperDeck';
 import { AssetBoundary } from './ReusableAsset';
 import { isValidPlushBody, plushFloorY, plushSupportHeight, type PlushBody } from './plushMotion';
+import { ObjectHandle } from './ObjectHandle';
+import type { WorldModelProps } from '../../types/world';
+import { createPlushShape, plushLabels, type PlushGrip, type PlushShape } from './plushCarry';
 
 interface PlushDollItemProps {
+  shapes: Map<string, PlushShape>;
+  grip: React.RefObject<PlushGrip | null>;
+  world: WorldModelProps;
   doll: PlushDollPlacement;
   index: number;
   bodies: React.MutableRefObject<PlushBody[]>;
 }
 
-function LoadedPlushDoll({ doll, index, bodies }: PlushDollItemProps) {
+function LoadedPlushDoll({ doll, index, bodies, grip, shapes, world }: PlushDollItemProps) {
   const gltf = useGLTF(`${import.meta.env.BASE_URL}models/${doll.path}`);
   const group = useRef<THREE.Group>(null);
 
+  const hand = useMemo(() => new THREE.Vector3(), []);
   const prepared = useMemo(() => {
     const clone = gltf.scene.clone(true);
     clone.traverse(object => {
@@ -30,21 +37,16 @@ function LoadedPlushDoll({ doll, index, bodies }: PlushDollItemProps) {
       });
       if (object.material.length === 1) object.material = object.material[0];
     });
-    clone.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(clone);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const scale = doll.height / size.y;
-    clone.scale.setScalar(scale);
-    // Center all three axes at the mesh volume center so wobble and toppling pivot cleanly.
-    clone.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
-    return {
-      model: clone,
-      halfWidth: size.x * scale * 0.5,
-      halfHeight: size.y * scale * 0.5,
-      halfDepth: size.z * scale * 0.5,
-    };
+    const shape = createPlushShape(gltf.scene, doll.height);
+    clone.scale.setScalar(shape.scale);
+    clone.position.copy(shape.origin).multiplyScalar(-shape.scale);
+    return { model: clone, shape };
   }, [gltf.scene, doll.height]);
+
+  useLayoutEffect(() => {
+    shapes.set(doll.id, prepared.shape);
+    return () => { shapes.delete(doll.id); };
+  }, [shapes, doll.id, prepared]);
 
   useEffect(() => () => {
     prepared.model.traverse(object => {
@@ -59,31 +61,36 @@ function LoadedPlushDoll({ doll, index, bodies }: PlushDollItemProps) {
     const root = group.current;
     const body = bodies.current[index];
     if (!root || !isValidPlushBody(body)) return;
-    const floor = plushFloorY(body.x, body.z);
-    const support = plushSupportHeight(body.roll, body.pitch, prepared.halfWidth, prepared.halfHeight, prepared.halfDepth);
-    root.position.set(body.x, floor + support + body.y, body.z);
-    root.rotation.order = 'YXZ';
-    root.rotation.set(body.pitch, body.yaw, body.roll);
+    const held = grip.current?.body === body ? grip.current : null;
+    const x = held?.floorX ?? body.x, z = held?.floorZ ?? body.z;
+    const upper = deckFromAuthoredX(x) === 'upper';
+    const support = plushSupportHeight(body.roll, body.pitch, prepared.shape.half.x, prepared.shape.half.y, prepared.shape.half.z);
+    root.position.set(x + (upper ? UPPER_DECK_OFFSET[0] : 0),
+      plushFloorY(x, z) + support + body.y + (upper ? UPPER_DECK_OFFSET[1] : 0), z);
+    if (held && held.lift > 0) root.position.copy(root.parent!.worldToLocal(hand.copy(held.center)));
+    root.visible = held ? held.visible : true;
+    if (held) root.rotation.copy(held.rotation);
+    else root.rotation.set(body.pitch, body.yaw, body.roll, 'YXZ');
+
   });
 
-  return <group ref={group} name={doll.name}
-    position={[doll.position[0], plushFloorY(doll.position[0], doll.position[2]) + prepared.halfHeight, doll.position[2]]}
+  const fadePart = () => {
+    const body = bodies.current[index];
+    if (body && grip.current?.body === body) return 'resident';
+    return deckFromAuthoredX(body?.x ?? doll.position[0]);
+  };
+  return <CabinFadeGroup part={fadePart}><group ref={group} name={doll.name}
+    position={[doll.position[0], plushFloorY(doll.position[0], doll.position[2]) + prepared.shape.half.y, doll.position[2]]}
     rotation={[0, doll.yaw, 0]} dispose={null}>
-    <primitive object={prepared.model} />
-  </group>;
+    <ObjectHandle id={doll.id} action="inspect" hint={`拿起或放下${plushLabels[doll.id]}`} panorama world={world}
+      acceptsHit={() => !!group.current?.visible} onClick={event => event.stopPropagation()}>
+      <primitive object={prepared.model} />
+    </ObjectHandle>
+  </group></CabinFadeGroup>;
 }
 
-export function PlushDolls({ bodies }: { bodies: React.MutableRefObject<PlushBody[]> }) {
-  return <>
-    {PLUSH_DOLLS.map((doll, index) => {
-      const item = <AssetBoundary>
-        <Suspense fallback={null}>
-          <LoadedPlushDoll doll={doll} index={index} bodies={bodies} />
-        </Suspense>
-      </AssetBoundary>;
-      return deckFromAuthoredX(doll.position[0]) === 'upper'
-        ? <CabinUpperDeck key={doll.id}>{item}</CabinUpperDeck>
-        : <CabinFadeGroup key={doll.id} part="lower">{item}</CabinFadeGroup>;
-    })}
-  </>;
+export function PlushDolls(props: Omit<PlushDollItemProps, 'doll' | 'index'>) {
+  return <>{PLUSH_DOLLS.map((doll, index) => <AssetBoundary key={doll.id}>
+    <Suspense fallback={null}><LoadedPlushDoll {...props} doll={doll} index={index} /></Suspense>
+  </AssetBoundary>)}</>;
 }

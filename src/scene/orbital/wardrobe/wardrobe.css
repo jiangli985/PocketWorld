@@ -27,8 +27,6 @@
   padding-bottom: 9px;
 }
 .wardrobe-portrait { width: 100%; background: radial-gradient(ellipse at 52% 35%, #fffaf0, #e6d7c2); }
-.outfit-snowflower .wardrobe-portrait { background: radial-gradient(ellipse at 52% 35%, #fbfaff, #d2dae6); }
-.outfit-cloudhoodie .wardrobe-portrait { background: radial-gradient(ellipse at 52% 35%, #f6f9ff, #d3d3e4); }
 .wardrobe-portrait img { display: block; width: 100%; height: auto; aspect-ratio: 320/430; object-fit: contain; }
 .wardrobe-label { margin-top: 8px; font-size: clamp(.8rem, 2.8vw, .98rem); font-weight: 600; }
 .wardrobe-card small { color: #645e55; margin-top: 3px; font-size: .72rem; }

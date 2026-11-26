@@ -2,13 +2,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Html } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import type { WorldSceneProps } from '../../../types/world';
+import { ObjectHandle } from '../ObjectHandle';
+import { PAPER_PICKUP_PREFIX, type PaperPickup } from '../cabinActions';
 import { useSchedule } from './ScheduleContext';
-import { discardSchedulePage, tearSchedulePage, turnSchedulePage } from './schedule';
+import { discardSchedulePage, paperBallPosition, tearSchedulePage, turnSchedulePage } from './schedule';
 import { BOOK_POSITION, FloorPaperBall, FlyingPaper, GLASS_POSITION, PostedPaper, type PaperFlight } from './SchedulePaper';
+import { roomAudio } from '../../audioEngine';
 import './schedule.css';
 
-export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) {
-  const { book, state, commit, ready, error, retry } = useSchedule();
+export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean; paperPickup: React.RefObject<PaperPickup | null> }) {
+  const { book, state, commit, ready, error, retry, collectPaper } = useSchedule();
   const { size } = useThree();
   const narrow = size.width < 720;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -29,6 +32,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
     if (next === state) return;
     (document.activeElement as HTMLElement)?.blur?.();
     if (!commit(next)) return;
+    roomAudio.playSfx('paper');
     book.current.ready = false;
     props.onGesture(false);
     setMessage('');
@@ -43,6 +47,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
     const page = state.current;
     (document.activeElement as HTMLElement)?.blur?.();
     if (!commit(tearSchedulePage(state))) return;
+    roomAudio.playSfx('paper-tear');
     busy.current = true;
     book.current.ready = false;
     setFlight({ kind: 'tear', page, from });
@@ -75,7 +80,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
       if (glassView && !busy.current && (event.code === 'ArrowLeft' || event.code === 'ArrowRight')) {
         event.preventDefault();
         const next = state.posted[selectedIndex + (event.code === 'ArrowLeft' ? -1 : 1)];
-        if (next) setSelectedId(next.id);
+        if (next) { roomAudio.playSfx('paper'); setSelectedId(next.id); }
       }
     };
     window.addEventListener('keydown', key);
@@ -84,6 +89,7 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
   const discard = () => {
     if (busy.current || !settled || !selected) return;
     if (!commit(discardSchedulePage(state, selected.id))) return;
+    roomAudio.playSfx('paper-crumple');
     busy.current = true;
     setFlight({ kind: 'discard', page: selected });
     setSelectedId(state.posted[selectedIndex + 1]?.id ?? state.posted[selectedIndex - 1]?.id ?? null);
@@ -100,11 +106,18 @@ export function ScheduleSurfaces(props: WorldSceneProps & { visible: boolean }) 
         if (!glassView) props.onAction({ sceneId: props.sceneId, objectId: 'schedule-glass', kind: 'inspect' });
       }} />;
     })}
-    {state.discarded.filter(ball => flight?.page.id !== ball.id).map(ball => <FloorPaperBall key={ball.id} ball={ball} />)}
+    {state.discarded.filter(ball => flight?.page.id !== ball.id).map(ball => {
+      const world = { ...props, onApproach: (_point: [number, number, number], action: Parameters<typeof props.onAction>[0]) => {
+        if (!props.visible || !ready || busy.current) return false;
+        return props.onApproach?.(paperBallPosition(ball.seed), action, () => { collectPaper(ball.id); }) ?? false;
+      } };
+      return <ObjectHandle key={ball.id} id={PAPER_PICKUP_PREFIX + ball.id} action="select" hint="捡起纸团" panorama
+        world={world} onClick={event => event.stopPropagation()}><FloorPaperBall ball={ball} pickup={props.paperPickup} /></ObjectHandle>;
+    })}
     {flight && <FlyingPaper flight={flight} reducedMotion={props.reducedMotion} onComplete={() => { busy.current = false; setFlight(null); }} />}
     {focused && !flight && (glassView || message || error) && <Html center transform={!narrow} position={glassView ? [GLASS_POSITION[0], GLASS_POSITION[1] - 0.52, GLASS_POSITION[2] + 0.018] : BOOK_POSITION} distanceFactor={narrow ? undefined : 0.62} zIndexRange={[24, 21]}>
       <div className="schedule-paper-tools" onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
-        {glassView && (selected ? <nav aria-label="玻璃日程翻页"><button disabled={blocked || selectedIndex === 0} onClick={() => setSelectedId(state.posted[selectedIndex - 1].id)} aria-label="上一张安排">‹</button><span>{selectedIndex + 1} / {state.posted.length}</span><button disabled={blocked || selectedIndex >= state.posted.length - 1} onClick={() => setSelectedId(state.posted[selectedIndex + 1].id)} aria-label="下一张安排">›</button><button disabled={blocked} onClick={discard}>揉掉这张</button></nav> : <p>玻璃上没有贴过的日程</p>)}
+        {glassView && (selected ? <nav aria-label="玻璃日程翻页"><button disabled={blocked || selectedIndex === 0} onClick={() => { roomAudio.playSfx('paper'); setSelectedId(state.posted[selectedIndex - 1].id); }} aria-label="上一张安排">‹</button><span>{selectedIndex + 1} / {state.posted.length}</span><button disabled={blocked || selectedIndex >= state.posted.length - 1} onClick={() => { roomAudio.playSfx('paper'); setSelectedId(state.posted[selectedIndex + 1].id); }} aria-label="下一张安排">›</button><button disabled={blocked} onClick={discard}>揉掉这张</button></nav> : <p>玻璃上没有贴过的日程</p>)}
         {message && <p role="status">{message}</p>}
         {error && <p role="alert">{error}<button onClick={retry}>{props.adapters?.schedule ? '重试同步' : '重试保存'}</button></p>}
       </div>

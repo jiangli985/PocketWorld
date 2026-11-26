@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
+import { roomAudio } from '../audioEngine';
 import { initialOutfit, isOutfit, rememberOutfit, type ResidentOutfit } from './wardrobe/outfit';
 import { CLOSED_OBJECT, type WorldAction, type WorldActionContext, type WorldFeatureAdapters, type WorldMotion, type WorldObjectState, type WorldSceneId, type WorldTransition } from '../../types/world';
 
@@ -14,7 +15,6 @@ export function nextObjectState(previous: WorldObjectState, action: WorldAction)
     case 'toggle': return { ...previous, active: !previous.active, value: previous.active ? 0 : 1 };
     case 'insert': case 'select': return { ...previous, active: true, itemId: action.payload?.itemId };
     case 'eject': return { ...previous, active: false, itemId: undefined };
-    case 'water': return { ...previous, value: previous.value + 1 };
     case 'pet': return { ...previous, value: previous.value + 1, itemId: action.payload?.itemId };
     case 'travel': return { ...previous, open: true };
     default: return { ...previous };
@@ -102,6 +102,9 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
       const mounted = outfit && new Promise<boolean>(resolve => { mountingOutfit.current = { outfit, resolve }; });
       const followsVisibleState = ['toggle', 'open', 'sit', 'turn-page'].includes(action.kind);
       const next = outfit ? { ...visiblePrevious, open: false, itemId: outfit } : nextObjectState(followsVisibleState ? visiblePrevious : previous, action);
+      if (action.objectId === 'lamp' && action.kind === 'toggle') {
+        roomAudio.playSfx(next.active ? 'lamp-on' : 'lamp-off');
+      }
       setSceneObjects(current => {
         const updated = { ...current[action.sceneId], [action.objectId]: next };
         const takingSeat = action.kind === 'sit' && next.active;

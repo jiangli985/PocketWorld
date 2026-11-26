@@ -63,6 +63,52 @@ test('room uses the authored walk at full weight and does not share bone poses b
   } finally { a.rig.dispose(); b.rig.dispose(); }
 });
 
+test('开衫摆臂随对侧脚交替，肘部微屈且手掌顺着小臂', async () => {
+  const { gltf: cardigan } = await load(new URL('../../../assets/public/models/resident/luna-cardigan.glb', import.meta.url));
+  const rig = createResidentRig(cardigan.scene, cardigan.animations.find(c => c.name === 'Walk_Grounded_Loop'), true);
+  try {
+    const mesh = cardigan.scene.getObjectByProperty('isSkinnedMesh', true);
+    const { skinIndex, skinWeight } = mesh.geometry.attributes;
+    const position = bone => bone.getWorldPosition(new THREE.Vector3());
+    for (const side of ['Left', 'Right']) {
+      const bone = part => mesh.skeleton.getBoneByName('mixamorig' + side + part);
+      // The middle knuckle of the imported right hand is offset from the visible fingers.
+      // Track the deformed palm surface so a sideways bend cannot pass on bone positions alone.
+      const knuckles = new Set([bone('HandMiddle1'), bone('HandMiddle2')]);
+      const patch = [];
+      for (let i = 0; i < skinIndex.count; i++) {
+        let weight = 0;
+        for (let k = 0; k < 4; k++) {
+          if (knuckles.has(mesh.skeleton.bones[skinIndex.getComponent(i, k)])) weight += skinWeight.getComponent(i, k);
+        }
+        if (weight > .25) patch.push({ i, weight });
+      }
+      const mass = patch.reduce((v, p) => v + p.weight, 0);
+      assert.ok(mass > 0);
+      const point = new THREE.Vector3(), forward = [];
+      for (let frame = 0; frame <= 30; frame++) {
+        const phase = frame / 30;
+        rig.applyPose(phase, 1);
+        rig.mesh.updateMatrixWorld(true);
+        const shoulder = position(bone('Arm')), elbow = position(bone('ForeArm')), wrist = position(bone('Hand'));
+        const upper = elbow.clone().sub(shoulder), lower = wrist.clone().sub(elbow);
+        const flex = THREE.MathUtils.radToDeg(upper.angleTo(lower));
+        assert.ok(flex > 12 && flex < 28, side + ' elbow ' + flex);
+        const palm = new THREE.Vector3();
+        for (const { i, weight } of patch) palm.addScaledVector(mesh.localToWorld(mesh.getVertexPosition(i, point)), weight);
+        palm.divideScalar(mass).sub(wrist);
+        assert.ok(palm.angleTo(lower) < THREE.MathUtils.degToRad(12), side + ' palm at ' + phase);
+        const handTravel = wrist.z - shoulder.z;
+        const footTravel = position(bone('Foot')).z - position(bone('UpLeg')).z;
+        if (Math.abs(footTravel) > .12) assert.ok(footTravel * handTravel < 0, side + ' arm and foot swung together');
+        forward.push(handTravel);
+      }
+      assert.ok(Math.min(...forward) < -.05 && Math.max(...forward) > .07);
+      assert.ok(Math.abs(forward[0] - forward.at(-1)) < .0001);
+    }
+  } finally { rig.dispose(); }
+});
+
 test('standing pelvis and neck are upright over the actual sole support area', () => {
   const { asset, rig, mesh } = instance();
   try {
@@ -209,49 +255,5 @@ test('hair and skirt follow movement without shifting body bones and settle afte
     assert(maxHair > .01, 'hair follows a turn of the head while standing');
     angles = pose(.65, .875, 0, 0, 0, false);
     assert(angles.Hair_ < .00001 && angles.Dress_ < .00001, 'contact and reduced motion use the base pose');
-  } finally { rig.dispose(); }
-});
-
-test('snowflower back hair hangs during a held bow, lags a turn, and settles', async () => {
-  const { gltf: snowflower } = await load(new URL('../../../assets/public/models/resident/luna-snowflower.glb', import.meta.url));
-  const rig = createResidentRig(snowflower.scene, snowflower.animations.find(c => c.name === 'Walk_Grounded_Loop'), true);
-  const root = rig.mesh.getObjectByName('Hair_Back_C_01');
-  const tip = rig.mesh.getObjectByName('Hair_Back_C_04');
-  const position = joint => joint.getWorldPosition(new THREE.Vector3());
-  const update = (pitch, yaw, enabled = true) => {
-    rig.head.rotation.set(pitch, yaw, 0, 'YXZ');
-    rig.applyPose(0, 0);
-    const authoredRoot = position(root), authoredTip = position(tip);
-    rig.followMotion(1 / 60, enabled, 0, 0, 0, 0);
-    return { root: position(root), tip: position(tip), authoredRoot, authoredTip };
-  };
-  try {
-    rig.mesh.rotation.y = Math.PI / 3;
-    const rest = update(0, 0);
-    assert(rest.tip.distanceTo(rest.authoredTip) < .0001, 'neutral hair matches the authored silhouette');
-    const bow = update(.48, 0);
-    const held = update(.48, 0);
-    assert(held.root.distanceTo(held.authoredRoot) < .0001, 'strand root stays attached');
-    assert(held.tip.y < held.authoredTip.y - .055, 'tip drops below the uncorrected pose');
-    const drop = pose => pose.root.y - pose.tip.y;
-    assert(Math.abs(drop(held) - drop(rest)) < .024, 'the long strand remains hanging');
-    assert(held.tip.distanceTo(bow.tip) < .0001, 'bow compensation holds at rest');
-    assert(update(.48, 0, false).tip.distanceTo(held.authoredTip) < .0001, 'disabled follow motion keeps the authored pose');
-    assert(update(0, 0).tip.distanceTo(rest.tip) < .0001, 'returns to neutral after lifting the head');
-    const roomRight = new THREE.Vector3(1, 0, 0).transformDirection(rig.mesh.matrixWorld);
-    let lag = 0, rebound = 0, earlier;
-    for (let frame = 0; frame <= 120; frame++) {
-      const progress = Math.min(frame / 25, 1);
-      const pose = update(0, .6 * progress ** 2 * (3 - 2 * progress));
-      const sideways = pose.tip.clone().sub(pose.authoredTip).dot(roomRight);
-      if (frame <= 25) lag = Math.max(lag, sideways);
-      else rebound = Math.max(rebound, -sideways);
-      if (earlier) assert(pose.tip.distanceTo(earlier) < .03, 'turn remains continuous');
-      earlier = pose.tip;
-    }
-    assert(lag > .03 && lag < .065, 'the tip visibly lags behind the turn');
-    assert(rebound > .004 && rebound < lag * .35, 'the tip rebounds once the head stops');
-    const settled = update(0, .6);
-    assert(settled.tip.distanceTo(settled.authoredTip) < .0001, 'turn lag settles without drift');
   } finally { rig.dispose(); }
 });

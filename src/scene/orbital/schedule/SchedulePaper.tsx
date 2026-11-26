@@ -1,32 +1,15 @@
+import { paperGeometry } from './paperGeometry';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { PaperBall, SchedulePage } from './schedule';
+import { paperBallPosition, type PaperBall, type SchedulePage } from './schedule';
+import type { PaperPickup } from '../cabinActions';
 import { SCHEDULE_BOOK_POSITION } from './bookLayout';
+import { roomAudio } from '../../audioEngine';
 
 export const GLASS_POSITION: [number, number, number] = [0.69, 2.53, -3.13];
 export const BOOK_POSITION: [number, number, number] = [SCHEDULE_BOOK_POSITION[0] + 0.126, SCHEDULE_BOOK_POSITION[1] + 0.033, SCHEDULE_BOOK_POSITION[2] - 0.01];
 const ease = (t: number) => 1 - (1 - t) ** 3;
-export function paperBallPosition(seed: number): [number, number, number] {
-  return [0.25 + Math.sin(seed * 2.4) * 0.65, 0.105, -0.68 + Math.cos(seed * 1.8) * 0.45];
-}
-export function paperGeometry(crumpled = false) {
-  const geometry = new THREE.PlaneGeometry(0.56, 0.872, 20, 26).toNonIndexed();
-  const attribute = geometry.attributes.position;
-  const flat = attribute.array.slice() as Float32Array;
-  const folded = new Float32Array(flat.length);
-  for (let i = 0; i < attribute.count; i++) {
-    const x = flat[i * 3], y = flat[i * 3 + 1];
-    const u = (x + 0.28) / 0.56, v = (y + 0.436) / 0.872;
-    const longitude = u * Math.PI * 2, latitude = v * Math.PI;
-    const radius = 0.083 + Math.sin(u * 23 + v * 17) * Math.cos(v * 29) * 0.009;
-    folded.set([Math.cos(longitude) * Math.sin(latitude) * radius, Math.cos(latitude) * radius, Math.sin(longitude) * Math.sin(latitude) * radius], i * 3);
-    flat[i * 3 + 2] = 0.012 * (u ** 6) + Math.sin(v * Math.PI) * 0.003;
-  }
-  attribute.array.set(crumpled ? folded : flat);
-  geometry.computeVertexNormals();
-  return { geometry, flat, folded };
-}
 export function pageTexture(page: SchedulePage, bound = false, side: 'left' | 'right' = 'right') {
   const canvas = document.createElement('canvas');
   canvas.width = 560; canvas.height = 872;
@@ -106,10 +89,17 @@ export function PostedPaper({ page, position, onSelect }: { page: SchedulePage; 
     </mesh>)}
   </group>;
 }
-export function FloorPaperBall({ ball }: { ball: PaperBall }) {
+export function FloorPaperBall({ ball, pickup }: { ball: PaperBall; pickup: React.RefObject<PaperPickup | null> }) {
+  const mesh = useRef<THREE.Mesh>(null);
+  const start = useMemo(() => paperBallPosition(ball.seed), [ball.seed]);
+  useFrame(() => {
+    if (!mesh.current) return;
+    if (pickup.current?.id === ball.id) mesh.current.position.copy(pickup.current.position);
+    else mesh.current.position.fromArray(start);
+  });
   const { geometry } = useMemo(() => paperGeometry(true), []);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  return <mesh name={`discarded-schedule-${ball.id}`} geometry={geometry} position={paperBallPosition(ball.seed)} rotation={[0.4, ball.seed, 0.3]} castShadow receiveShadow>
+  return <mesh ref={mesh} name={`discarded-schedule-${ball.id}`} geometry={geometry} position={start} rotation={[0.4, ball.seed, 0.3]} castShadow receiveShadow>
     <meshStandardMaterial color="#e7ddc3" roughness={1} side={THREE.DoubleSide} flatShading />
   </mesh>;
 }
@@ -117,6 +107,7 @@ export interface PaperFlight { kind: 'tear' | 'discard'; page: SchedulePage; fro
 export function FlyingPaper({ flight, reducedMotion, onComplete }: { flight: PaperFlight; reducedMotion: boolean; onComplete: () => void }) {
   const mesh = useRef<THREE.Mesh>(null);
   const elapsed = useRef(0);
+  const cues = useRef({ crumpled: flight.kind === 'discard', landed: false });
   const data = useMemo(() => paperGeometry(), []);
   const texture = useMemo(() => pageTexture(flight.page), [flight.page]);
   const start = useMemo(() => new THREE.Vector3(...(flight.kind === 'tear' ? flight.from ?? BOOK_POSITION : GLASS_POSITION)), [flight]);
@@ -129,10 +120,18 @@ export function FlyingPaper({ flight, reducedMotion, onComplete }: { flight: Pap
     elapsed.current += Math.min(delta, 0.05);
     const progress = Math.min(1, elapsed.current / duration);
     const fold = reducedMotion ? 1 : ease(Math.min(1, progress / 0.32));
+    if (!cues.current.crumpled && (reducedMotion || progress >= 0.12)) {
+      cues.current.crumpled = true;
+      roomAudio.playSfx('paper-crumple');
+    }
     const positions = data.geometry.attributes.position;
     for (let i = 0; i < data.flat.length; i++) positions.array[i] = THREE.MathUtils.lerp(data.flat[i], data.folded[i], fold);
     positions.needsUpdate = true; data.geometry.computeVertexNormals();
     const fall = reducedMotion ? progress : Math.max(0, (progress - 0.32) / 0.68);
+    if (!cues.current.landed && fall >= 0.85) {
+      cues.current.landed = true;
+      roomAudio.playSfx('paper-land');
+    }
     mesh.current.position.lerpVectors(start, end, fall);
     mesh.current.position.y = THREE.MathUtils.lerp(start.y, end.y, fall * fall);
     if (fall > 0.85) mesh.current.position.y += Math.sin((fall - 0.85) / 0.15 * Math.PI) * 0.08;

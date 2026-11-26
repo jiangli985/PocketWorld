@@ -1,0 +1,65 @@
+.mario-sandbox {
+  box-sizing: border-box;
+  block-size: 100dvh;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 14px;
+  overflow: auto;
+  padding-block: 16px;
+  background: #102b36;
+  color: #fff3db;
+  color-scheme: dark;
+  font: 500 14px/1.45 system-ui, "Microsoft YaHei", sans-serif;
+}
+
+.mario-sandbox-header,
+.mario-sandbox-stats {
+  box-sizing: border-box;
+  inline-size: min(100%, 800px);
+  padding-inline: 12px;
+}
+
+.mario-sandbox-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.mario-sandbox-header h1 { margin: 0; font-size: 16px; }
+.mario-sandbox-controls { display: flex; flex-wrap: wrap; gap: 6px; }
+.mario-sandbox-controls button {
+  min-block-size: 44px;
+  padding-inline: 12px;
+  border: 1px solid #789ba1;
+  border-radius: 6px;
+  background: #204553;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.mario-sandbox-controls button:disabled { opacity: .6; cursor: default; }
+.mario-sandbox-controls button:not(:disabled):hover { background: #2c5b68; }
+.mario-sandbox-controls button:focus-visible { outline: 2px solid #ffda97; outline-offset: 2px; }
+
+.mario-sandbox-stage {
+  position: relative;
+  inline-size: min(100%, 800px);
+  aspect-ratio: 4 / 3;
+  background: #163844;
+  outline: 1px solid #70929b;
+}
+.mario-sandbox-stage > .tf-game { position: absolute; inset: 0; }
+.mario-sandbox-stage > p { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 12px; text-align: center; }
+
+.mario-sandbox-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.mario-sandbox-stats dt { color: #b6d1cb; }
+.mario-sandbox-stats dd { margin: 0; color: #ffda97; font-weight: 700; }

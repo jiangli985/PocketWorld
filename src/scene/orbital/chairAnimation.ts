@@ -14,7 +14,7 @@ export function readSeatContactCache(buffer: ArrayBuffer): SeatContactCache {
 }
 
 /** Evaluated Blender clearance is baked in pre-skin space. Only the local contact vertices change. */
-export function createChairAnimation(asset: THREE.Object3D, clip: THREE.AnimationClip, cache: SeatContactCache) {
+export function createChairAnimation(asset: THREE.Object3D, clip: THREE.AnimationClip, contact?: SeatContactCache) {
   const bones = new Map<string, THREE.Bone>();
   asset.traverse(o => { if (o instanceof THREE.Bone) bones.set(o.name, o); });
   const channels = clip.tracks.map(track => {
@@ -24,28 +24,42 @@ export function createChairAnimation(asset: THREE.Object3D, clip: THREE.Animatio
     return { value: joint[propertyName as 'position' | 'quaternion' | 'scale'], propertyName, curve: track.createInterpolant() };
   });
   const surfaces: { geometry: THREE.BufferGeometry; rest: Float32Array; position: THREE.BufferAttribute; mapping: [number, number][] }[] = [];
-  asset.traverse(o => {
-    if (!(o instanceof THREE.SkinnedMesh)) return;
-    const ids = o.geometry.getAttribute('_contact_id');
-    if (!ids) throw new Error('Luna seat vertex mapping missing');
-    const mapping: [number, number][] = [];
-    for (let i = 0; i < ids.count; i++) if (ids.getX(i) >= 0) {
-      const index = Math.round(ids.getX(i));
-      if (index >= cache.count) throw new Error('Luna seat vertex mapping out of range');
-      mapping.push([i * 3, index * 3]);
-    }
-    if (!mapping.length) return;
-    o.geometry = o.geometry.clone();
-    const position = o.geometry.getAttribute('position') as THREE.BufferAttribute;
-    position.setUsage(THREE.DynamicDrawUsage);
-    surfaces.push({ geometry: o.geometry, rest: new Float32Array(position.array), position, mapping });
-  });
+  let cache: SeatContactCache | undefined;
+  let attachPendingContact: (() => void) | undefined;
+  function prepareContact(next: SeatContactCache) {
+    const meshes: { mesh: THREE.SkinnedMesh; mapping: [number, number][] }[] = [];
+    asset.traverse(o => {
+      if (!(o instanceof THREE.SkinnedMesh)) return;
+      const ids = o.geometry.getAttribute('_contact_id');
+      if (!ids) throw new Error('Luna seat vertex mapping missing');
+      const mapping: [number, number][] = [];
+      for (let i = 0; i < ids.count; i++) if (ids.getX(i) >= 0) {
+        const index = Math.round(ids.getX(i));
+        if (index >= next.count) throw new Error('Luna seat vertex mapping out of range');
+        mapping.push([i * 3, index * 3]);
+      }
+      if (mapping.length) meshes.push({ mesh: o, mapping });
+    });
+    return () => {
+      for (const { mesh, mapping } of meshes) {
+        const geometry = mesh.geometry.clone();
+        mesh.geometry = geometry;
+        const position = geometry.getAttribute('position') as THREE.BufferAttribute;
+        position.setUsage(THREE.DynamicDrawUsage);
+        surfaces.push({ geometry, rest: new Float32Array(position.array), position, mapping });
+      }
+      cache = next;
+      attachPendingContact = undefined;
+    };
+  }
+  if (contact) prepareContact(contact)();
   const vector = new THREE.Vector3(), rotation = new THREE.Quaternion();
   const hips = bones.get('mixamorigHips')!;
   let lastTime = -1, lastWeight = -1;
   function deform(time: number, weight: number) {
     if (time === lastTime && weight === lastWeight) return;
     lastTime = time; lastWeight = weight;
+    if (!cache) return;
     const f = THREE.MathUtils.clamp(time * CHAIR_FPS, 0, cache.frames - 1), a = Math.floor(f), b = Math.min(a + 1, cache.frames - 1), t = f - a;
     const stride = cache.count * 3;
     for (const { rest, position, mapping } of surfaces) {
@@ -62,7 +76,10 @@ export function createChairAnimation(asset: THREE.Object3D, clip: THREE.Animatio
   function apply(time: number, weight: number) {
     time = THREE.MathUtils.clamp(time, 0, CHAIR_SIT_SECONDS);
     deform(time, weight);
-    if (weight <= 0) return;
+    if (weight <= 0) {
+      attachPendingContact?.();
+      return;
+    }
     for (const { value, propertyName, curve } of channels) {
       const sample = curve.evaluate(time);
       if (propertyName === 'quaternion') (value as THREE.Quaternion).slerp(rotation.fromArray(sample), weight);
@@ -71,5 +88,11 @@ export function createChairAnimation(asset: THREE.Object3D, clip: THREE.Animatio
     // Root travel is already in the clip. Rebase once so the controller can align the entry stance.
     hips.position.z -= CHAIR_CLIP_ORIGIN / RESIDENT_SCALE * weight;
   }
-  return { apply, dispose: () => surfaces.forEach(s => s.geometry.dispose()) };
+  function setContact(next: SeatContactCache) {
+    if (cache || attachPendingContact) return;
+    attachPendingContact = prepareContact(next);
+    // Keep the current pose continuous if a slow request finishes during a sit.
+    if (lastWeight <= 0) attachPendingContact();
+  }
+  return { apply, setContact, dispose: () => surfaces.forEach(s => s.geometry.dispose()) };
 }

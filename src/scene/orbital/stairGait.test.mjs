@@ -76,7 +76,7 @@ test('both elbows and wrists articulate as the hands exchange leading sides', as
 test('the ascending pelvis, neck and head advance through both support exchanges', async () => {
   // Pelvis-to-neck pitch in degrees from ascent frames 48, 52, …, 76 in the original GLB.
   const sourcePitch = [-.10, -1.81, -2.37, -.10, .77, .16, -.51, .17];
-  for (const outfit of ['walk-room', 'snowflower', 'cloudhoodie']) {
+  for (const outfit of ['walk-room', 'cardigan']) {
     const { gltf } = await load(new URL(`../../../assets/public/models/resident/luna-${outfit}.glb`, import.meta.url));
     const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'), outfit !== 'walk-room');
     const joints = ['Hips', 'Neck', 'Head'].map(name => gltf.scene.getObjectByName('mixamorig' + name));
@@ -116,7 +116,7 @@ test('the descending torso and its balance above the planted ankle match the sid
     [10, -15.43, -6.80], [10 + 5 / 18, -13.41, -2.46], [10 + 14 / 18, -12.55, 5.37],
   ];
   const angle = (from, to) => Math.atan2(to.z - from.z, to.y - from.y) * 180 / Math.PI;
-  for (const outfit of ['walk-room', 'snowflower', 'cloudhoodie']) {
+  for (const outfit of ['walk-room', 'cardigan']) {
     const { gltf } = await load(new URL(`../../../assets/public/models/resident/luna-${outfit}.glb`, import.meta.url));
     const rig = createResidentRig(gltf.scene, gltf.animations.find(clip => clip.name === 'Walk_Grounded_Loop'), outfit !== 'walk-room');
     const point = name => gltf.scene.getObjectByName('mixamorig' + name).getWorldPosition(new Vector3());
@@ -191,7 +191,7 @@ function soleVertices(asset) {
   return vertices;
 }
 
-for (const file of ['luna-walk-room.glb', 'luna-snowflower.glb', 'luna-cloudhoodie.glb']) {
+for (const file of ['luna-walk-room.glb', 'luna-cardigan.glb']) {
   test(`${file} keeps the supporting sole on the tread during both gaits`, async () => {
     const { gltf } = await load(new URL(`../../../assets/public/models/resident/${file}`, import.meta.url));
     const asset = clone(gltf.scene);

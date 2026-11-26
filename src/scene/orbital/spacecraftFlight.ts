@@ -3,11 +3,11 @@ import { CAMERA_FOV } from './cabinView.ts';
 
 export type SpacecraftViewMode = 'approach' | 'orbit' | 'entering-cabin' | 'leaving-cabin' | 'cabin';
 
-export const SHIP_TARGET = new THREE.Vector3(-1.15, 1.85, -0.115);
-/** Front-left-above orbital framing: showcases hero triptych windows, bow canopy, solar wings, plumes, and Earth behind. */
-export const ORBIT_DIRECTION = new THREE.Vector3(-3.8, 6.2, 16.0).normalize();
+export const SHIP_TARGET = new THREE.Vector3(0.45, 4.15, -0.113);
+/** Front-left-above orbital framing: showcases stacked duplex bays, stairwell portholes, sloped bridge, solar wings, plumes, and Earth behind. */
+export const ORBIT_DIRECTION = new THREE.Vector3(-4.2, 5.8, 16.2).normalize();
 /** Opening deep-space approach vector: starts farther out & slightly aft-high, swooping gracefully to ORBIT_DIRECTION. */
-export const APPROACH_DIRECTION = new THREE.Vector3(-10.5, 9.2, 22.5).normalize();
+export const APPROACH_DIRECTION = new THREE.Vector3(-11.2, 9.6, 23.0).normalize();
 
 export const APPROACH_DURATION = 2.6;
 export const ENTER_CABIN_DURATION = 1.15;
@@ -22,9 +22,96 @@ export const BASE_DRIFT_SPEED = 1.6;
 export const BOOST_DRIFT_SPEED = 36.0;
 export const BOOST_FOV_KICK = 5.5;
 
+/** Sweeping low-Earth-orbit horizon geometry in exterior orbital view (`orbitPresence = 1`). */
+export const ORBIT_EARTH_RADIUS = 468;
+export const ORBIT_EARTH_DISTANCE = 760;
+
+const orbitLook = ORBIT_DIRECTION.clone().negate();
 const orbitRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), ORBIT_DIRECTION).normalize();
 const orbitUp = new THREE.Vector3().crossVectors(ORBIT_DIRECTION, orbitRight);
-const orbitVerticalSlope = Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
+const orbitCamRight = orbitRight; // +X screen right when looking along -ORBIT_DIRECTION
+const orbitCamUp = orbitUp;       // +Y screen up when looking along -ORBIT_DIRECTION
+const orbitHalfFovY = THREE.MathUtils.degToRad(CAMERA_FOV / 2);
+const orbitVerticalSlope = Math.tan(orbitHalfFovY);
+
+export interface OrbitCelestialLayout {
+  earthPosition: [number, number, number];
+  cabinEarthPosition: [number, number, number];
+  earthRadius: number;
+  moonPosition: [number, number, number];
+  cabinMoonPosition: [number, number, number];
+  moonRadius: number;
+  cabinMoonRadius: number;
+  sunStartTarget: [number, number, number];
+  upDirection: [number, number, number];
+  cameraLook: [number, number, number];
+}
+
+/**
+ * Compute three-body celestial framing shared across exterior orbital cruise and interior cabin:
+ * - Sweeping giant LEO Earth horizon arc beneath the hull (and visible behind/through the cabin window)
+ * - Blazing starburst Sun in the upper-left sky
+ * - Cratered Moon in the upper-right sky
+ */
+export function orbitCelestialLayout(aspect: number): OrbitCelestialLayout {
+  const safeAspect = Math.max(0.35, Number.isFinite(aspect) ? aspect : 16 / 9);
+  const halfFovX = Math.atan(orbitVerticalSlope * safeAspect);
+  const portrait = safeAspect < 0.85;
+
+  const dirFromNdc = (ndcX: number, ndcY: number) => {
+    const yaw = Math.atan(ndcX * Math.tan(halfFovX));
+    const pitch = Math.atan(ndcY * orbitVerticalSlope);
+    return orbitLook.clone()
+      .multiplyScalar(Math.cos(pitch) * Math.cos(yaw))
+      .addScaledVector(orbitCamRight, Math.cos(pitch) * Math.sin(yaw))
+      .addScaledVector(orbitCamUp, Math.sin(pitch))
+      .normalize();
+  };
+
+  // 1. Giant LEO Earth sweeping across the bottom of the frame (raised gently in zoomed-in cabin view so the horizon fills the rear panorama window & lower backdrop)
+  const earthAngRadius = Math.asin(ORBIT_EARTH_RADIUS / ORBIT_EARTH_DISTANCE);
+  const makeEarthPos = (crestNdcY: number, yawNdcX: number): [number, number, number] => {
+    const crestPitch = Math.atan(crestNdcY * orbitVerticalSlope);
+    const centerPitch = crestPitch - earthAngRadius;
+    const centerYaw = Math.atan(yawNdcX * Math.tan(halfFovX));
+    return orbitLook.clone()
+      .multiplyScalar(Math.cos(centerPitch) * Math.cos(centerYaw))
+      .addScaledVector(orbitCamRight, Math.cos(centerPitch) * Math.sin(centerYaw))
+      .addScaledVector(orbitCamUp, Math.sin(centerPitch))
+      .normalize()
+      .multiplyScalar(ORBIT_EARTH_DISTANCE)
+      .toArray() as [number, number, number];
+  };
+
+  const earthPosition = makeEarthPos(portrait ? -0.22 : -0.275, -0.025);
+  const cabinEarthPosition = makeEarthPos(portrait ? 0.14 : 0.18, 0.02);
+
+  // 2. Cratered Moon suspended in the upper-right sky (framed cleanly in both orbit and cabin overview)
+  const moonDir = dirFromNdc(portrait ? 0.50 : 0.39, portrait ? 0.45 : 0.43);
+  const moonDist = 1180;
+  const moonRadius = portrait ? 40 : 68;
+  const moonPosition = moonDir.clone().multiplyScalar(moonDist).toArray() as [number, number, number];
+
+  const cabinMoonDir = dirFromNdc(portrait ? 0.36 : 0.42, portrait ? 0.58 : 0.56);
+  const cabinMoonPosition = cabinMoonDir.clone().multiplyScalar(moonDist).toArray() as [number, number, number];
+  const cabinMoonRadius = portrait ? 34 : 54;
+
+  // 3. Blazing Sun upper-left sky target at initial entry
+  const sunStartTarget = dirFromNdc(-0.55, portrait ? 0.47 : 0.44).toArray() as [number, number, number];
+
+  return {
+    earthPosition,
+    cabinEarthPosition,
+    earthRadius: ORBIT_EARTH_RADIUS,
+    moonPosition,
+    cabinMoonPosition,
+    moonRadius,
+    cabinMoonRadius,
+    sunStartTarget,
+    upDirection: orbitCamUp.toArray() as [number, number, number],
+    cameraLook: orbitLook.toArray() as [number, number, number],
+  };
+}
 
 export interface SpacecraftFlightState {
   mode: SpacecraftViewMode;
@@ -70,7 +157,7 @@ export function easeInOutCubic(t: number): number {
 export function readInitialViewMode(search: string, reducedMotion: boolean): SpacecraftViewMode {
   const params = new URLSearchParams(search);
   const dev = params.get('dev');
-  if (dev === 'mario' || dev === 'shooter') return 'cabin';
+  if (dev === 'mario' || dev === 'shooter' || params.get('game') === 'ski') return 'cabin';
   const view = params.get('view')?.trim().toLowerCase();
   if (view === 'cabin') return 'cabin';
   if (view === 'orbit') return 'orbit';
@@ -101,15 +188,15 @@ export function createFlightState(initialMode: SpacecraftViewMode): SpacecraftFl
  */
 export function orbitDistanceForAspect(aspect: number): number {
   const safeAspect = Math.max(0.35, Number.isFinite(aspect) ? aspect : 16 / 9);
-  let distance = 22;
-  // Spacecraft visual envelope in Three.js Y-up coordinates (hull + wings + tail + plumes)
-  for (const x of [-10.8, 8.2]) for (const y of [-1.3, 6.4]) for (const z of [-8.2, 8.2]) {
+  let distance = 26;
+  // Duplex spacecraft visual envelope in Three.js Y-up coordinates (two-tier hull + wings + tail fin + plumes)
+  for (const x of [-11.6, 9.8]) for (const y of [-1.4, 10.6]) for (const z of [-9.6, 9.6]) {
     const corner = new THREE.Vector3(x, y, z).sub(SHIP_TARGET);
     distance = Math.max(
       distance,
       corner.dot(ORBIT_DIRECTION) + Math.max(
-        Math.abs(corner.dot(orbitRight)) / (0.66 * orbitVerticalSlope * safeAspect),
-        Math.abs(corner.dot(orbitUp)) / (0.64 * orbitVerticalSlope),
+        Math.abs(corner.dot(orbitRight)) / (0.68 * orbitVerticalSlope * safeAspect),
+        Math.abs(corner.dot(orbitUp)) / (0.66 * orbitVerticalSlope),
       ),
     );
   }
