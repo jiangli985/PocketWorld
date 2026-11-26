@@ -4,9 +4,11 @@ import json
 import struct
 import sys
 import tempfile
+import zlib
 from pathlib import Path
 
 import bpy
+import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +18,7 @@ ASSETS = (
     ("luna-cardigan.glb", "Luna-Cardigan.blend"),
 )
 LIMIT = 2048
+ROUGHNESS_IMAGES = {"walk_rm", "Luna | Cloth roughness and metal"}
 
 
 def read_glb(path):
@@ -47,7 +50,57 @@ def shrink(image):
     return True
 
 
-def resize_runtime(path, scratch):
+def optimize_roughness(image):
+    image.colorspace_settings.name = "Non-Color"
+    pixels = np.empty(len(image.pixels), dtype=np.float32)
+    image.pixels.foreach_get(pixels)
+    rgba = pixels.reshape(-1, 4)
+    if np.array_equal(rgba[:, 0], rgba[:, 1]) and np.array_equal(rgba[:, 2], rgba[:, 1]):
+        return False
+    rgba[:, 0] = rgba[:, 1]
+    rgba[:, 2] = rgba[:, 1]
+    image.pixels.foreach_set(pixels)
+    image.update()
+    return True
+
+
+def encode_roughness(image):
+    pixels = np.empty(len(image.pixels), dtype=np.float32)
+    image.pixels.foreach_get(pixels)
+    width, height = image.size
+    # Blender pixels start at the bottom; PNG scanlines start at the top.
+    values = np.rint(pixels.reshape(height, width, 4)[::-1, :, 1] * 255).astype(np.uint8)
+    previous = np.vstack((np.zeros((1, width), dtype=np.uint8), values[:-1]))
+    rows = np.concatenate((np.full((height, 1), 2, dtype=np.uint8), values - previous), axis=1)
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows.tobytes(), 9)) + chunk(b"IEND", b""))
+
+
+def validate_roughness(doc, index):
+    users = []
+    def check(value, path=()):
+        if isinstance(value, dict):
+            if "index" in value and path and path[-1].endswith("Texture"):
+                if doc["textures"][value["index"]].get("source") == index:
+                    users.append(path)
+            for key, child in value.items():
+                check(child, (*path, key))
+        elif isinstance(value, list):
+            for child in value:
+                check(child, path)
+    for material in doc["materials"]:
+        check(material)
+        pbr = material.get("pbrMetallicRoughness", {})
+        texture = pbr.get("metallicRoughnessTexture")
+        if texture and doc["textures"][texture["index"]].get("source") == index:
+            assert pbr.get("metallicFactor", 1) == 0, "Metallic channel is in use"
+    assert users and all(path[-1] == "metallicRoughnessTexture" for path in users), users
+
+
+def resize_runtime(path, scratch, optimize=False):
     original = path.read_bytes()
     doc, binary = read_glb(path)
     updated = copy.deepcopy(doc)
@@ -59,11 +112,20 @@ def resize_runtime(path, scratch):
         extracted.write_bytes(view_bytes(doc, binary, image["bufferView"]))
         texture = bpy.data.images.load(str(extracted), check_existing=False)
         before = list(texture.size)
-        if shrink(texture):
+        changed = shrink(texture)
+        if optimize and image.get("name") in ROUGHNESS_IMAGES:
+            validate_roughness(doc, index)
+            assert suffix == ".png", "Data texture must remain lossless"
+            optimize_roughness(texture)
+            candidate = encode_roughness(texture)
+            if len(candidate) < extracted.stat().st_size:
+                replacements[image["bufferView"]] = candidate
+        elif changed:
             texture.filepath_raw = str(extracted)
             texture.file_format = "JPEG" if suffix == ".jpg" else "PNG"
             texture.save(quality=95)
             replacements[image["bufferView"]] = extracted.read_bytes()
+        if image["bufferView"] in replacements:
             changes.append({"name": image.get("name", str(index)), "before": before, "after": list(texture.size)})
         bpy.data.images.remove(texture)
     if not replacements:
@@ -96,11 +158,15 @@ def resize_runtime(path, scratch):
     return {"file": path.name, "bytes_before": before_size, "bytes_after": len(raw), "images": changes}
 
 
-def resize_source(path):
+def resize_source(path, optimize=False):
     bpy.ops.wm.open_mainfile(filepath=str(path))
     changed = []
     for image in bpy.data.images:
-        if image.type == "IMAGE" and shrink(image):
+        if image.type != "IMAGE":
+            continue
+        resized = shrink(image)
+        optimized = optimize and image.name in ROUGHNESS_IMAGES and optimize_roughness(image)
+        if resized or optimized:
             image.pack()
             changed.append(image.name)
     if changed:
@@ -113,12 +179,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--optimize-roughness", action="store_true")
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
     reports = []
     with tempfile.TemporaryDirectory(prefix="luna-2k-", dir=args.report.parent if args.report else None) as temporary:
         for runtime, source in ASSETS:
-            report = resize_runtime(args.root / "assets/public/models/resident" / runtime, Path(temporary))
-            report["source_images"] = resize_source(args.root / "assets/models/resident" / source)
+            report = resize_runtime(args.root / "assets/public/models/resident" / runtime, Path(temporary), args.optimize_roughness)
+            report["source_images"] = resize_source(args.root / "assets/models/resident" / source, args.optimize_roughness)
             reports.append(report)
     if args.report:
         args.report.write_text(json.dumps(reports, ensure_ascii=False, indent=2) + "\n")

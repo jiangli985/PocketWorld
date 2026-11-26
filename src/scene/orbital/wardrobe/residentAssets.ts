@@ -1,3 +1,4 @@
+import { loadSceneAsset } from '../assetQueue.ts';
 import { FileLoader, type AnimationClip } from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { readSeatContactCache, type SeatContactCache } from '../chairAnimation';
@@ -28,7 +29,7 @@ const pendingContacts = new Map<ResidentOutfit, Promise<SeatContactCache>>();
 export function loadResidentSeatContact(outfit: ResidentOutfit): Promise<SeatContactCache> {
   const cached = pendingContacts.get(outfit);
   if (cached) return cached;
-  const request = new FileLoader().setResponseType('arraybuffer').loadAsync(base + files[outfit][1])
+  const request = loadSceneAsset(base + files[outfit][1], () => new FileLoader().setResponseType('arraybuffer').loadAsync(base + files[outfit][1]))
     .then(buffer => readSeatContactCache(buffer as ArrayBuffer))
     .catch(error => { pendingContacts.delete(outfit); throw error; });
   pendingContacts.set(outfit, request);
@@ -38,7 +39,7 @@ export function loadResidentSeatContact(outfit: ResidentOutfit): Promise<SeatCon
 export function loadResidentAssets(outfit: ResidentOutfit): Promise<ResidentAssets> {
   const cached = pending.get(outfit);
   if (cached) return cached;
-  const request = new GLTFLoader().loadAsync(base + files[outfit][0]).then(gltf => {
+  const request = loadSceneAsset(base + files[outfit][0], () => new GLTFLoader().loadAsync(base + files[outfit][0])).then(gltf => {
     const clip = (name: string) => {
       const match = gltf.animations.find(animation => animation.name === name);
       if (!match) throw new Error('人物动作缺失：' + name);

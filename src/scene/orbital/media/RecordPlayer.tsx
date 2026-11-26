@@ -1,5 +1,6 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Html, useGLTF } from '@react-three/drei';
+import { Html } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from '../useSceneGLTF';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { WorldAction, WorldSceneProps } from '../../../types/world';

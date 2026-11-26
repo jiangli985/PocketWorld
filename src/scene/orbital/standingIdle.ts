@@ -1,3 +1,4 @@
+import { loadSceneAsset } from './assetQueue.ts';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { createCabinActionPlayer } from './cabinActions';
@@ -109,7 +110,7 @@ export function stepIdle(state: IdleState, delta: number, eligible: boolean, dur
 
 let pendingLook: Promise<THREE.AnimationClip> | undefined;
 export function loadLookingAround() {
-  return pendingLook ??= new GLTFLoader().loadAsync('./models/resident/luna-looking-around.glb').then(({ animations }) => {
+  return pendingLook ??= loadSceneAsset('./models/resident/luna-looking-around.glb', () => new GLTFLoader().loadAsync('./models/resident/luna-looking-around.glb')).then(({ animations }) => {
     const clip = animations.find(value => value.name === 'Luna_Looking_Around');
     if (!clip) throw new Error('Luna looking around animation missing');
     return clip;
@@ -118,7 +119,7 @@ export function loadLookingAround() {
 
 let pending: Promise<THREE.AnimationClip> | undefined;
 export function loadYawn() {
-  return pending ??= new GLTFLoader().loadAsync('./models/resident/luna-yawn.glb').then(({ animations }) => {
+  return pending ??= loadSceneAsset('./models/resident/luna-yawn.glb', () => new GLTFLoader().loadAsync('./models/resident/luna-yawn.glb')).then(({ animations }) => {
     const clip = animations.find(value => value.name === 'Luna_Yawn');
     if (!clip) throw new Error('Luna yawn animation missing');
     return clip;

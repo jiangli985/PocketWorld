@@ -1,3 +1,4 @@
+import { loadSceneAsset } from '../assetQueue.ts';
 import { AnimationMixer, type AnimationClip, type Object3D } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -5,7 +6,7 @@ let pending: Promise<AnimationClip[]> | undefined;
 
 export function loadCatClips() {
   const url = `${import.meta.env.BASE_URL}models/cat/tuanzi-motion.glb`;
-  return pending ??= new GLTFLoader().loadAsync(url).then(({ animations }) => animations).catch(error => {
+  return pending ??= loadSceneAsset(url, () => new GLTFLoader().loadAsync(url)).then(({ animations }) => animations).catch(error => {
     pending = undefined;
     throw error;
   });
