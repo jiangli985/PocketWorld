@@ -26,7 +26,7 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
   const [announcement, setAnnouncement] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const ownedUrls = useRef<string[]>([]);
-  const initialized = useRef(false);
+  const enteredFromUrl = useRef(false);
   const inputDepth = useRef(0);
   const hintTimer = useRef<number>();
   const onFeatureError = useCallback((message: string) => {
@@ -57,14 +57,14 @@ export const App: React.FC<{ adapters?: WorldFeatureAdapters }> = ({ adapters })
     setBoosting(active);
   }, []);
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-    const dev = new URLSearchParams(window.location.search).get('dev');
-    if (dev === 'mario' || dev === 'shooter') {
-      setViewMode('cabin');
-      setActiveGame(dev);
+    if (enteredFromUrl.current || new URLSearchParams(window.location.search).get('game') !== 'ski') return;
+    // Wait for the final StrictMode mount before starting the computer transaction.
+    const timer = window.setTimeout(() => {
+      enteredFromUrl.current = true;
+      setActiveGame('mario');
       void world.onAction({ sceneId: 'habitat', objectId: 'computer', kind: 'inspect' });
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [world.onAction]);
   useEffect(() => {
     const down = (event: KeyboardEvent) => {

@@ -157,7 +157,7 @@ export function easeInOutCubic(t: number): number {
 export function readInitialViewMode(search: string, reducedMotion: boolean): SpacecraftViewMode {
   const params = new URLSearchParams(search);
   const dev = params.get('dev');
-  if (dev === 'mario' || dev === 'shooter') return 'cabin';
+  if (dev === 'mario' || dev === 'shooter' || params.get('game') === 'ski') return 'cabin';
   const view = params.get('view')?.trim().toLowerCase();
   if (view === 'cabin') return 'cabin';
   if (view === 'orbit') return 'orbit';

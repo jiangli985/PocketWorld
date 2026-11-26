@@ -5,13 +5,14 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import * as computerLayout from './computerLayout.ts';
 import * as cartridgeMotion from './cartridge-motion.ts';
+import { HIGHSCORE_KEY as fishingScoreKey } from '../../../games/mario/storage.ts';
 
 const source = fs.readFileSync(process.env.MEDIA_EXIT_SOURCE ?? new URL('./MediaObjects.tsx', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source.replace(/const gameModules = .*;/, 'const gameModules = globalThis.gameModules;'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
 }).outputText;
 
-function mount({ game = null, modules = {}, focusedObject = 'computer', width = 1280, height = 720 } = {}) {
+function mount({ game = null, modules = {}, focusedObject = 'computer', width = 1280, height = 720, localStorage } = {}) {
   const slots = [];
   let cursor = 0, dirty = true, tree;
   const effects = [];
@@ -60,7 +61,7 @@ function mount({ game = null, modules = {}, focusedObject = 'computer', width = 
   };
   const document = Object.assign(new EventTarget(), { hidden: false, activeElement: { blur() { blurred++; } } });
   const context = {
-    exports: {}, gameModules: modules, window: target, document,
+    exports: {}, gameModules: modules, window: target, document, localStorage,
     require(name) {
       if (name === 'react') return react;
       if (name === '@react-three/drei') return { Html: 'Html' };
@@ -271,6 +272,71 @@ test('one cartridge selection from the room waits for the computer, then inserts
     assert.deepEqual(transfer().props.transfer.from, cartridgeMotion.cartridgePosition('shooter'));
     transfer().props.onDone();
     assert.deepEqual(view.changes, ['shooter']);
+  } finally { view.dispose(); }
+});
+
+test('mario loads only on selection and ignores a late import after leaving', async () => {
+  const Game = () => null;
+  let loads = 0, finish;
+  const view = mount({ modules: { '../../../games/mario/index.tsx': () => {
+    loads++;
+    return loads === 1 ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ default: Game });
+  } } });
+  try {
+    await view.settle();
+    assert.equal(loads, 0);
+    assert.match(view.find(node => node.props?.id === 'game-cartridge-mario').props.hint, /潮汐小馆/);
+    view.props.activeGame = 'mario';
+    view.render();
+    assert.equal(loads, 1);
+    view.key();
+    assert.deepEqual(view.changes, [null]);
+    view.props.activeGame = null;
+    view.props.focusedObject = null;
+    view.render();
+    finish({ default: Game });
+    await view.settle();
+    assert.equal(view.find(node => node.type === Game), undefined);
+    view.props.activeGame = 'mario';
+    view.props.focusedObject = 'computer';
+    view.render();
+    await view.settle();
+    assert.equal(loads, 2);
+    assert.equal(view.find(node => node.type === Game).props.isActive, true);
+  } finally { view.dispose(); }
+});
+
+test('room score callbacks keep fishing, legacy ski and shooter records separate', async () => {
+  const Game = () => null;
+  const legacy = 'pocketworld:mario:highscore', shooter = 'pocketworld:shooter:highscore';
+  const data = new Map([[legacy, '99999'], [fishingScoreKey, '1e3'], [shooter, '12']]);
+  const reads = [], writes = [];
+  const localStorage = {
+    getItem(key) { reads.push(key); return data.get(key) ?? null; },
+    setItem(key, value) { writes.push(key); data.set(key, value); },
+  };
+  const view = mount({ game: 'mario', localStorage, modules: {
+    '../../../games/mario/index.tsx': () => Promise.resolve({ default: Game }),
+    '../../../games/shooter/index.tsx': () => Promise.resolve({ default: Game }),
+  } });
+  try {
+    await view.settle();
+    const fishing = view.find(node => node.type === Game).props;
+    fishing.onScoreChange(5, 5);
+    fishing.onGameOver({ score: 4, highScore: 4, victory: false });
+    assert.equal(data.get(fishingScoreKey), '5');
+    assert.equal(data.get(legacy), '99999');
+    assert.equal(data.get(shooter), '12');
+    assert.deepEqual(reads, [fishingScoreKey, fishingScoreKey]);
+    assert.deepEqual(writes, [fishingScoreKey]);
+    view.props.activeGame = 'shooter';
+    view.render();
+    await view.settle();
+    view.find(node => node.type === Game).props.onScoreChange(15, 15);
+    assert.equal(data.get(shooter), '15');
+    assert.equal(data.get(fishingScoreKey), '5');
+    assert.deepEqual(reads, [fishingScoreKey, fishingScoreKey, shooter]);
+    assert.deepEqual(writes, [fishingScoreKey, shooter]);
   } finally { view.dispose(); }
 });
 

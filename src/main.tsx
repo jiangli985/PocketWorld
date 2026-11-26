@@ -2,15 +2,13 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './styles.css';
 
-// The cartridge sandboxes intentionally skip importing the room and Three.js.
-const params = new URLSearchParams(window.location.search);
-const devGame = params.get('dev');
-const directSki = params.get('game') === 'ski' || devGame === 'mario';
-const Entry = React.lazy<React.ComponentType>(() => devGame === 'shooter'
-  ? import('./games/shooter/dev')
-  : directSki
-    ? import('./components/computer/SkiStandalone')
-    : import('./App').then(module => ({ default: module.App })));
+// Both sandboxes keep the room, Three.js and GSAP out of their import graph.
+const devGame = new URLSearchParams(window.location.search).get('dev');
+const Entry = React.lazy<React.ComponentType>(() => {
+  if (devGame === 'shooter') return import('./games/shooter/dev');
+  if (devGame === 'mario') return import('./games/mario/mario-sandbox');
+  return import('./App').then(module => ({ default: module.App }));
+});
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

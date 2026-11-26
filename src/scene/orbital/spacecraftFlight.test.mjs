@@ -26,6 +26,7 @@ test('initial view mode respects query params and reduced motion', () => {
   assert.equal(readInitialViewMode('?view=orbit', false), 'orbit');
   assert.equal(readInitialViewMode('?view=cabin', false), 'cabin');
   assert.equal(readInitialViewMode('?dev=mario', false), 'cabin');
+  assert.equal(readInitialViewMode('?game=ski', false), 'cabin');
   assert.equal(readInitialViewMode('?dev=shooter', false), 'cabin');
 });
 
