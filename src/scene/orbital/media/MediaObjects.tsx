@@ -271,12 +271,12 @@ export const MediaObjects: React.FC<WorldSceneProps> = props => {
     <ObjectHandle id="computer-exit" action="close" hint="握住电脑侧把手，离开电脑" world={world} position={[2.25, 1.47, -2.32]}>
       <SoftBox dims={[0.045, 0.21, 0.08]} color="#c99852" />
     </ObjectHandle>
-    <ObjectHandle id="computer" action="inspect" panorama hint="点击后走近坐下，再使用电脑" world={world} position={CRT_SCREEN}>
+    <ObjectHandle id="computer" action="inspect" panoramaOnly hint="点击后走近坐下，再使用电脑" world={world} position={CRT_SCREEN}>
       <mesh scale={CRT_SCALE}><planeGeometry args={[0.92, 0.69]} /><meshBasicMaterial visible={false} /></mesh>
     </ObjectHandle>
     {/* The DOM display must not paint over a physical cartridge moving in front of the CRT. */}
     {(sceneVisible || activeComponent) && <ComputerScreen visible={displayVisible && !pickup && !transfer?.game} interactive={displayVisible && !!activeComponent && presentation !== 'collapsed'}
-      expanded={expanded} collapsed={presentation === 'collapsed'} controls={!!props.activeGame} allowEmbeddedResume={!narrow}
+      expanded={expanded} collapsed={!!props.activeGame && presentation === 'collapsed'} controls={!!props.activeGame} allowEmbeddedResume={!narrow}
       onExpand={() => setPresentation('expanded')} onCollapse={() => setPresentation('collapsed')} onResume={() => setPresentation('embedded')} onEject={eject}>
       <div aria-label="电脑游戏屏幕" onPointerDown={event => { if (activeComponent) event.stopPropagation(); }} style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
 

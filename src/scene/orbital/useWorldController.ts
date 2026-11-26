@@ -36,6 +36,8 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
   const motion = useRef<WorldMotion>({ progress: 0, sceneProgress: 0 });
   const live = useRef({ sceneId, sceneObjects, focusedObject });
   live.current = { sceneId, sceneObjects, focusedObject };
+  const transitionPhase = useRef(transition.phase);
+  transitionPhase.current = transition.phase;
   const sequence = useRef(0);
   const pending = useRef<{ abort: AbortController; context: WorldActionContext; timeline?: gsap.core.Timeline; rollback: () => void } | null>(null);
   const mountingOutfit = useRef<{ outfit: ResidentOutfit; resolve: (ready: boolean) => void } | null>(null);
@@ -62,6 +64,7 @@ export function useWorldController(adapters?: WorldFeatureAdapters) {
   const onAction = useCallback(async (request: WorldAction) => {
     if (request.sceneId !== live.current.sceneId) return;
     const displayed = live.current;
+    if (request.kind === 'inspect' && displayed.focusedObject === request.objectId && !pending.current && transitionPhase.current === 'active') return;
     const wardrobe = request.sceneId === 'habitat' && request.objectId === 'wardrobe';
     const choice = request.payload?.itemId;
     const outfit = wardrobe && request.kind === 'select' && isOutfit(choice) ? choice : null;
