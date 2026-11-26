@@ -22,7 +22,7 @@ type PromptKeycap = DustPoint & { key: string };
 
 function paintPromptGlyph(ctx: CanvasRenderingContext2D, text: string, x: number, y: number) {
   ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = .5;
+  ctx.lineWidth = .75;
   ctx.lineJoin = 'round';
   ctx.strokeText(text, x, y);
   ctx.fillText(text, x, y);
