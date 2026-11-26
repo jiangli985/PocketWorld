@@ -16,8 +16,7 @@ import {
 
 const CANVAS_HEIGHT = 116;
 const TEXT_CENTER_Y = 34;
-const PROMPT_FONT = "'PocketWorld Prompt'";
-const FONT_FAMILY = `${PROMPT_FONT}, 'YouYuan', 'Hiragino Maru Gothic ProN', 'PingFang SC', 'Microsoft YaHei', sans-serif`;
+const FONT_FAMILY = "'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif";
 type PromptKeycap = DustPoint & { key: string };
 
 function createDustSprites(): HTMLCanvasElement[] {
@@ -56,7 +55,7 @@ function sampleGlyphs(
   if (!ctx) return empty;
 
   const fontSize = width < 480 ? 15 : 18;
-  const font = `400 ${fontSize}px ${FONT_FAMILY}`;
+  const font = `600 ${fontSize}px ${FONT_FAMILY}`;
   ctx.scale(scale, scale);
   ctx.font = font;
   ctx.textAlign = 'center';
@@ -101,7 +100,7 @@ function sampleGlyphs(
   for (const { x, y } of keycaps) ctx.roundRect(x + (width - maskSize) / 2, y - maskSize / 2, maskSize, maskSize, 5);
   ctx.stroke();
   ctx.fillStyle = '#ff0000';
-  ctx.font = `400 12px ${FONT_FAMILY}`;
+  ctx.font = '700 11px system-ui, sans-serif';
   for (const { key, x, y } of keycaps) ctx.fillText(key, x + width / 2, y);
 
   const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
@@ -280,16 +279,7 @@ export const DustPrompt: React.FC<{ text: string; reducedMotion?: boolean }> = (
 
     syncLayout();
     window.addEventListener('resize', syncLayout);
-    let active = true;
-    void document.fonts.load(`400 18px ${PROMPT_FONT}`).then(() => {
-      if (active && propsRef.current.text) {
-        syncPrompt(propsRef.current.text, widthRef.current, propsRef.current.reducedMotion);
-      }
-    }, () => undefined);
-    return () => {
-      active = false;
-      window.removeEventListener('resize', syncLayout);
-    };
+    return () => window.removeEventListener('resize', syncLayout);
   }, []);
 
   useEffect(() => {
