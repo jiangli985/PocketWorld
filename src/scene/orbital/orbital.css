@@ -38,11 +38,16 @@
 .orbital-cabin-controls .orbital-flight-pill {
   display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 4px;
   border: 0; border-radius: 4px; background: transparent; backdrop-filter: none;
-  color: #fff9ec; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: auto;
+  color: #fff9ec; font: 600 18px/1.2 'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  letter-spacing: normal; white-space: nowrap; pointer-events: auto;
   text-shadow: 0 1px 2px #080714, 0 0 4px #080714e6, 0 0 1px #080714;
 }
 .orbital-cabin-controls .orbital-flight-pill:hover:not(:disabled) { color: #fff; }
 .orbital-cabin-controls .orbital-flight-pill:disabled { opacity: .55; cursor: default; }
+/* Match the prompt canvas's 480px threshold and 24px viewport inset. */
+@media (width < 504px) {
+  .orbital-cabin-controls .orbital-flight-pill { font-size: 15px; }
+}
 .orbital-now-playing { position: absolute; left: 42px; bottom: 36px; pointer-events: none; display: flex; align-items: center; gap: 12px; }
 .orbital-app:has(.orbital-cabin-controls) .orbital-now-playing { bottom: calc(var(--cabin-controls-bottom) + 54px); }
 .orbital-now-playing small { font-size: 8px; letter-spacing: 2px; color: #9b9d8b; }
