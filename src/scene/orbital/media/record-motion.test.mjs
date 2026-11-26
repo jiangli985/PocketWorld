@@ -11,12 +11,16 @@ import {
   PLATTER,
   PLAYER,
   RACK_ORIGIN,
+  RACK_SLOT_COUNT,
+  RACK_FULL_MESSAGE,
+  MAX_IMPORT_AUDIO_BYTES,
   RACK_SLOT_PITCH_X,
   RACK_DIVIDER_X0,
   DISC_YAW,
   DISC_LEAN,
   DISC_RADIUS,
   ARM_PLAY,
+  validateMusicImport,
 } from './record-motion.ts';
 const disc = index => ({ id: `disc-${index}`, title: `${index}`, audioUrl: `synth:${index}`, discThemeColor: ['#fff', '#000'] });
 const advance = (machine, target, options = {}) => {
@@ -220,4 +224,17 @@ test('arm, motor and volume do not jump when transport stages hand off', () => {
     assert.equal(machine.phase,'playing');
     machine.toggle();advance(machine,'paused');assert.equal(machine.pose().lift,0,'arm rests after parking');
   }
+});
+
+test('music import validation caps total discs to the 6 physical rack slots and enforces type/size limits', () => {
+  assert.equal(RACK_SLOT_COUNT, 6);
+  const validTrack = { name: '01-morning.mp3', type: 'audio/mpeg', size: 1024 };
+  assert.equal(validateMusicImport(validTrack, 4), null);
+  assert.equal(validateMusicImport(validTrack, 5), null);
+  assert.equal(validateMusicImport(validTrack, RACK_SLOT_COUNT), RACK_FULL_MESSAGE);
+  assert.equal(validateMusicImport(validTrack, RACK_SLOT_COUNT + 2), RACK_FULL_MESSAGE);
+  assert.equal(validateMusicImport({ name: 'notes.txt', type: 'text/plain', size: 128 }, 4), '请放入一个音频文件。');
+  assert.equal(validateMusicImport({ name: 'huge.wav', type: 'audio/wav', size: MAX_IMPORT_AUDIO_BYTES + 1 }, 4), '这张唱片太大了，请选择 100 MB 以内的音频。');
+  // Extension fallback when browser omits MIME type
+  assert.equal(validateMusicImport({ name: 'ambient.flac', type: '', size: 4096 }, 5), null);
 });
