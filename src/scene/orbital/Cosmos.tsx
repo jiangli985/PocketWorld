@@ -316,27 +316,26 @@ function Earth({
         THREE.MathUtils.lerp(cabinPosition[1], orbitPosition[1], t),
         THREE.MathUtils.lerp(cabinPosition[2], orbitPosition[2], t),
       );
-      const scale = THREE.MathUtils.lerp(baseRadius, orbitRadius, t) / baseRadius;
-      root.current.scale.setScalar(scale);
+      root.current.scale.setScalar(orbitRadius / baseRadius);
     }
     if (!spin.current) return;
-    spin.current.rotation.y = flight ? flight.earthSpinAngle : clock.value * 0.008;
+    spin.current.rotation.y = (flight ? flight.earthSpinAngle : clock.value * 0.008) + 2.32;
     spin.current.rotation.z = flight ? flight.earthOrbitSweep * 0.35 : 0;
   });
   return (
-    <group ref={root} position={cabinPosition} rotation={[0.05, 2.05, 0.13]}>
+    <group ref={root} position={orbitPosition} rotation={[1.22, 0.35, -0.26]}>
       <group ref={spin}>
         <mesh renderOrder={-90} raycast={NO_RAYCAST}>
-          <sphereGeometry args={[baseRadius, 96, 64]} />
+          <sphereGeometry args={[baseRadius, 128, 96]} />
           <shaderMaterial uniforms={uniforms} vertexShader={planetVertex} fragmentShader={earthFragment} />
         </mesh>
         <mesh renderOrder={-89} raycast={NO_RAYCAST}>
-          <sphereGeometry args={[baseRadius * 1.0037, 96, 64]} />
+          <sphereGeometry args={[baseRadius * 1.0032, 128, 96]} />
           <shaderMaterial uniforms={uniforms} vertexShader={planetVertex} fragmentShader={cloudFragment} transparent depthWrite={false} />
         </mesh>
       </group>
       <mesh renderOrder={-88} raycast={NO_RAYCAST}>
-        <sphereGeometry args={[baseRadius * 1.0115, 96, 64]} />
+        <sphereGeometry args={[baseRadius * 1.0092, 128, 96]} />
         <shaderMaterial uniforms={uniforms} vertexShader={planetVertex} fragmentShader={atmosphereFragment}
           transparent blending={THREE.AdditiveBlending} depthWrite={false} />
       </mesh>
@@ -354,8 +353,6 @@ function Earth({
 export const Cosmos: React.FC<{ reducedMotion: boolean; sun: SunState; flight?: SpacecraftFlightState }> = ({ reducedMotion, sun, flight }) => {
   const distant = useRef<THREE.Group>(null);
   const worldPosition = useMemo(() => new THREE.Vector3(), []);
-  const cabinDirVec = useMemo(() => new THREE.Vector3(), []);
-  const orbitDirVec = useMemo(() => new THREE.Vector3(), []);
   const cabinLightVec = useMemo(() => new THREE.Vector3(), []);
   const orbitLightVec = useMemo(() => new THREE.Vector3(), []);
   const upVec = useMemo(() => new THREE.Vector3(), []);
@@ -400,41 +397,44 @@ export const Cosmos: React.FC<{ reducedMotion: boolean; sun: SunState; flight?: 
 
     const cabinSample = sampleSun(cabinOrbit, phase.current);
     const orbitSample = sampleOrbitSun(orbitSunRig, phase.current);
-    const daylight = THREE.MathUtils.lerp(cabinSample.daylight, orbitSample.daylight, orbitPresence);
-    const warmth = THREE.MathUtils.lerp(cabinSample.warmth, orbitSample.warmth, orbitPresence);
+    const daylight = orbitSample.daylight;
+    const warmth = orbitSample.warmth;
 
-    cabinDirVec.set(...cabinSample.direction);
-    orbitDirVec.set(...orbitSample.direction);
-    sun.direction.copy(cabinDirVec).lerp(orbitDirVec, orbitPresence).normalize();
+    // Unified celestial Sun across both exterior orbit and interior cabin (no jump or revert on entering cabin!)
+    sun.direction.set(...orbitSample.direction);
 
-    // Keep indoor room key-light shadow direction unchanged inside cabin, blending smoothly outside
+    // Keep indoor room key-light shadow direction open-front inside cabin so walls never cast dark shadows on furniture
     cabinLightVec.set(...roomLightDirection(cabinSample.direction));
     orbitLightVec.set(...roomLightDirection(orbitSample.direction, 0.36));
     sun.light.copy(cabinLightVec).lerp(orbitLightVec, orbitPresence).normalize();
 
     // Active Earth world direction for sky halo & spacecraft rim bounce
     sun.earthDirection.set(
-      THREE.MathUtils.lerp(cabinEarthPosition[0], orbitLayout.earthPosition[0], orbitPresence),
-      THREE.MathUtils.lerp(cabinEarthPosition[1], orbitLayout.earthPosition[1], orbitPresence),
-      THREE.MathUtils.lerp(cabinEarthPosition[2], orbitLayout.earthPosition[2], orbitPresence),
+      THREE.MathUtils.lerp(orbitLayout.cabinEarthPosition[0], orbitLayout.earthPosition[0], orbitPresence),
+      THREE.MathUtils.lerp(orbitLayout.cabinEarthPosition[1], orbitLayout.earthPosition[1], orbitPresence),
+      THREE.MathUtils.lerp(orbitLayout.cabinEarthPosition[2], orbitLayout.earthPosition[2], orbitPresence),
     ).normalize();
 
-    // Carve a dramatic diagonal golden terminator across Earth's LEO horizon cap (sunlit upper-left, twilight lower-right)
+    // Illuminate ~72% of Earth's LEO cap in vivid Blue-Marble sunlight, sweeping into a lower-right golden terminator
     upVec.set(...orbitLayout.upDirection);
     lookVec.set(...orbitLayout.cameraLook);
     sun.earthLitSun.copy(sun.direction)
-      .addScaledVector(upVec, 0.15 * daylight * orbitPresence)
-      .addScaledVector(lookVec, -0.12 * daylight * orbitPresence);
-    sun.earthLitSun.x += orbitSunRig.left[0] * 0.24 * daylight * orbitPresence;
-    sun.earthLitSun.y += orbitSunRig.left[1] * 0.24 * daylight * orbitPresence;
-    sun.earthLitSun.z += orbitSunRig.left[2] * 0.24 * daylight * orbitPresence;
+      .addScaledVector(upVec, 0.28 * daylight)
+      .addScaledVector(lookVec, -0.25 * daylight);
+    sun.earthLitSun.x += orbitSunRig.left[0] * 0.28 * daylight;
+    sun.earthLitSun.y += orbitSunRig.left[1] * 0.28 * daylight;
+    sun.earthLitSun.z += orbitSunRig.left[2] * 0.28 * daylight;
     sun.earthLitSun.normalize();
 
-    // Sculpted ~42% crescent-quarter Moon facing the upper-left Sun with deep terminator crater relief
-    moonViewDir.set(...orbitLayout.moonPosition).normalize().negate();
+    // Sculpted ~42% crescent-quarter Moon facing the upper-left Sun in both orbit & cabin
+    moonViewDir.set(
+      THREE.MathUtils.lerp(orbitLayout.cabinMoonPosition[0], orbitLayout.moonPosition[0], orbitPresence),
+      THREE.MathUtils.lerp(orbitLayout.cabinMoonPosition[1], orbitLayout.moonPosition[1], orbitPresence),
+      THREE.MathUtils.lerp(orbitLayout.cabinMoonPosition[2], orbitLayout.moonPosition[2], orbitPresence),
+    ).normalize().negate();
     sun.moonLitSun.copy(sun.direction)
-      .addScaledVector(moonViewDir, 0.56 * daylight * orbitPresence)
-      .addScaledVector(upVec, 0.10 * daylight * orbitPresence)
+      .addScaledVector(moonViewDir, 0.56 * daylight)
+      .addScaledVector(upVec, 0.10 * daylight)
       .normalize();
 
     sun.daylight.value = daylight;
@@ -455,7 +455,7 @@ export const Cosmos: React.FC<{ reducedMotion: boolean; sun: SunState; flight?: 
           orbitRadius={orbitLayout.moonRadius}
         />
         <Earth
-          cabinPosition={cabinEarthPosition}
+          cabinPosition={orbitLayout.cabinEarthPosition}
           orbitPosition={orbitLayout.earthPosition}
           orbitRadius={orbitLayout.earthRadius}
           clock={clock}

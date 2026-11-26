@@ -36,10 +36,11 @@ const orbitVerticalSlope = Math.tan(orbitHalfFovY);
 
 export interface OrbitCelestialLayout {
   earthPosition: [number, number, number];
+  cabinEarthPosition: [number, number, number];
   earthRadius: number;
   moonPosition: [number, number, number];
-  moonRadius: number;
   cabinMoonPosition: [number, number, number];
+  moonRadius: number;
   cabinMoonRadius: number;
   sunStartTarget: [number, number, number];
   upDirection: [number, number, number];
@@ -47,8 +48,8 @@ export interface OrbitCelestialLayout {
 }
 
 /**
- * Compute three-body celestial framing for exterior orbital cruise:
- * - Sweeping giant LEO Earth horizon arc across the lower frame beneath the hull
+ * Compute three-body celestial framing shared across exterior orbital cruise and interior cabin:
+ * - Sweeping giant LEO Earth horizon arc beneath the hull (and visible behind/through the cabin window)
  * - Blazing starburst Sun in the upper-left sky
  * - Cratered Moon in the upper-right sky
  */
@@ -67,39 +68,44 @@ export function orbitCelestialLayout(aspect: number): OrbitCelestialLayout {
       .normalize();
   };
 
-  // 1. Giant LEO Earth sweeping across the bottom of the frame right beneath the duplex hull
+  // 1. Giant LEO Earth sweeping across the bottom of the frame (raised gently in zoomed-in cabin view so the horizon fills the rear panorama window & lower backdrop)
   const earthAngRadius = Math.asin(ORBIT_EARTH_RADIUS / ORBIT_EARTH_DISTANCE);
-  const crestNdcY = portrait ? -0.22 : -0.275;
-  const crestPitch = Math.atan(crestNdcY * orbitVerticalSlope);
-  const centerPitch = crestPitch - earthAngRadius;
-  const centerYaw = Math.atan(-0.025 * Math.tan(halfFovX));
-  const earthDir = orbitLook.clone()
-    .multiplyScalar(Math.cos(centerPitch) * Math.cos(centerYaw))
-    .addScaledVector(orbitCamRight, Math.cos(centerPitch) * Math.sin(centerYaw))
-    .addScaledVector(orbitCamUp, Math.sin(centerPitch))
-    .normalize();
-  const earthPosition = earthDir.clone().multiplyScalar(ORBIT_EARTH_DISTANCE).toArray() as [number, number, number];
+  const makeEarthPos = (crestNdcY: number, yawNdcX: number): [number, number, number] => {
+    const crestPitch = Math.atan(crestNdcY * orbitVerticalSlope);
+    const centerPitch = crestPitch - earthAngRadius;
+    const centerYaw = Math.atan(yawNdcX * Math.tan(halfFovX));
+    return orbitLook.clone()
+      .multiplyScalar(Math.cos(centerPitch) * Math.cos(centerYaw))
+      .addScaledVector(orbitCamRight, Math.cos(centerPitch) * Math.sin(centerYaw))
+      .addScaledVector(orbitCamUp, Math.sin(centerPitch))
+      .normalize()
+      .multiplyScalar(ORBIT_EARTH_DISTANCE)
+      .toArray() as [number, number, number];
+  };
 
-  // 2. Cratered Moon suspended in the upper-right orbital sky
+  const earthPosition = makeEarthPos(portrait ? -0.22 : -0.275, -0.025);
+  const cabinEarthPosition = makeEarthPos(portrait ? 0.14 : 0.18, 0.02);
+
+  // 2. Cratered Moon suspended in the upper-right sky (framed cleanly in both orbit and cabin overview)
   const moonDir = dirFromNdc(portrait ? 0.50 : 0.39, portrait ? 0.45 : 0.43);
   const moonDist = 1180;
   const moonRadius = portrait ? 40 : 68;
   const moonPosition = moonDir.clone().multiplyScalar(moonDist).toArray() as [number, number, number];
 
-  // Subtle companion Moon position in cabin mode (upper-right sky beyond the rear window)
-  const cabinMoonDir = dirFromNdc(portrait ? 0.44 : 0.48, 0.32);
-  const cabinMoonPosition = cabinMoonDir.clone().multiplyScalar(1260).toArray() as [number, number, number];
-  const cabinMoonRadius = 46;
+  const cabinMoonDir = dirFromNdc(portrait ? 0.36 : 0.42, portrait ? 0.58 : 0.56);
+  const cabinMoonPosition = cabinMoonDir.clone().multiplyScalar(moonDist).toArray() as [number, number, number];
+  const cabinMoonRadius = portrait ? 34 : 54;
 
   // 3. Blazing Sun upper-left sky target at initial entry
   const sunStartTarget = dirFromNdc(-0.55, portrait ? 0.47 : 0.44).toArray() as [number, number, number];
 
   return {
     earthPosition,
+    cabinEarthPosition,
     earthRadius: ORBIT_EARTH_RADIUS,
     moonPosition,
-    moonRadius,
     cabinMoonPosition,
+    moonRadius,
     cabinMoonRadius,
     sunStartTarget,
     upDirection: orbitCamUp.toArray() as [number, number, number],
