@@ -20,6 +20,14 @@ const ROUNDED_FONT = "'PocketWorld Prompt Rounded'";
 const FONT_FAMILY = `${ROUNDED_FONT}, 'YouYuan', 'Hiragino Maru Gothic ProN', 'PingFang SC', 'Microsoft YaHei', sans-serif`;
 type PromptKeycap = DustPoint & { key: string };
 
+function paintPromptGlyph(ctx: CanvasRenderingContext2D, text: string, x: number, y: number) {
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = .2;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(text, x, y);
+  ctx.fillText(text, x, y);
+}
+
 function createDustSprites(): HTMLCanvasElement[] {
   return DUST_TONES.map(hex => {
     const sprite = document.createElement('canvas');
@@ -92,7 +100,7 @@ function sampleGlyphs(
   }
 
   ctx.fillStyle = '#ffffff';
-  for (const { label, x, y } of glyphs) ctx.fillText(label, x, y);
+  for (const { label, x, y } of glyphs) paintPromptGlyph(ctx, label, x, y);
   // Red marks keycap particles in the sampling mask.
   const maskSize = PROMPT_KEYCAP_SIZE - 2;
   ctx.strokeStyle = '#ff0000';
@@ -102,7 +110,7 @@ function sampleGlyphs(
   ctx.stroke();
   ctx.fillStyle = '#ff0000';
   ctx.font = `400 12px ${FONT_FAMILY}`;
-  for (const { key, x, y } of keycaps) ctx.fillText(key, x + width / 2, y);
+  for (const { key, x, y } of keycaps) paintPromptGlyph(ctx, key, x + width / 2, y);
 
   const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
   const points: DustPoint[] = [];
@@ -141,7 +149,7 @@ function sampleGlyphs(
     cctx.textAlign = 'center';
     cctx.textBaseline = 'middle';
     cctx.fillStyle = '#fff9ec';
-    for (const { label, x, y } of glyphs) cctx.fillText(label, x, y);
+    for (const { label, x, y } of glyphs) paintPromptGlyph(cctx, label, x, y);
   }
 
   return { points, shadow, core, keycaps };
