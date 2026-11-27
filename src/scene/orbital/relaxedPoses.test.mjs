@@ -113,7 +113,7 @@ for (const [outfit, file] of Object.entries(files)) {
     const bone = name => rig.mesh.getObjectByName('mixamorig' + name);
     const position = name => bone(name).getWorldPosition(new THREE.Vector3());
     const state = createIdleState();
-    const player = createIdlePlayer(rig.mesh, undefined, undefined, undefined, clip('Luna_Relaxed_Standing'));
+    const player = createIdlePlayer(rig.mesh, undefined, undefined, clip('Luna_Relaxed_Standing'));
     rig.applyPose(0, 0); rig.mesh.updateMatrixWorld(true);
     const fixed = ['Hips', 'LeftFoot', 'RightFoot'].map(position);
     try {

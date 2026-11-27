@@ -9,6 +9,7 @@ import { createChairAnimation } from './chairAnimation';
 import { createSeatedIdlePlayer } from './seatedIdle';
 import { createSleeveContact } from './wardrobe/sleeveContact';
 import { loadResidentAssets, loadResidentSeatContact, type ResidentAssets } from './wardrobe/residentAssets';
+import { usePrewarmObject } from './ScenePrewarmer';
 import type { ResidentOutfit } from './wardrobe/outfit';
 import type { StairGait } from './stairGait';
 
@@ -136,4 +137,18 @@ export function ResidentModel({ rig, outfit = 'everyday', onFailure, onMounted, 
     {failed ? <group onPointerDown={event => { event.stopPropagation(); setAttempt(value => value + 1); }}><ModelStatus failed /></group>
       : !assets && <ModelStatus />}
   </group>;
+}
+
+export function ResidentPrewarmer({ active, outfit }: { active: boolean; outfit: ResidentOutfit }) {
+  const [scene, setScene] = useState<THREE.Group | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    let live = true;
+    void loadResidentAssets(outfit).then(value => {
+      if (live) setScene(value.scene);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [active, outfit]);
+  usePrewarmObject(scene, { enabled: active && !!scene, materialsPerFrame: 2, texturesPerFrame: 1 });
+  return null;
 }

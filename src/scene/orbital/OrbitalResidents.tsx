@@ -2,7 +2,7 @@ import { createPlushPose, dropSpot, gripPlush, plushBounds, plushLabels, type Pl
 import { createPaperPose } from './schedule/paperGrip';
 import { RUG_SEAT, RUG_TOP, RUG_YAW, PICKUP_GRIP_TIME, PAPER_PICKUP_REACH, PAPER_PICKUP_PREFIX, advanceCabinPerformance, applyCabinPerformance, createCabinActionPlayer, isPaperPickup, isRugSeat, leaveCabinPerformance, loadCabinActions, newRugPerformance, type CabinPerformance, type PaperPickup } from './cabinActions';
 import { SOFA_ENTRY, SOFA_STEPS, loadSofaClip, sofaPlayer } from './sofaMotion';
-import { DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
+import { DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, LOW_FURNITURE_CLEARANCE, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
 import { CABIN_STAIRS, STAIR_DISTANCE, STAIR_TREAD_RUN, otherDeck, sampleCabinStairs, stairDestination, stairLanding, type CabinResidentView } from './cabinStairs';
 import type { CabinDeck } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef } from 'react';
@@ -27,7 +27,7 @@ import { readingStand, shelfOrigin, shelfPoint, shelfYaw, slotFor } from './libr
 import { HIP_HEIGHT as HIP, ResidentModel, type ResidentLeg, type ResidentRig } from './ResidentModel';
 import { WALK_SPEED } from './residentRig';
 import { sampleStairGait, stairFootfall, stairTreadSurface, type StairGait } from './stairGait';
-import { createIdlePlayer, createIdleState, loadYawn, loadLookingAround, stepIdle, STANDING_IDLE } from './standingIdle';
+import { createIdlePlayer, createIdleState, loadYawn, stepIdle, STANDING_IDLE } from './standingIdle';
 import { CHAIR_SIT_SECONDS, createChairMotion, stepChairMotion } from './chairMotion';
 import { createSeatedIdle, seatedIdleWeight, stepSeatedIdle } from './seatedIdle';
 import { SlipperPair } from './Slippers';
@@ -79,7 +79,10 @@ const angle = (from: number, to: number, t: number) => from + Math.atan2(Math.si
 function layout(observatory: boolean) {
   const [shelfX, , shelfZ] = shelfOrigin(observatory ? 'observatory' : 'habitat');
   const [sofaX, , sofaZ] = FLOOR_SOFA.position;
-  const { left, right, back, front } = FLOOR_SOFA.footprint;
+  const lowFurniture: Box[] = observatory ? [] : [
+    [BED_POSITION[0] - .86, BED_POSITION[0] + .86, BED_POSITION[2] - 1.3, BED_POSITION[2] + 1.3],
+    ...FLOOR_SOFA.footprints.map(([a, b, c, d]): Box => [sofaX + a, sofaX + b, sofaZ + c, sofaZ + d]),
+  ];
   const [trashX, , trashZ] = TRASH_CAN.position;
   const trashFoot = TRASH_CAN.footprint;
   const furniture: Box[] = [
@@ -87,24 +90,24 @@ function layout(observatory: boolean) {
     observatory ? [shelfX - .59, shelfX + .59, shelfZ - .27, shelfZ + .27]
       : [shelfX - .27, shelfX + .31, shelfZ - .65, shelfZ + .65],
     ...(observatory ? [[-0.65, 0.15, 0.45, 1.25], [2.4, 3.1, 1.5, 2.2]] as Box[] : [
-      [BED_POSITION[0] - .86, BED_POSITION[0] + .86, BED_POSITION[2] - 1.3, BED_POSITION[2] + 1.3],
-      [sofaX + left, sofaX + right, sofaZ + back, sofaZ + front],
       [trashX + trashFoot.left, trashX + trashFoot.right, trashZ + trashFoot.back, trashZ + trashFoot.front],
       WARDROBE_FOOTPRINT,
       [NIGHTSTAND_X - .61, NIGHTSTAND_X + .61, NIGHTSTAND_Z - .355, NIGHTSTAND_Z + .397],
       [-1.81, -.85, -3.03, -1.75],
     ] as Box[]),
   ];
-  const grow = (by: number) => furniture.map(([a, b, c, d]) => [a - by, b + by, c - by, d + by] as Box);
+  const grow = (boxes: Box[], by: number) => boxes.map(([a, b, c, d]) => [a - by, b + by, c - by, d + by] as Box);
   const chairRadius = observatory ? 0.55 : 0.5;
   // Keep kicked plush dolls out of static furniture, the fixed desk chair, and Tuanzi's cat mat.
   const chair = CHAIR_POSES.habitat;
   const plushBoxes: Box[] = observatory ? furniture : [
     ...furniture,
+    ...lowFurniture,
     [chair.x - 0.38, chair.x + 0.38, chair.z - 0.38, chair.z + 0.38],
     [2.58, 3.46, 1.98, 2.78],
   ];
-  return { observatory, seat: observatory ? 0.755 : 0.72, chairRadius, boxes: grow(RADIUS), plushBoxes };
+  return { observatory, seat: observatory ? 0.755 : 0.72, chairRadius,
+    boxes: [...grow(furniture, RADIUS), ...grow(lowFurniture, LOW_FURNITURE_CLEARANCE)], plushBoxes };
 }
 type Room = ReturnType<typeof layout>;
 function obstacles(room: Room, pose: ChairPose, extra: Box[] = []): Box[] {
@@ -274,8 +277,7 @@ export function OrbitalResidents(props: ResidentsProps) {
   }, [props.sceneId, room]);
   const idle = useRef(createIdleState());
   const idleMotion = useRef({ rig: null as ResidentRig | null, player: null as ReturnType<typeof createIdlePlayer> | null,
-    clip: null as THREE.AnimationClip | null, loading: false, retryAt: 0,
-    lookClip: null as THREE.AnimationClip | null, lookLoading: false, lookRetryAt: 0 });
+    clip: null as THREE.AnimationClip | null, loading: false, retryAt: 0 });
   const idleInput = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -1088,17 +1090,10 @@ export function OrbitalResidents(props: ResidentsProps) {
     const im = idleMotion.current;
     const fittedIdle = rig.current?.fitted?.idle;
     const yawnClip = fittedIdle?.yawn ?? im.clip;
-    const lookClip = fittedIdle?.look ?? im.lookClip;
     // Camera input interrupts decorative gestures, but never removes the standing pose.
     stepIdle(idle.current, rawDelta, standingAtRest && !idleInput.current && !p.reducedMotion, yawnClip?.duration ?? 0,
-      Math.random, lookClip?.duration ?? 0, standingAtRest, cabin.clips);
+      Math.random, standingAtRest, cabin.clips);
     idleInput.current = false;
-    if (idle.current.elapsed >= STANDING_IDLE.delay && !lookClip && !im.lookLoading && idle.current.elapsed >= im.lookRetryAt) {
-      im.lookLoading = true;
-      void loadLookingAround().then(clip => { if (mounted.current) { im.lookClip = clip; im.rig = null; } })
-        .catch(() => { im.lookRetryAt = idle.current.elapsed + 30; })
-        .finally(() => { im.lookLoading = false; });
-    }
     if (idle.current.elapsed >= STANDING_IDLE.delay && !yawnClip && !im.loading && idle.current.elapsed >= im.retryAt) {
       im.loading = true;
       void loadYawn().then(clip => { if (mounted.current) { im.clip = clip; im.rig = null; } })
@@ -1107,7 +1102,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
     if (rig.current && im.rig !== rig.current) {
       im.rig = rig.current;
-      im.player = createIdlePlayer(rig.current.mesh, yawnClip ?? undefined, lookClip ?? undefined, cabin.apply, rig.current.relaxed?.standing);
+      im.player = createIdlePlayer(rig.current.mesh, yawnClip ?? undefined, cabin.apply, rig.current.relaxed?.standing);
     }
     if (rig.current) {
       const playingChair = p.sceneId === 'habitat' && s.posture === 'chair';
@@ -1175,7 +1170,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     root.userData.posture = s.exiting ? 'standing-up' : s.posture;
     root.userData.cabinAction = cabinPerformance.current?.kind === 'floor' ? cabinPerformance.current.phase : cabinPerformance.current?.kind;
     root.userData.standingIdle = { elapsed: idle.current.elapsed, weight: idle.current.weight, yawnTime: idle.current.yawnTime,
-      nextYawn: idle.current.nextYawn, lookTime: idle.current.lookTime, nextLook: idle.current.nextLook,
+      nextYawn: idle.current.nextYawn,
       shortTime: idle.current.shortTime, shortKind: idle.current.shortKind };
     root.userData.chairPhase = s.posture === 'chair' ? chairMotion.current.phase : 'idle';
     p.sofaTime.current = s.posture === 'sofa' ? sofa.time - SOFA_STEPS : null;
