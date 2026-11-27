@@ -132,7 +132,8 @@ for (const [outfit, file] of Object.entries(files)) {
         const shoulder = position(side + 'Arm'), elbow = position(side + 'ForeArm'), wrist = position(side + 'Hand');
         const middle = position(side + 'HandIndex1').add(position(side + 'HandRing1')).add(position(side + 'HandPinky1')).multiplyScalar(1 / 3);
         const spread = elbow.clone().sub(shoulder).angleTo(down);
-        assert(spread > .21 && spread < .26, `${side} arm should rest slightly open: ${spread}`);
+        const [minSpread, maxSpread] = outfit === 'cardigan' ? [.28, .32] : [.145, .18];
+        assert(spread > minSpread && spread < maxSpread, `${outfit} ${side} arm spread: ${spread}`);
         assert(middle.clone().sub(wrist).angleTo(wrist.clone().sub(elbow)) < .21, `${side} wrist bends outward`);
         const normal = middle.clone().sub(wrist).cross(position(side + 'HandIndex1').sub(position(side + 'HandPinky1'))).normalize();
         assert(normal.x < -.85, `${side} palm does not face the body`); // Cross product reverses between sides.

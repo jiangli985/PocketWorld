@@ -136,7 +136,7 @@ python3 scripts/extract-luna-seated-idles.py <AMC目录>
 
 [`Luna-Relaxed-Poses.blend`](Luna-Relaxed-Poses.blend) 保存三套衣装各自的 `Relaxed_everyday`、`Relaxed_ribbon`、`Relaxed_cardigan` 场景。每个场景的第 1 帧为自然站姿，第 31 帧为双手搭腿，第 61 帧为左手托腮；这是可编辑姿态库，运行时过渡仍使用原走停、落座与 CMU 手势时序。
 
-`scripts/bake-luna-rest.py` 从 Blender 骨骼求值导出 `Luna_Relaxed_Standing`、`Luna_Sofa_Lap`、`Luna_Sofa_Cheek` 三个旋转片段，追加到各自运行模型。站定时上臂相对竖直方向外展约 13°，前臂略微向外、掌心朝内，环顾只驱动躯干和头颈。拖动视角与滚轮缩放只打断装饰待机，不撤掉基础站姿。沙发落座后段逐渐进入搭腿，托腮时右手保持原接触，起身沿原时轴退出。减少动态效果时保留自然站姿和双手搭腿。原模型二进制数据、UV 拆点、形态键、骨权与接触缓存不变。
+`scripts/bake-luna-rest.py` 从 Blender 骨骼求值导出 `Luna_Relaxed_Standing`、`Luna_Sofa_Lap`、`Luna_Sofa_Cheek` 三个旋转片段，追加到各自运行模型。站定时日常装与蝴蝶结外套上臂相对竖直方向外展约 9.44°，丁香开衫单独外展约 16.97°，前臂稍向外打开；三套均保持掌心朝内，环顾只驱动躯干和头颈。拖动视角与滚轮缩放只打断装饰待机，不撤掉基础站姿。沙发落座后段逐渐进入搭腿，托腮时右手保持原接触，起身沿原时轴退出。减少动态效果时保留自然站姿和双手搭腿。原模型二进制数据、UV 拆点、形态键、骨权与接触缓存不变。
 
 使用 `--from-blend --update-standing` 可以仅按脚本重做第 1 帧站姿，保留第 31／61 帧的沙发手势。导出按当前 bufferView 的实际偏移计算原始数据边界，兼容贴图缩小后的 GLB。
 

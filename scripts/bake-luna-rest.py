@@ -117,14 +117,15 @@ class Pose:
         axis=(self.pos(side+'HandIndex1')-self.pos(side+'HandPinky1')).normalized()*(-sign)
         for fi,finger in enumerate(('Index','Middle','Ring','Pinky')):
             for segment in (1,2,3):self.rotate(side+'Hand'+finger+str(segment),Quaternion(axis,amount*(.85+.06*fi)))
-    def standing(self):
+    def standing(self,outfit):
         self.reset('standing')
         for side in ('Left','Right'):
             sign=1 if side=='Left' else -1; inv=self.basis(side)
             a=self.pos(side+'Arm');e=self.pos(side+'ForeArm');w=self.pos(side+'Hand')
             u=(e-a).length;l=(w-e).length
-            upper=Vector((sign*.23,-.973,-.035)).normalized()
-            lower=Vector((sign*.08,-.984,.16)).normalized()
+            # Only the third outfit needs extra sleeve clearance; keep the first two original poses.
+            upper=Vector((sign*.29,-.957,-.035) if outfit=='cardigan' else (sign*.16,-.985,-.035)).normalized()
+            lower=Vector((sign*.12,-.98,.16) if outfit=='cardigan' else (sign*.04,-.987,.16)).normalized()
             self.aim(side+'Arm',side+'ForeArm',a+upper*u)
             e=self.pos(side+'ForeArm');self.aim(side+'ForeArm',side+'Hand',e+lower*l)
             self.hand(side,Vector((sign*.02,-1,.12)),Vector((-sign,0,.10)),inv)
@@ -213,7 +214,7 @@ def main():
             scene.frame_set(frame)
             if not args.from_blend or (args.update_standing and kind=='standing'):
                 old=rig.animation_data.action if rig.animation_data else None
-                if kind=='standing':pose.standing()
+                if kind=='standing':pose.standing(outfit)
                 elif kind=='seated':pose.lap(outfit)
                 else:pose.cheek(outfit)
                 # reset() disconnects the Action while authoring; retain both poses.
