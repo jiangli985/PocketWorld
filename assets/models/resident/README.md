@@ -152,13 +152,13 @@ blender --background --factory-startup --python-exit-code 1 --python scripts/rep
 首次制作从运行 GLB 导入，以逆绑定矩阵恢复真实绑定基准；节点初始姿势不能代替蒙皮绑定姿势。已有制作源时导出当前编辑结果，不重复叠加修复。脚本只更新袖部 `JOINTS_0` / `WEIGHTS_0` 及六条上臂、前臂、手腕旋转轨道，保留几何、UV、形态键、贴图、其余动作和 `_CONTACT_ID`；运行模型大小为 7,789,564 bytes。`cardigan-sleeve-binding.py` 沿用已有肘部修复的局部平滑权重规则。与其他人物分支合并时，先合并制作源中的权重，再以合并后的 GLB 为 `--base` 导出，避免覆盖另一批蒙皮修复。专项回归为 `node --test src/scene/orbital/cardiganStretch.test.mjs`。
 
 
-## 站立环顾
+## 历史站立环顾素材
 
 Mixamo 页面按描述 `Idle Stand Looking Around` 确认的 `Looking Around`，使用 X Bot 空手站姿，完整 1–191 帧。下载设为 FBX Binary / Without Skin / 30 FPS / Keyframe Reduction none；Body Type 0、Surprise Level 50、Overdrive 50、Arm-Space 50、Trim 0–100%、Mirror 关闭。不是同名持火把动作，也不是 `Look Around — Looking Around The Body`。
 
-复用 `scripts/export-luna-yawn.py` 的绑定姿态与肩臂方向修正：`blender --background --python scripts/export-luna-yawn.py -- "<Looking Around.fbx路径>" looking-around`。生成 `luna-looking-around.glb`：180,012 bytes，54 条上身旋转轨道，6.33 秒；无网格、纹理和根位移。骨盆、腿及脚由原中立姿态负责，环顾期间保持原地。源 FBX 留在仓库外，SHA-256 与许可入口见来源清单。
+复用 `scripts/export-luna-yawn.py` 的绑定姿态与肩臂方向修正：`blender --background --python scripts/export-luna-yawn.py -- "<Looking Around.fbx路径>" looking-around`。生成非运行时素材 `assets/models/resident/luna-looking-around.glb`：180,012 bytes，54 条上身旋转轨道，6.33 秒；无网格、纹理和根位移。源 FBX 留在仓库外，SHA-256 与许可入口见来源清单。
 
-环顾和伸懒腰各自按需加载；偏头、拢手和松弛站姿由运行时直接计算。时序与打断由 `standingIdle.ts` 统一管理，数值参数及产品行为见 SPEC.md。
+站立环顾已从待机调度、加载和播放中移除；上述素材仅供历史制作参考，不随站点发布。开衫模型内的历史片段保留但不再绑定。伸懒腰仍按需加载；偏头、拢手和松弛站姿由运行时直接计算。时序与打断由 `standingIdle.ts` 统一管理，数值参数及产品行为见 SPEC.md。
 
 ## 书柜取书与归还
 
