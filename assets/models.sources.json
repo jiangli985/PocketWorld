@@ -207,7 +207,8 @@
       "processing": "Adapted from David-Alfter's Animal Animator 0.1.0 presets. Retargeted four-beat walk, paw contact and belly-rest breathing for Tuanzi. Editable animation source and license: assets/models/cat/motion/."
     },
     {
-      "file": "resident/luna-looking-around.glb",
+      "file": "assets/models/resident/luna-looking-around.glb",
+      "used": false,
       "source": "Adobe Mixamo — Looking Around (description: Idle Stand Looking Around)",
       "sourceUrl": "https://www.mixamo.com/#/?page=1&query=Idle+Stand+Looking+Around",
       "license": "Adobe Mixamo terms; see https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html",
