@@ -34,8 +34,8 @@
       "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
       "used": true,
       "bytes": 7789564,
-      "sha256": "0673ebdace44086b073731bfd0f69e2da0d91105e67d313fe381893b5bc85729",
-      "processing": "Transferred everyday facial landmarks onto the cardigan UV atlas and rounded the lower chin mesh. Fitted 115-joint Luna skin with independent sleeves, hand and hair weights, graded collar and shoulder-cap weights, a closer arm stance and a walk retargeted from the everyday shoulder, elbow and palm trajectories, independent contact shapes, continuous rear hem weights, sock sole contacts and nine existing animation clips."
+      "sha256": "330b60da79bd3ff8717524791bad89df5db34dc6259fb39130fed311c5815e25",
+      "processing": "Transferred everyday facial landmarks onto the cardigan UV atlas and rounded the lower chin mesh. Fitted 115-joint Luna skin with independent sleeves, hand and hair weights, graded collar and shoulder-cap weights, a closer arm stance and a walk retargeted from the everyday shoulder, elbow and palm trajectories, independent contact shapes, continuous rear hem weights, sock sole contacts and nine existing animation clips. Blender 5.3 stretch repair: 535 local sleeve vertices follow the upper arm with a smooth elbow transition; six Luna_Yawn arm/hand rotation tracks reduce axial twist and wrist folding and smooth the return between 6.2 and 8.25 seconds. Editable source: assets/models/resident/Luna-Cardigan-Stretch.blend; exporter: scripts/repair-cardigan-yawn.py. Geometry, UVs, morphs, textures, inverse binds, contact IDs and all other clips remain byte-identical."
     },
     {
       "file": "resident/luna-cardigan-seat.bin",
