@@ -7,9 +7,9 @@
       "file": "resident/luna-ribbon.glb",
       "source": "User-supplied bf6b5b5d-a86b-4f38-b940-dc6e2a2a05dd.glb. Face references Luna's everyday outfit.",
       "used": true,
-      "bytes": 6557984,
-      "sha256": "7e05a55fb5bd5b1af86918b63dff517da3a93f4142c17f639dbcc9074aa87510",
-      "processing": "91-joint fitted skeleton, retouched face and rounded chin, 2K albedo resized from the original 4K texture in Blender, with the everyday outfit’s full-atlas fill, skin tint and normal strength, grounded walk, desk chair, sofa and three book pickups. Editable source: assets/models/resident/Luna-Ribbon.blend. Rebuild texture limit with scripts/resize-luna-textures.py. Roughness PNG is packed as grayscale after Blender validation: its green channel is unchanged, unused red/blue channels are collapsed with metallic factor 0. Rebuild using --optimize-roughness.",
+      "bytes": 6589648,
+      "sha256": "7aaa9a1165ab7135a3c65240a6f8c2fef9d24b12ef5618f9f88d84db8ebd383a",
+      "processing": "91-joint fitted skeleton, retouched face and rounded chin, 2K albedo resized from the original 4K texture in Blender, with the everyday outfit’s full-atlas fill, skin tint and normal strength, grounded walk, desk chair, sofa and three book pickups. Editable source: assets/models/resident/Luna-Ribbon.blend. Rebuild texture limit with scripts/resize-luna-textures.py. Roughness PNG is packed as grayscale after Blender validation: its green channel is unchanged, unused red/blue channels are collapsed with metallic factor 0. Rebuild using --optimize-roughness. Blender-authored relaxed standing, sofa lap and cheek poses are appended without changing existing mesh, skin, texture or animation bytes. Source: assets/models/resident/Luna-Relaxed-Poses.blend; rebuild: scripts/bake-luna-rest.py.",
       "license": "User supplied the model for this project. No separate model license was provided."
     },
     {
@@ -33,9 +33,9 @@
       "source": "User-supplied anime girl 3d model.glb (Tripo, SHA-256 c37b76be9566ab6034357e8c4545e393a181f85154962ad272a45af862fd3eda). Face paint sampled from Luna everyday. Existing Luna motion sources are listed with their respective assets.",
       "license": "User-supplied character; no separate character license declaration supplied. Motion provenance is listed with the corresponding Luna assets.",
       "used": true,
-      "bytes": 7789564,
-      "sha256": "0673ebdace44086b073731bfd0f69e2da0d91105e67d313fe381893b5bc85729",
-      "processing": "Transferred everyday facial landmarks onto the cardigan UV atlas and rounded the lower chin mesh. Fitted 115-joint Luna skin with independent sleeves, hand and hair weights, graded collar and shoulder-cap weights, a closer arm stance and a walk retargeted from the everyday shoulder, elbow and palm trajectories, independent contact shapes, continuous rear hem weights, sock sole contacts and nine existing animation clips."
+      "bytes": 7821600,
+      "sha256": "038b45e3f2c1aa59dbdb5c8976a32de6089e1a74e99b7b2e0d76ade3381f4916",
+      "processing": "Transferred everyday facial landmarks onto the cardigan UV atlas and rounded the lower chin mesh. Fitted 115-joint Luna skin with independent sleeves, hand and hair weights, graded collar and shoulder-cap weights, a closer arm stance and a walk retargeted from the everyday shoulder, elbow and palm trajectories, independent contact shapes, continuous rear hem weights, sock sole contacts and nine existing animation clips. Blender-authored relaxed standing, sofa lap and cheek poses are appended without changing existing mesh, skin, texture or animation bytes. Source: assets/models/resident/Luna-Relaxed-Poses.blend; rebuild: scripts/bake-luna-rest.py."
     },
     {
       "file": "resident/luna-cardigan-seat.bin",
@@ -173,9 +173,9 @@
       "source": "User-supplied Luna/Mixamo source and Luna-Sit-ContactFixed.blend with the arm-supported scoot from the cushion edge to the resting pose; Walk and 2K data maps from repository commit 6f6df88; original 4K base color from the user-supplied Tripo GLB, also preserved in commit 2e1ff72.",
       "license": "User-supplied; no separate license declaration supplied.",
       "used": true,
-      "bytes": 7068924,
-      "sha256": "f138c8223f0f474a36c217629e2f1833868a57882282e04a9b971a0615a4b4a4",
-      "processing": "The seated clip and detailed contact mesh are baked from Blender. Luna-ArmContact.blend adds independent sparse skirt and underarm morph targets driven by arm pose. The original 4K base color is resized to 2K. Roughness optimization preserves vertex mapping, walk channels, base color and normal image bytes, and every green roughness value. Unused red/blue channels are collapsed into grayscale PNG with metallic factor 0. Normal scale 0.18 and base-color emission factor 0.55. Rebuild with scripts/resize-luna-textures.py -- --optimize-roughness. See assets/models/resident/README.md."
+      "bytes": 7100588,
+      "sha256": "0a8e26ad8606506acda5fa3f8e0978b2ee14673bd90715de4d8783df580bc9b1",
+      "processing": "The seated clip and detailed contact mesh are baked from Blender. Luna-ArmContact.blend adds independent sparse skirt and underarm morph targets driven by arm pose. The original 4K base color is resized to 2K. Roughness optimization preserves vertex mapping, walk channels, base color and normal image bytes, and every green roughness value. Unused red/blue channels are collapsed into grayscale PNG with metallic factor 0. Normal scale 0.18 and base-color emission factor 0.55. Rebuild with scripts/resize-luna-textures.py -- --optimize-roughness. See assets/models/resident/README.md. Blender-authored relaxed standing, sofa lap and cheek poses are appended without changing existing mesh, skin, texture or animation bytes. Source: assets/models/resident/Luna-Relaxed-Poses.blend; rebuild: scripts/bake-luna-rest.py."
     },
     {
       "file": "resident/luna-seat-contact.bin",
@@ -354,6 +354,28 @@
       "bytes": 1013604,
       "sha256": "2966d4f116d6e160ac5e2bfab39e55a9931fa3fae06cdd4eac6a5ea652983971",
       "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, fits hand gestures to the face or waist, and exports masked idle rotations and action tracks without meshes or textures."
+    },
+    {
+      "file": "assets/public/models/resident/luna-cardigan-hands.glb",
+      "source": "PocketWorld Blender authoring on the existing Luna cardigan rig and MotionSmith stair profiles.",
+      "sourcePage": "https://cosindra.ai/motionsmith/motions/walk-upstairs",
+      "license": "Existing Luna model license and MotionSmith commercial game-use permission; original source records retained.",
+      "licensePage": "https://cosindra.ai/license",
+      "used": true,
+      "bytes": 143388,
+      "sha256": "f20a81c2732163dd9f7bebad82c94ef08a8c408cdde49c0f51f0e65394f26ec8",
+      "processing": "scripts/bake-luna-contact-hands.py exports two upper-limb stair cycles and calibrated bear palm/finger/cradle guides from assets/models/resident/Luna-Cardigan-Contact-Hands.blend. Animation-only; model, skin and lower-body motion are unchanged."
+    },
+    {
+      "file": "assets/public/models/resident/luna-cabin-actions-cardigan.glb",
+      "source": "Existing PocketWorld cardigan adaptation of the eleven Cosindra MotionSmith clips, with Blender-authored floor hand contact.",
+      "sourcePage": "https://cosindra.ai/motionsmith/motions/sit-floor",
+      "license": "Existing Luna model license and MotionSmith commercial game-use permission; original source records retained.",
+      "licensePage": "https://cosindra.ai/license",
+      "used": true,
+      "bytes": 791940,
+      "sha256": "a9daaa32bb12c70fa12ca1a8e7180fb16fb89ad6cff60b68a77c943d442be3fb",
+      "processing": "scripts/bake-luna-floor-hands.py replaces only 76 upper-limb rotation channels in floorSit/floorStand. Other nine clips, pelvis/legs, times and GLB schema are preserved. Editable source: assets/models/resident/Luna-Cardigan-Floor-Hands.blend. Base bundle SHA-256 d4b514a03bfc10ad237a012fc3cad55c57151d1e02db69a0b08fc73e99c7aa4a."
     }
   ]
 }
