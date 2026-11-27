@@ -36,13 +36,15 @@ const scheduleModel = load('./orbital/schedule/schedule.ts', {});
 function libraryDependencies(residentRig) {
   const authored = load('./orbital/library/pageTurnFrames.ts', {});
   const bookMotion = load('./orbital/library/bookMotion.ts', { three: THREE, './catalog': catalog, './pageTurnFrames': authored });
-  const armPose = load('./orbital/library/armPose.ts', { three: THREE });
+  const cardiganPalms = load('./orbital/library/cardiganPalms.ts', {});
+  const cardiganPickup = load('./orbital/library/cardiganPickup.ts', {});
+  const armPose = load('./orbital/library/armPose.ts', { three: THREE, './cardiganPalms': cardiganPalms });
   return {
     './library/catalog': catalog,
     './library/bookMotion': bookMotion,
     './library/armPose': armPose,
     './library/residentPose': load('./orbital/library/residentPose.ts', { three: THREE, './bookMotion': bookMotion, './catalog': catalog, './armPose': armPose, './pageTurnFrames': authored }),
-    './library/libraryMotion': load('./orbital/library/libraryMotion.ts', { three: THREE, './bookMotion': bookMotion, './catalog': catalog, '../residentRig': residentRig }),
+    './library/libraryMotion': load('./orbital/library/libraryMotion.ts', { three: THREE, './bookMotion': bookMotion, './catalog': catalog, '../residentRig': residentRig, './cardiganPickup': cardiganPickup }),
   };
 }
 

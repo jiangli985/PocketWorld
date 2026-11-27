@@ -1085,12 +1085,13 @@ export function OrbitalResidents(props: ResidentsProps) {
     const standingAtRest = !!rig.current && p.enabled && !p.focusedObject
       && !document.hidden && s.posture === 'standing' && wanted === 'standing' && !s.exiting
       && !walking && distance < .00001 && walkWeight.current === 0
-      && !keys.current.size && !idleInput.current && !s.path.length && !s.stairs && !s.external
+      && !keys.current.size && !s.path.length && !s.stairs && !s.external
       && !approach.current && !libraryActive && !cabinPerformance.current && !plushGrip.current;
     const im = idleMotion.current;
     const fittedIdle = rig.current?.fitted?.idle;
     const yawnClip = fittedIdle?.yawn ?? im.clip;
-    stepIdle(idle.current, rawDelta, standingAtRest && !p.reducedMotion, yawnClip?.duration ?? 0,
+    // Camera input interrupts decorative gestures, but never removes the standing pose.
+    stepIdle(idle.current, rawDelta, standingAtRest && !idleInput.current && !p.reducedMotion, yawnClip?.duration ?? 0,
       Math.random, standingAtRest, cabin.clips);
     idleInput.current = false;
     if (idle.current.elapsed >= STANDING_IDLE.delay && !yawnClip && !im.loading && idle.current.elapsed >= im.retryAt) {
@@ -1101,7 +1102,7 @@ export function OrbitalResidents(props: ResidentsProps) {
     }
     if (rig.current && im.rig !== rig.current) {
       im.rig = rig.current;
-      im.player = createIdlePlayer(rig.current.mesh, yawnClip ?? undefined, cabin.apply);
+      im.player = createIdlePlayer(rig.current.mesh, yawnClip ?? undefined, cabin.apply, rig.current.relaxed?.standing);
     }
     if (rig.current) {
       const playingChair = p.sceneId === 'habitat' && s.posture === 'chair';
@@ -1150,11 +1151,12 @@ export function OrbitalResidents(props: ResidentsProps) {
         plushGrip.current.visible = deckFrame.current?.visible ?? true;
         plushPose.current.apply(root, plushGrip.current, performance?.kind === 'plush' ? performance.time : cabin.clips.pickUp.duration, PICKUP_GRIP_TIME);
       }
+      const lapWeight = s.posture === 'sofa' && sofaClip && !sofaSteps
+        ? THREE.MathUtils.smoothstep(sofa.time - SOFA_STEPS, sofaClip.duration * .62, sofaClip.duration * .94) : 0;
+      rig.current.applySeatedIdle?.(seatIdle, lapWeight);
       if (seatIdle.overlay) {
         const weight = seatedIdleWeight(seatIdle);
         if (weight > 0) cabin.apply?.(seatIdle.overlay, seatIdle.time, weight);
-      } else {
-        rig.current.applySeatedIdle?.(seatIdle);
       }
       // Add the offsets after authored animation, only when there is no contact pose to preserve.
       rig.current.followMotion(rawDelta,
