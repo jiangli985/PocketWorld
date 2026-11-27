@@ -171,6 +171,14 @@ blender --background --factory-startup --python-exit-code 1 \
 
 复建命令为 `blender --background --python scripts/export-luna-yawn.py -- <Yawn.fbx路径>`。输入由用户下载提供，许可见来源清单中的 Adobe Mixamo FAQ。普通待机与额外动作的节奏及打断条件见 SPEC.md。
 
+丁香针织开衫使用 `luna-cardigan.glb` 内嵌的 `Luna_Yawn`。其伸展修复的可编辑源为 [Luna-Cardigan-Stretch.blend](./Luna-Cardigan-Stretch.blend)：535 个局部袖面顶点从胸廓牵引改为随上臂运动，在肘部平滑过渡到前臂；6.2–8.25 秒的双侧上臂和前臂减少轴向扭转，手掌随前臂展开，收手关键帧采用约 0.1 秒的四元数平滑。动作仍为 8.33 秒，前半段遮嘴及其他动作保持原样。
+
+```sh
+blender --background --factory-startup --python-exit-code 1 --python scripts/repair-cardigan-yawn.py
+```
+
+首次制作从运行 GLB 导入，以逆绑定矩阵恢复真实绑定基准；节点初始姿势不能代替蒙皮绑定姿势。已有制作源时导出当前编辑结果，不重复叠加修复。脚本只更新袖部 `JOINTS_0` / `WEIGHTS_0` 及六条上臂、前臂、手腕旋转轨道，保留几何、UV、形态键、贴图、其余动作和 `_CONTACT_ID`。与袖部及掌向修复合并后，运行模型为 7,821,600 bytes、12 条动作，保留新增的自然站姿、沙发搭腿与托腮；双方袖部权重一致，联合导出只改变六条伸懒腰旋转轨道，其余二进制数据逐字节保留。`cardigan-sleeve-binding.py` 沿用已有肘部修复的局部平滑权重规则。与其他人物分支合并时，先核对制作源中的权重，再以合并后的 GLB 为 `--base` 导出，避免覆盖另一批蒙皮修复。专项回归为 `node --test src/scene/orbital/cardiganStretch.test.mjs`。
+
 
 ## 历史站立环顾素材
 
