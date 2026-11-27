@@ -6,6 +6,14 @@ export const SCENE_QUALITY = [
   { dpr: 1.6, shadowSize: 2048 },
 ] as const;
 
+const MAX_SCENE_PIXELS = 2_000_000;
+
+export function sceneMaxDpr(qualityDpr: number, width: number, height: number, devicePixelRatio = 2): number {
+  const safeDevice = Math.max(1, Number.isFinite(devicePixelRatio) ? devicePixelRatio : 1);
+  const area = Math.max(1, (Number.isFinite(width) ? width : 0) * (Number.isFinite(height) ? height : 0));
+  const areaCap = width > 0 && height > 0 ? Math.max(1, Math.sqrt(MAX_SCENE_PIXELS / area)) : qualityDpr;
+  return +Math.min(qualityDpr, safeDevice, areaCap).toFixed(2);
+}
 export function createQualityState() {
   return {
     level: 2 as QualityLevel,

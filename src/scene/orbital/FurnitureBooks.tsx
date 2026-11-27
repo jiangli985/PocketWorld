@@ -37,7 +37,7 @@ export function FurnitureBookcase({ world }: { world: WorldModelProps }) {
     </ObjectHandle>
     <ObjectHandle id="cabinet-item" action={item.active ? 'eject' : 'select'} hint={item.active ? '放回收纳盒' : '取出收纳盒'} world={world} panorama drag="z" payload={{ itemId: 'storage-box' }}>
       <FurnitureMotion mode="position" axis="z" target={item.active ? 0.62 : 0} reducedMotion={world.reducedMotion}>
-        <SuppliedAsset name="storage-box" size={[.36, .2675, .36]} fit="contact" position={[-.2, .16, 0]} fallback={<>        <SoftBox dims={[0.34, 0.23, 0.34]} position={[-0.2, 0.275, 0]} color="#8a9b8f" />
+        <SuppliedAsset name="storage-box" size={[.36, .2675, .36]} fit="contact" castShadow={false} position={[-.2, .16, 0]} fallback={<>        <SoftBox dims={[0.34, 0.23, 0.34]} position={[-0.2, 0.275, 0]} color="#8a9b8f" />
         <SoftBox dims={[0.36, 0.035, 0.36]} position={[-0.2, 0.405, 0]} color="#acb7a3" radius={0.012} />
 </>} />
       </FurnitureMotion>

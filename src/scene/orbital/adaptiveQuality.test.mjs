@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createQualityState, resetQualitySamples, sampleQuality } from './adaptiveQuality.ts';
-
+import { createQualityState, resetQualitySamples, sampleQuality, sceneMaxDpr } from './adaptiveQuality.ts';
 function feed(state, seconds, fps, eligible = true) {
   const changes = [];
   for (let i = 0; i < seconds * fps; i++) {
@@ -62,4 +61,11 @@ test('loading, background, game pause and a long resume gap discard evidence and
   assert.deepEqual(feed(state, 6, 30), []);
   assert.deepEqual(feed(state, 2, 30), [1]);
   for (const delta of [NaN, Infinity, 0, -1]) assert.equal(sampleQuality(state, delta), null);
+});
+
+test('sceneMaxDpr caps large viewports by pixel budget while keeping compact screens sharp', () => {
+  assert.equal(sceneMaxDpr(1.6, 390, 844, 3), 1.6);
+  assert.equal(sceneMaxDpr(1.6, 1440, 900, 2), 1.24);
+  assert.equal(sceneMaxDpr(1, 1440, 900, 2), 1);
+  assert.equal(sceneMaxDpr(1.6, 1440, 900, 1), 1);
 });
