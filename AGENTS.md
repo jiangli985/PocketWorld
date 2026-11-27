@@ -117,9 +117,9 @@ Canvas 默认逻辑尺寸为 `800 × 600`，比例为 `4:3`，等比缩放由外
 - 一个批次完成并合并后，再从最新 `main` 开始下一批次。已合并或已放弃的 PR 不作为新任务的开发入口，也不把模块分支长期当作所有需求的汇总分支。
 - 分支命名为 `type/简短英文描述`，使用小写英文和连字符，例如 `feat/ski-control`、`fix/pet-instant-finish`、`docs/align-project-docs`。
 
-### 6.2 新会话先检查，再接续
+### 6.2 每次开工先同步主线，再接续
 
-开始写入前，先识别当前任务对应的分支、工作区和 PR：
+每次开始工作前（包括新会话和接续已有任务），先识别当前任务对应的分支、工作区和 PR：
 
 ```bash
 git status --short --branch
@@ -127,7 +127,13 @@ git worktree list
 git branch -vv
 ```
 
-远端可用时执行 `git fetch origin`，并查看相关 PR 的实际状态；可使用 `gh pr list --state open` 查找已有 PR。无需每次会话重新规划整个项目或清理全部工作区，只检查与当前任务有关的状态。
+确认工作区使用情况并保留已有改动后，必须执行 `git fetch origin`，检查远端 `main` 是否有本地尚未拉取的提交，不能只依赖本地缓存的 `origin/main`：
+
+- 使用 `git log --oneline main..origin/main` 检查远端新增提交。有新增时，在确认可安全操作的 `main` 工作区执行 `git pull --ff-only origin main`，将本地 `main` 快进到最新版本；没有新增则无需拉取。
+- 接续已有任务分支时，还须检查 `git log --oneline HEAD..origin/main`。若有尚未合入的主线提交，先保留当前改动，再执行 `git merge origin/main`，完成同步后才继续开发；新批次按第 6.3 节从最新 `origin/main` 创建。
+- 遇到本地 `main` 与远端分叉、工作区被占用、未提交改动阻碍同步或合并冲突时，先按本节和第 6.3 节安全处理，不得强制覆盖已有工作。远端访问失败时明确报告主线尚未核实，不能将本地缓存视为最新状态。
+
+同时查看相关 PR 的实际状态；可使用 `gh pr list --state open` 查找已有 PR。无需每次会话重新规划整个项目或清理全部工作区，只检查与当前任务有关的状态。
 
 按以下顺序处理：
 

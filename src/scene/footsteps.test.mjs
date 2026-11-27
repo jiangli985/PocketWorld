@@ -36,13 +36,15 @@ const scheduleModel = load('./orbital/schedule/schedule.ts', {});
 function libraryDependencies(residentRig) {
   const authored = load('./orbital/library/pageTurnFrames.ts', {});
   const bookMotion = load('./orbital/library/bookMotion.ts', { three: THREE, './catalog': catalog, './pageTurnFrames': authored });
-  const armPose = load('./orbital/library/armPose.ts', { three: THREE });
+  const cardiganPalms = load('./orbital/library/cardiganPalms.ts', {});
+  const cardiganPickup = load('./orbital/library/cardiganPickup.ts', {});
+  const armPose = load('./orbital/library/armPose.ts', { three: THREE, './cardiganPalms': cardiganPalms });
   return {
     './library/catalog': catalog,
     './library/bookMotion': bookMotion,
     './library/armPose': armPose,
     './library/residentPose': load('./orbital/library/residentPose.ts', { three: THREE, './bookMotion': bookMotion, './catalog': catalog, './armPose': armPose, './pageTurnFrames': authored }),
-    './library/libraryMotion': load('./orbital/library/libraryMotion.ts', { three: THREE, './bookMotion': bookMotion, './catalog': catalog, '../residentRig': residentRig }),
+    './library/libraryMotion': load('./orbital/library/libraryMotion.ts', { three: THREE, './bookMotion': bookMotion, './catalog': catalog, '../residentRig': residentRig, './cardiganPickup': cardiganPickup }),
   };
 }
 
@@ -150,6 +152,7 @@ function mount(kind, overrides = {}, idleLibrary) {
     if (node.type === 'group' && node.props.ref) {
       const group = new THREE.Group();
       if (node.props.position) group.position.set(...node.props.position);
+      if (node.props.name === 'OrbitalResident' && overrides.start) group.position.fromArray(overrides.start);
       node.props.ref.current = group;
       groups.push({ group, name: node.props.name });
     }
@@ -264,13 +267,52 @@ test('the floor sofa blocks walking from the rug only inside the habitat', () =>
       for (let i = 0; i < 150; i++) view.frame(1 / 60);
       const end = view.root.position.z;
       if (sceneId === 'habitat') {
-        const edge = z + cabinLayout.FLOOR_SOFA.footprint.back;
-        assert.ok(end > z - 1.4 && end <= edge - .23);
+        const edge = z + cabinLayout.FLOOR_SOFA.footprints[0][2] - cabinLayout.LOW_FURNITURE_CLEARANCE;
+        assert.ok(end <= edge && end > edge - .025, `sofa contact at ${end}, expected near ${edge}`);
       } else {
         assert.ok(end > z);
       }
     } finally { view.dispose(); }
   }
+});
+
+test('walking and floor-click routing can reach the empty rug-side corner of the sofa', () => {
+  const [x, , z] = cabinLayout.FLOOR_SOFA.position;
+  const target = [x + .70, 0, z - .90];
+  for (const click of [false, true]) {
+    let arrivals = 0;
+    const view = mount('orbital', { start: [target[0], 0, z - 1.30], walkTarget: click ? target : null, onArrive: () => arrivals++ });
+    try {
+      if (!click) view.key('KeyS');
+      for (let i = 0; i < (click ? 180 : 27); i++) view.frame(1 / 60);
+      assert.ok(Math.abs(view.root.position.x - target[0]) < .02);
+      assert.ok(Math.abs(view.root.position.z - target[2]) < .03, 'the old rectangular air wall is open');
+      if (click) assert.equal(arrivals, 1);
+    } finally { view.dispose(); }
+  }
+});
+
+test('the bed foot allows closer contact and floor-click routes still go around the solid bed', () => {
+  const [x, , z] = cabinLayout.BED_POSITION;
+  const view = mount('orbital');
+  try {
+    view.root.position.set(x, 0, z + 1.85);
+    view.key('KeyW');
+    for (let i = 0; i < 90; i++) view.frame(1 / 60);
+    view.key('KeyW', 'keyup');
+    const edge = z + 1.30 + cabinLayout.LOW_FURNITURE_CLEARANCE;
+    assert.ok(view.root.position.z >= edge && view.root.position.z < edge + .025);
+  } finally { view.dispose(); }
+  const target = [x - 1.15, 0, z + .3];
+  const routed = mount('orbital', { start: [x + 1.15, 0, z + .3], walkTarget: target });
+  try {
+    for (let i = 0; i < 420; i++) {
+      routed.frame(1 / 60);
+      const { x: px, z: pz } = routed.root.position;
+      assert.ok(Math.abs(px - x) >= .86 || Math.abs(pz - z) >= 1.30, 'route never enters the bed');
+    }
+    assert.ok(routed.root.position.distanceTo(new THREE.Vector3(...target)) < .03);
+  } finally { routed.dispose(); }
 });
 
 test('the pedal trash can blocks walking only inside the habitat', () => {
@@ -645,7 +687,8 @@ test('the static bed blocks walking without offering keyboard interaction, and n
     view.key('KeyA');
     for (let i = 0; i < 60; i++) view.frame(1 / 60);
     view.key('KeyA', 'keyup');
-    assert.ok(view.root.position.x >= x + .86 + cabinLayout.RESIDENT_RADIUS, 'the bed remains a solid obstacle');
+    const edge = x + .86 + cabinLayout.LOW_FURNITURE_CLEARANCE;
+    assert.ok(view.root.position.x >= edge && view.root.position.x < edge + .025, 'the bed blocks only at the closer contact boundary');
 
     for (const [px, pz, id] of [
       [cabinLayout.NIGHTSTAND_X - .11, cabinLayout.NIGHTSTAND_Z + .77, 'lamp'],
@@ -1155,12 +1198,9 @@ test('standing idle starts early, ignores Space and resets on movement, focus an
   } finally { view.dispose(); }
 });
 
-test('loaded looking gesture ignores Space and is interrupted by movement, focus, disabling and reduced motion', async () => {
-  const idleLibrary = {};
-  for (const name of ['luna-yawn', 'luna-looking-around']) {
-    const { gltf } = await loadModel(new URL(`../../assets/public/models/resident/${name}.glb`, import.meta.url));
-    idleLibrary[`./models/resident/${name}.glb`] = gltf;
-  }
+test('loaded yawn ignores Space and is interrupted by movement, focus, disabling and reduced motion', async () => {
+  const { gltf } = await loadModel(new URL('../../assets/public/models/resident/luna-yawn.glb', import.meta.url));
+  const idleLibrary = { './models/resident/luna-yawn.glb': gltf };
   for (const trigger of [view => view.key('KeyD'),
     view => { view.props.focusedObject = 'journal'; }, view => { view.props.enabled = false; },
     view => { view.props.reducedMotion = true; }]) {
@@ -1169,19 +1209,18 @@ test('loaded looking gesture ignores Space and is interrupted by movement, focus
     try {
       advance(8);
       await new Promise(setImmediate);
-      for (let i = 0; i < 35 * 60 && view.root.userData.standingIdle.lookTime < 1; i++) view.frame(1 / 60);
-      assert(view.root.userData.standingIdle.lookTime >= 1, 'real clip must be playing before interruption');
-      const lookBeforeSpace = view.root.userData.standingIdle.lookTime;
+      for (let i = 0; i < 80 * 60 && view.root.userData.standingIdle.yawnTime < 1; i++) view.frame(1 / 60);
+      assert(view.root.userData.standingIdle.yawnTime >= 1, 'real clip must be playing before interruption');
+      const yawnBeforeSpace = view.root.userData.standingIdle.yawnTime;
       view.key('Space'); view.frame(1 / 60);
-      assert.ok(view.root.userData.standingIdle.lookTime > lookBeforeSpace);
+      assert.ok(view.root.userData.standingIdle.yawnTime > yawnBeforeSpace);
       trigger(view); view.frame(1 / 60);
       assert.equal(view.root.userData.standingIdle.elapsed, 0);
       advance(.5);
-      assert.equal(view.root.userData.standingIdle.lookTime, -1);
+      assert.equal(view.root.userData.standingIdle.yawnTime, -1);
       assert.equal(view.root.userData.standingIdle.weight, 0);
       if (view.props.reducedMotion) {
         advance(120);
-        assert.equal(view.root.userData.standingIdle.lookTime, -1);
         assert.equal(view.root.userData.standingIdle.yawnTime, -1);
         assert.equal(view.root.userData.standingIdle.elapsed, 0);
       }
