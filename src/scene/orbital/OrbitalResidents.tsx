@@ -2,7 +2,7 @@ import { createPlushPose, dropSpot, gripPlush, plushBounds, plushLabels, type Pl
 import { createPaperPose } from './schedule/paperGrip';
 import { RUG_SEAT, RUG_TOP, RUG_YAW, PICKUP_GRIP_TIME, PAPER_PICKUP_REACH, PAPER_PICKUP_PREFIX, advanceCabinPerformance, applyCabinPerformance, createCabinActionPlayer, isPaperPickup, isRugSeat, leaveCabinPerformance, loadCabinActions, newRugPerformance, type CabinPerformance, type PaperPickup } from './cabinActions';
 import { SOFA_ENTRY, SOFA_STEPS, loadSofaClip, sofaPlayer } from './sofaMotion';
-import { DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
+import { DECK_WALK_BOUNDS, UPPER_DECK_OFFSET, deckFromAuthoredX, BED_POSITION, CAT_HOME, CAT_MAT_Y, COMPUTER_STAND, FLOOR_SOFA, PLUSH_DOLLS, TRASH_CAN, HABITAT_SPAWN, WARDROBE_FOOTPRINT, WARDROBE_STAND, NIGHTSTAND_X, NIGHTSTAND_Z, LOW_FURNITURE_CLEARANCE, RESIDENT_RADIUS, WALK_BOUNDS } from './cabinLayout';
 import { CABIN_STAIRS, STAIR_DISTANCE, STAIR_TREAD_RUN, otherDeck, sampleCabinStairs, stairDestination, stairLanding, type CabinResidentView } from './cabinStairs';
 import type { CabinDeck } from './cabinLayout';
 import React, { Suspense, useEffect, useMemo, useRef } from 'react';
@@ -79,7 +79,10 @@ const angle = (from: number, to: number, t: number) => from + Math.atan2(Math.si
 function layout(observatory: boolean) {
   const [shelfX, , shelfZ] = shelfOrigin(observatory ? 'observatory' : 'habitat');
   const [sofaX, , sofaZ] = FLOOR_SOFA.position;
-  const { left, right, back, front } = FLOOR_SOFA.footprint;
+  const lowFurniture: Box[] = observatory ? [] : [
+    [BED_POSITION[0] - .86, BED_POSITION[0] + .86, BED_POSITION[2] - 1.3, BED_POSITION[2] + 1.3],
+    ...FLOOR_SOFA.footprints.map(([a, b, c, d]): Box => [sofaX + a, sofaX + b, sofaZ + c, sofaZ + d]),
+  ];
   const [trashX, , trashZ] = TRASH_CAN.position;
   const trashFoot = TRASH_CAN.footprint;
   const furniture: Box[] = [
@@ -87,24 +90,24 @@ function layout(observatory: boolean) {
     observatory ? [shelfX - .59, shelfX + .59, shelfZ - .27, shelfZ + .27]
       : [shelfX - .27, shelfX + .31, shelfZ - .65, shelfZ + .65],
     ...(observatory ? [[-0.65, 0.15, 0.45, 1.25], [2.4, 3.1, 1.5, 2.2]] as Box[] : [
-      [BED_POSITION[0] - .86, BED_POSITION[0] + .86, BED_POSITION[2] - 1.3, BED_POSITION[2] + 1.3],
-      [sofaX + left, sofaX + right, sofaZ + back, sofaZ + front],
       [trashX + trashFoot.left, trashX + trashFoot.right, trashZ + trashFoot.back, trashZ + trashFoot.front],
       WARDROBE_FOOTPRINT,
       [NIGHTSTAND_X - .61, NIGHTSTAND_X + .61, NIGHTSTAND_Z - .355, NIGHTSTAND_Z + .397],
       [-1.81, -.85, -3.03, -1.75],
     ] as Box[]),
   ];
-  const grow = (by: number) => furniture.map(([a, b, c, d]) => [a - by, b + by, c - by, d + by] as Box);
+  const grow = (boxes: Box[], by: number) => boxes.map(([a, b, c, d]) => [a - by, b + by, c - by, d + by] as Box);
   const chairRadius = observatory ? 0.55 : 0.5;
   // Keep kicked plush dolls out of static furniture, the fixed desk chair, and Tuanzi's cat mat.
   const chair = CHAIR_POSES.habitat;
   const plushBoxes: Box[] = observatory ? furniture : [
     ...furniture,
+    ...lowFurniture,
     [chair.x - 0.38, chair.x + 0.38, chair.z - 0.38, chair.z + 0.38],
     [2.58, 3.46, 1.98, 2.78],
   ];
-  return { observatory, seat: observatory ? 0.755 : 0.72, chairRadius, boxes: grow(RADIUS), plushBoxes };
+  return { observatory, seat: observatory ? 0.755 : 0.72, chairRadius,
+    boxes: [...grow(furniture, RADIUS), ...grow(lowFurniture, LOW_FURNITURE_CLEARANCE)], plushBoxes };
 }
 type Room = ReturnType<typeof layout>;
 function obstacles(room: Room, pose: ChairPose, extra: Box[] = []): Box[] {
