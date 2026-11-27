@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useMemo } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from '../useSceneGLTF';
 import { useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import tavernMark from '../../../../assets/games/ski/tavern-mark.webp';
@@ -13,13 +13,22 @@ const fallbackColors: Record<GameId, [string, string]> = {
   shooter: ['#7b5db8', '#e6b956'],
 };
 
-function useClonedHardwareScene(path: string, pixelLabels = false) {
+function useClonedHardwareScene(path: string, pixelLabels = false, castShadow = true) {
   const { scene } = useGLTF(`${import.meta.env.BASE_URL}models/${path}`);
   const model = useMemo(() => {
     const clone = scene.clone(true);
+    const box = new THREE.Box3();
+    const size = new THREE.Vector3();
     clone.traverse(object => {
       if (!(object instanceof THREE.Mesh)) return;
-      object.castShadow = object.receiveShadow = true;
+      object.receiveShadow = true;
+      if (castShadow) {
+        box.setFromObject(object);
+        box.getSize(size);
+        object.castShadow = Math.max(size.x, size.y, size.z) >= 0.06;
+      } else {
+        object.castShadow = false;
+      }
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       object.material = materials.map(material => {
         const copy = material.clone() as THREE.MeshStandardMaterial;
@@ -33,8 +42,7 @@ function useClonedHardwareScene(path: string, pixelLabels = false) {
       if (object.material.length === 1) object.material = object.material[0];
     });
     return clone;
-  }, [scene, pixelLabels]);
-
+  }, [scene, pixelLabels, castShadow]);
   useEffect(() => () => {
     model.traverse(object => {
       if (!(object instanceof THREE.Mesh)) return;

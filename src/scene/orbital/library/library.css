@@ -7,7 +7,7 @@
 .library-surface button { min-height:44px; padding:8px 12px; border:1px solid #b5a788; background:transparent; color:#514c3a; font:14px/1.4 'PingFang SC',sans-serif; cursor:pointer; touch-action:manipulation; }
 .library-surface button:disabled { opacity:.48; cursor:default; }
 .library-surface button:not(:disabled):hover { background:#e7dbbf; }
-.library-surface button:focus-visible,.library-surface input:focus-visible,.library-surface textarea:focus-visible { outline:2px solid #657c66; outline-offset:3px; }
+.library-surface button:focus-visible,.library-surface input:focus-visible { outline:2px solid #657c66; outline-offset:3px; }
 .library-surface header>button { flex-shrink:0; font-size:12px; padding:8px; }
 .library-capacity { margin:0 0 16px; font-size:17px; font-variant-numeric:tabular-nums; }
 .library-capacity span { display:block; font:12px/1.6 'PingFang SC',sans-serif; margin-top:7px; color:#6d624e; }
@@ -31,13 +31,20 @@
 .library-surface form { display:flex; flex-direction:column; gap:12px; min-height:0; }
 .library-surface form header { margin-bottom:0; }
 .library-surface label { display:flex; flex-direction:column; gap:6px; font:13px/1.4 'PingFang SC',sans-serif; }
-.library-surface input[type=text],.library-surface textarea { width:100%; border:1px solid #b5a788; background:#faf3e2; padding:10px; color:#454a40; font:15px/1.7 'PingFang SC',sans-serif; border-radius:0; caret-color:#566e5e; }
-.library-surface textarea { height:118px; min-height:118px; line-height:24px; resize:vertical; }
-.library-surface textarea::placeholder { color:#6d624e; }
-.library-file input { font-size:12px; max-width:100%; }
+.library-surface input[type=text] { width:100%; border:1px solid #b5a788; background:#faf3e2; padding:10px; color:#454a40; font:15px/1.7 'PingFang SC',sans-serif; border-radius:0; caret-color:#566e5e; }
+.library-dropzone { display:flex; flex-direction:column; gap:8px; }
+.library-surface .library-dropzone-trigger { width:100%; display:flex; flex-direction:column; align-items:flex-start; gap:4px; padding:14px 12px; border:1.5px dashed #8f8266; background:#faf3e2; text-align:left; }
+.library-surface .library-dropzone.has-file .library-dropzone-trigger { border-style:solid; border-color:#657c66; background:#eff1e4; }
+.library-dropzone-trigger strong { font:500 14px/1.4 'PingFang SC',sans-serif; color:#3d4437; overflow-wrap:anywhere; }
+.library-dropzone-trigger small { font:12px/1.5 'PingFang SC',sans-serif; color:#6d624e; overflow-wrap:anywhere; }
+.library-file-excerpt { margin:0; padding:8px 10px; border-left:2px solid #b5a788; background:#faf3e2; font:12px/1.6 'Songti SC','Noto Serif SC',Georgia,serif; color:#575142; max-height:4.8em; overflow:hidden; overflow-wrap:anywhere; }
 .library-preview { margin:0; font:12px/1.7 'PingFang SC',sans-serif; color:#6d624e; overflow-wrap:anywhere; }
-.library-preview span { display:block; max-height:3.4em; overflow:hidden; margin-top:8px; }
 .library-error { color:#8b382d; font:13px/1.7 'PingFang SC',sans-serif; margin:0; }
+.library-drop-overlay { position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:24px; text-align:center; background:rgba(243,234,212,.94); border:2px dashed #566e5e; color:#364833; pointer-events:none; }
+.library-drop-overlay.is-full { border-color:#8b382d; color:#8b382d; }
+.library-drop-overlay strong { font:600 16px/1.4 'PingFang SC',sans-serif; }
+.library-drop-overlay span { font:12px/1.6 'PingFang SC',sans-serif; color:#5a5242; }
+.library-drop-overlay.is-full span { color:#8b382d; }
 .library-confirm { position:absolute; inset:0; z-index:2; display:flex; flex-wrap:wrap; align-content:center; justify-content:center; gap:16px; padding:24px; background:#f3ead4; }
 .library-confirm p { width:100%; line-height:1.8; overflow-wrap:anywhere; }
 .library-surface ::selection { background:#c6d4bc; color:#27392c; }
@@ -53,7 +60,6 @@
  .library-reading footer { margin-top:8px; }
  .library-reading .library-help { margin:6px 0 0; font-size:10px; }
  .library-adding { top:80px; bottom:12px; max-height:none; }
- .library-surface textarea { min-height:118px; }
  .library-surface form { min-height:100%; }
  .orbital-app:has(.library-surface) .orbital-footer { display:none; }
 }
@@ -66,5 +72,4 @@
  .library-reading { height:auto; max-height:none; }
  .library-surface h2 { font-size:19px; }
  .library-surface header { margin-bottom:10px; }
- .library-surface textarea { min-height:118px; }
 }

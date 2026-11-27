@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useGLTF } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from './useSceneGLTF';
 import * as THREE from 'three';
 import { PLUSH_DOLLS, UPPER_DECK_OFFSET, deckFromAuthoredX, type PlushDollPlacement } from './cabinLayout';
 import { CabinFadeGroup } from './CabinUpperDeck';
@@ -26,9 +26,16 @@ function LoadedPlushDoll({ doll, index, bodies, grip, shapes, world }: PlushDoll
   const hand = useMemo(() => new THREE.Vector3(), []);
   const prepared = useMemo(() => {
     const clone = gltf.scene.clone(true);
+    const shape = createPlushShape(gltf.scene, doll.height);
+    const size = new THREE.Vector3();
+    const box = new THREE.Box3();
     clone.traverse(object => {
       if (!(object instanceof THREE.Mesh)) return;
-      object.castShadow = object.receiveShadow = true;
+      object.receiveShadow = true;
+      box.setFromObject(object);
+      box.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z) * shape.scale;
+      object.castShadow = maxDim >= 0.14;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       object.material = materials.map(material => {
         const copy = material.clone() as THREE.MeshStandardMaterial;
@@ -37,12 +44,10 @@ function LoadedPlushDoll({ doll, index, bodies, grip, shapes, world }: PlushDoll
       });
       if (object.material.length === 1) object.material = object.material[0];
     });
-    const shape = createPlushShape(gltf.scene, doll.height);
     clone.scale.setScalar(shape.scale);
     clone.position.copy(shape.origin).multiplyScalar(-shape.scale);
     return { model: clone, shape };
   }, [gltf.scene, doll.height]);
-
   useLayoutEffect(() => {
     shapes.set(doll.id, prepared.shape);
     return () => { shapes.delete(doll.id); };

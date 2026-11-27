@@ -1,11 +1,12 @@
 import { BEDROOM_LEFT, CABIN_DIVIDER_X, CABIN_LEFT, CABIN_RIGHT, type CabinDeck } from './cabinLayout';
 import React, { Suspense, useMemo, useRef } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from './useSceneGLTF';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { AssetBoundary } from './ReusableAsset';
 import { extractSlipperModel, isSlipperMaterial } from './slipperModel';
 import { ObjectHandle } from './ObjectHandle';
+import { usePrewarmObject } from './ScenePrewarmer';
 import type { WorldModelProps } from '../../types/world';
 
 interface HabitatShellProps {
@@ -19,9 +20,34 @@ export function preloadHabitatShell() {
   useGLTF.preload(CABIN_MODEL_URL);
 }
 
+function CabinShellPrewarmModel({ active }: { active: boolean }) {
+  const { scene } = useGLTF(CABIN_MODEL_URL);
+  usePrewarmObject(scene, { enabled: active, materialsPerFrame: 3, texturesPerFrame: 2 });
+  return null;
+}
+
+export function HabitatShellPrewarmer({ active }: { active: boolean }) {
+  if (!active) return null;
+  return <AssetBoundary fallback={null}><Suspense fallback={null}><CabinShellPrewarmModel active={active} /></Suspense></AssetBoundary>;
+}
+
 const LOWER_PARTS = ['Duplex_LowerShell', 'Duplex_DeckBase', 'Floor_Parquet', 'Stationery', 'Shelf_Gallery', 'Rugs'];
 const UPPER_PARTS = ['Duplex_UpperShell', 'Duplex_BedroomBase', 'Floor_Parquet_Bedroom', 'Nightstand', 'Interactable_Wardrobe', 'Rugs_Upper'];
 const OBSERVATORY_PARTS = ['Shell', 'Floor_Parquet', 'Floor_Parquet_Upper'];
+
+function shouldShellNodeCastShadow(node: THREE.Object3D): boolean {
+  for (let cur: THREE.Object3D | null = node; cur; cur = cur.parent) {
+    if (
+      cur.name.startsWith('Floor_Parquet') ||
+      cur.name.startsWith('Rugs') ||
+      cur.name.includes('Glass') ||
+      cur.name.includes('Window')
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) {
   const variant = world.sceneId;
@@ -37,7 +63,8 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
     const remountSlippers = deck === 'upper' && variant === 'habitat' && !!extractSlipperModel(scene);
     shell.traverse(node => {
       if (!(node instanceof THREE.Mesh)) return;
-      node.castShadow = node.receiveShadow = true;
+      node.receiveShadow = true;
+      node.castShadow = shouldShellNodeCastShadow(node);
       if (remountSlippers && isSlipperMaterial(node.material)) slippers.push(node);
     });
     slippers.forEach(node => node.removeFromParent());
@@ -48,7 +75,6 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
     rug?.removeFromParent();
     return { shell, wardrobe, rug, door, closed: door?.position.clone() };
   }, [scene, variant, deck]);
-
   const slide = useRef(0);
   useFrame((_, dt) => {
     if (!cabin.door || !cabin.closed) return;

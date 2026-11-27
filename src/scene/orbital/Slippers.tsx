@@ -1,6 +1,6 @@
 import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useGLTF } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from './useSceneGLTF';
 import * as THREE from 'three';
 import { DECK_WALK_BOUNDS, deckFromAuthoredX } from './cabinLayout';
 import { CabinUpperDeck } from './CabinUpperDeck';

@@ -1,5 +1,6 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Html, useGLTF } from '@react-three/drei';
+import { Html } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from '../useSceneGLTF';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { WorldAction, WorldSceneProps } from '../../../types/world';
@@ -20,9 +21,14 @@ function VinylRackModel() {
   const { scene } = useGLTF(`${import.meta.env.BASE_URL}models/furniture/vinyl-rack.glb`);
   const model = useMemo(() => {
     const clone = scene.clone(true);
+    const box = new THREE.Box3();
+    const size = new THREE.Vector3();
     clone.traverse(object => {
       if (!(object instanceof THREE.Mesh)) return;
-      object.castShadow = object.receiveShadow = true;
+      object.receiveShadow = true;
+      box.setFromObject(object);
+      box.getSize(size);
+      object.castShadow = Math.max(size.x, size.y, size.z) >= 0.08;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       object.material = materials.map(material => material.clone());
       if (object.material.length === 1) object.material = object.material[0];

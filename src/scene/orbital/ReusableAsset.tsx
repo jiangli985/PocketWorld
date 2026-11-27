@@ -1,5 +1,5 @@
 import React, { Component, Suspense, useEffect, useMemo } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from './useSceneGLTF';
 import type { ThreeElements } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -8,13 +8,14 @@ export class AssetBoundary extends Component<{ children: React.ReactNode; fallba
   static getDerivedStateFromError() { return { failed: true }; }
   render() { return this.state.failed ? this.props.fallback ?? null : this.props.children; }
 }
-function LoadedAsset({ path, width, height, tint, ...props }: ThreeElements['group'] & { path: string; width?: number; height?: number; tint?: string }) {
+function LoadedAsset({ path, width, height, tint, castShadow = true, ...props }: ThreeElements['group'] & { path: string; width?: number; height?: number; tint?: string; castShadow?: boolean }) {
   const gltf = useGLTF(`${import.meta.env.BASE_URL}models/${path}`);
   const model = useMemo(() => {
     const clone = gltf.scene.clone(true);
     clone.traverse(object => {
       if (!(object instanceof THREE.Mesh)) return;
-      object.castShadow = object.receiveShadow = true;
+      object.castShadow = castShadow;
+      object.receiveShadow = true;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       object.material = materials.map(material => {
         const copy = material.clone() as THREE.MeshStandardMaterial;

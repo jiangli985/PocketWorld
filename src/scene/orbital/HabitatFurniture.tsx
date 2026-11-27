@@ -1,6 +1,6 @@
 import { BED_POSITION, LAMP_POSITION, PLANT_POSITION, TRASH_CAN } from './cabinLayout';
 import React, { Suspense, useMemo } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useSceneGLTF as useGLTF } from './useSceneGLTF';
 import { CLOSED_OBJECT, type WorldModelProps } from '../../types/world';
 import { ObjectHandle } from './ObjectHandle';
 import { SoftBox, Tube } from './Primitives';
@@ -111,24 +111,34 @@ function FurnitureHatch() {
   </group>;
 }
 
-export function HabitatBedroom({ world, sofaTime }: { world: WorldModelProps; sofaTime: React.RefObject<number | null> }) {
+export function HabitatBedroom({
+  world,
+  sofaTime,
+  stage = 2,
+}: {
+  world: WorldModelProps;
+  sofaTime: React.RefObject<number | null>;
+  stage?: number;
+}) {
   return <>
     <FurnitureBed />
-    <ObjectHandle id="sofa" panorama onClick={event => event.stopPropagation()} action={world.objects.sofa?.active ? 'stand' : 'sit'}
-      hint={world.objects.sofa?.active ? '起身' : '坐进懒人沙发'} world={world}>
-      <AssetBoundary><Suspense fallback={null}><FloorSofa sample={sofaTime} /></Suspense></AssetBoundary>
-    </ObjectHandle>
-    <FurnitureLamp world={world} />
-    <FurniturePlant observatory={false} />
+    {stage >= 2 && <>
+      <ObjectHandle id="sofa" panorama onClick={event => event.stopPropagation()} action={world.objects.sofa?.active ? 'stand' : 'sit'}
+        hint={world.objects.sofa?.active ? '起身' : '坐进懒人沙发'} world={world}>
+        <AssetBoundary><Suspense fallback={null}><FloorSofa sample={sofaTime} /></Suspense></AssetBoundary>
+      </ObjectHandle>
+      <FurnitureLamp world={world} />
+      <FurniturePlant observatory={false} />
+    </>}
   </>;
 }
 
-export const HabitatFurniture: React.FC<WorldModelProps> = world => {
+export const HabitatFurniture: React.FC<WorldModelProps & { stage?: number }> = ({ stage = 3, ...world }) => {
   const observatory = world.sceneId === 'observatory';
   return <group name={`Furniture_${world.sceneId}`}>
     <FurnitureDesk world={world} />
-    <FurnitureBookcase world={world} />
     {observatory ? <>
+      <FurnitureBookcase world={world} />
       <SoftBox dims={[2.9, 0.025, 2.2]} position={[-1.5, 0.013, 0.8]} radius={0.01} color="#748f8a" />
       <FurnitureChair world={world} />
       <ReusableAsset path="furniture/throw_pillows_01.glb" width={0.52} position={[-1.65, 0.76, 0.9]} rotation={[0, 0.42, 0]} />
@@ -137,12 +147,17 @@ export const HabitatFurniture: React.FC<WorldModelProps> = world => {
         <Cylinder radius={0.045} height={0.59} position={[0, 0.31, 0]} color={C.brass} />
         <Cylinder radius={0.25} height={0.035} position={[0, 0.018, 0]} color={C.ink} />
       </group>
+      <FurnitureLamp world={world} />
+      <FurniturePlant observatory />
+      <FurnitureHatch />
     </> : <>
       <FurnitureChair world={world} />
-      <ReusableAsset name="Furniture_TrashCan" path="furniture/trash-can.glb"
-        height={TRASH_CAN.height} position={TRASH_CAN.position} rotation={[0, TRASH_CAN.yaw, 0]} />
+      {stage >= 2 && <FurnitureBookcase world={world} />}
+      {stage >= 3 && <>
+        <ReusableAsset name="Furniture_TrashCan" path="furniture/trash-can.glb" castShadow={false}
+          height={TRASH_CAN.height} position={TRASH_CAN.position} rotation={[0, TRASH_CAN.yaw, 0]} />
+        <FurnitureHatch />
+      </>}
     </>}
-    {observatory && <><FurnitureLamp world={world} /><FurniturePlant observatory /></>}
-    <FurnitureHatch />
   </group>;
 };
