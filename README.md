@@ -1,6 +1,6 @@
 # PocketWorld — 浏览器里的 3D 轨道居住舱
 
-一个可以直接动手的 3D 小房间。访客在轨道居住舱里环绕观察、控制住民走动，写日记和日程，从书柜取书阅读，播放唱片或把本地音乐做成唱片，把实体卡带插入电脑游玩内置小游戏（奶娃滑雪大冒险、团团魔法录）。
+一个可以直接动手的 3D 小房间。访客在轨道居住舱里环绕观察、控制住民走动，写日记和日程，从书柜取书阅读，播放唱片或把本地音乐做成唱片，把实体卡带插入电脑游玩内置小游戏（潮汐小馆、团团魔法录）。
 
 ## 一、技术栈与整体架构
 
@@ -32,9 +32,8 @@ PocketWorld/
 │   │   │   └── shaders/      # 宇宙与木材着色器
 │   │   ├── audioEngine.ts    # 房间音效与音乐播放
 │   │   └── geometry.ts       # 共用几何工具
-│   ├── components/computer/  # 独立滑雪页面与卡带播放器
 │   ├── games/
-│   │   ├── mario/            # 奶娃滑雪大冒险，保留 mario 卡带标识
+│   │   ├── mario/            # 潮汐小馆，保留 mario 卡带标识
 │   │   └── shooter/          # 团团魔法录，保留 shooter 卡带标识
 │   └── types/                # 卡带、交互物品与世界接口
 ├── AGENTS.md                 # 工程规范与协作流程（CLAUDE.md 引入同一份）
@@ -56,7 +55,7 @@ PocketWorld/
 | 分工、目录边界、分支与 PR 流程、文档放哪 | [`AGENTS.md`](./AGENTS.md) |
 | 操作方式、卡带接口、存储键、入口参数 | [`SPEC.md`](./SPEC.md) |
 | 场景模块的职责与当前状态 | [场景说明](src/scene/README.md)、[场景进度](src/scene/orbital/进度文档.md) |
-| 奶娃滑雪大冒险 | [说明](src/games/mario/README.md)、[进度](src/games/mario/进度文档.md) |
+| 潮汐小馆 | [说明](src/games/mario/README.md)、[进度](src/games/mario/进度文档.md) |
 | 团团魔法录 | [说明](src/games/shooter/README.md)、[进度](src/games/shooter/进度文档.md) |
 | Agent 技能包的安装与使用 | [技能集合](skills/README.md) |
 
@@ -78,6 +77,6 @@ npm run build
 npm test
 ```
 
-默认页面进入房间。`?game=ski` 或 `?dev=mario` 进入滑雪独立页，`?dev=shooter` 进入团团魔法录独立页。
+默认页面进入房间。`?dev=mario` 与 `?dev=shooter` 分别打开《潮汐小馆》和《团团魔法录》独立页面。旧 `?game=ski` 进入房间并自动选中《潮汐小馆》卡带。
 
 `npm test` 先执行类型检查与生产构建，再编译游戏引擎并发现 `src/` 内的全部 `*.test.mjs`。生产构建用于检查按需加载依赖图，引擎测试包生成在被 Git 忽略的 `src/games/shooter/survival/dist/`。功能测试与对应实现就近维护。

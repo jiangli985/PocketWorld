@@ -1,6 +1,8 @@
 import React, { Suspense, useEffect, useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
+import { useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
+import tavernMark from '../../../../assets/games/ski/tavern-mark.webp';
 import type { GameId } from '../../../types/game';
 import { SoftBox } from '../Primitives';
 import { AssetBoundary } from '../ReusableAsset';
@@ -48,6 +50,69 @@ function LoadedCartridge({ game }: { game: GameId }) {
   return <primitive object={model} name={`CartridgeModel_${game}`} dispose={null} />;
 }
 
+// Apply the new artwork to the existing cover, spine and rear label surfaces.
+function TideLabels() {
+  const mark = useLoader(THREE.TextureLoader, tavernMark);
+  const labels = useMemo(() => {
+    const createLabel = (width: number, height: number, paint: (context: CanvasRenderingContext2D) => void) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d')!;
+      context.imageSmoothingEnabled = false;
+      context.fillStyle = '#d8ac68';
+      context.fillRect(0, 0, width, height);
+      context.fillStyle = '#19383d';
+      context.fillRect(2, 2, width - 4, height - 4);
+      context.textAlign = 'center';
+      paint(context);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.magFilter = THREE.NearestFilter;
+      return texture;
+    };
+    return [
+      createLabel(128, 108, context => {
+        context.fillStyle = '#274e50';
+        context.fillRect(6, 6, 116, 72);
+        context.drawImage(mark.image, 28, 4, 72, 72);
+        context.fillStyle = '#ffe2a6';
+        context.font = 'bold 15px "Microsoft YaHei", sans-serif';
+        context.fillText('潮汐小馆', 64, 94);
+        context.fillRect(11, 88, 12, 2);
+        context.fillRect(105, 88, 12, 2);
+      }),
+      createLabel(128, 24, context => {
+        context.fillStyle = '#ffd897';
+        context.font = 'bold 13px monospace';
+        context.fillText('01 TIDE', 64, 17);
+      }),
+      createLabel(128, 80, context => {
+        context.fillStyle = '#ffd897';
+        context.font = 'bold 10px monospace';
+        context.fillText('POCKET WORLD', 64, 22);
+        context.fillText('CART-01 TIDE', 64, 43);
+        context.fillRect(28, 56, 72, 2);
+      }),
+    ] as const;
+  }, [mark]);
+  useEffect(() => () => labels.forEach(texture => texture.dispose()), [labels]);
+  return <group name="TideCartridgeLabels">
+    <mesh position={[0, 0.014, 0.0243]}>
+      <planeGeometry args={[0.156, 0.132]} />
+      <meshBasicMaterial map={labels[0]} toneMapped={false} />
+    </mesh>
+    <mesh position={[-0.007, 0.1268, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[0.144, 0.030]} />
+      <meshBasicMaterial map={labels[1]} toneMapped={false} />
+    </mesh>
+    <mesh position={[0, 0.016, -0.0233]} rotation={[0, Math.PI, 0]}>
+      <planeGeometry args={[0.128, 0.080]} />
+      <meshBasicMaterial map={labels[2]} toneMapped={false} />
+    </mesh>
+  </group>;
+}
+
 function CartridgeFallback({ game }: { game: GameId }) {
   const [shell, accent] = fallbackColors[game];
   return <group>
@@ -59,11 +124,14 @@ function CartridgeFallback({ game }: { game: GameId }) {
 
 export function GameCartridgeModel({ game }: { game: GameId }) {
   const fallback = <CartridgeFallback game={game} />;
-  return <AssetBoundary fallback={fallback}>
-    <Suspense fallback={fallback}>
-      <LoadedCartridge game={game} />
-    </Suspense>
-  </AssetBoundary>;
+  return <group>
+    <AssetBoundary fallback={fallback}>
+      <Suspense fallback={fallback}>
+        <LoadedCartridge game={game} />
+      </Suspense>
+    </AssetBoundary>
+    {game === 'mario' && <Suspense fallback={null}><TideLabels /></Suspense>}
+  </group>;
 }
 
 function LoadedCartridgeStand() {

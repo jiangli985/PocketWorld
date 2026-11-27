@@ -4,10 +4,11 @@
 
 ## 职责分布
 
-- `orbital/OrbitalScene.tsx` 组合镜头、灯光、舱室、家具、住民与交互表面。`orbital/cabinView.ts` 负责双层全景和楼层取景，`orbital/cabinStairs.ts` 与 `orbital/CabinStructure.tsx` 共用楼梯尺寸、踏步高度和层间走位。`orbital/stairGait.ts` 按楼梯进度采样上下楼动作，由 `orbital/residentRig.ts` 驱动肩、肘、腕，并将各套服装的脚底对齐踏面。「快速上楼」通过住民控制器清除当前行走目标，黑屏期间将人物移到二层平台并切换机位。
-- `orbital/HabitatShell.tsx` 载入两面实体舱壁、拼花地板和固定陈设；`orbital/SpacecraftHull.tsx` 与 `orbital/spacecraftFlight.ts` 负责轨道飞船外壳、开场推近运镜、长按加速绕地与时间倍速，以及 `orbit ↔ cabin` 剖面切入过渡；`orbital/Cosmos.tsx` 渲染完整 360° 宇宙星空、银河、太阳、地球与轨道微粒背景。初始构图与横竖屏取景由 `orbital/cabinView.ts` 计算。
+- `orbital/OrbitalScene.tsx` 组合镜头、灯光、舱室、家具、住民与交互表面。`orbital/cabinView.ts` 负责双层全景和楼层取景，`orbital/cabinStairs.ts` 与 `orbital/CabinStructure.tsx` 共用楼梯尺寸、踏步高度和层间走位。`orbital/stairGait.ts` 按楼梯进度采样上下楼动作，由 `orbital/residentRig.ts` 驱动肩、肘、腕，并将各套服装的脚底对齐踏面。跨层点击只把人物带到本层楼梯平台，站台附近的 `E · 上楼` / `E · 下楼` 提示由 `OrbitalResidents` 的附近交互统一处理，只有按 `E` 才进入楼梯走位。按 `R` 或点击快速上下楼按钮，通过住民控制器清除当前行走目标，在镜头移动期间将人物移到目标平台。近距离取景会渐隐另一层，拉远后恢复双层。进出舱使用同样的透明度过渡，让飞船外壳和室内随镜头交接。
+- `orbital/HabitatShell.tsx` 载入两面实体舱壁、拼花地板和固定陈设；`orbital/SpacecraftHull.tsx` 与 `orbital/spacecraftFlight.ts` 负责轨道飞船外壳（含舱外迎光/地照菲涅尔轮廓边缘光）、开场推近运镜、长按加速绕地与时间倍速，以及 `orbit ↔ cabin` 剖面切入过渡；`orbital/Cosmos.tsx` 在舱外巡航与生活舱室内统一渲染高反差 360° 宇宙星空、银河、光学衍射星芒太阳、程序化环形山月球、高精细近地轨道地球（分形海岸线、珊瑚浅滩、山脉峡谷、科里奥利气旋云系与瑞利大气透视）与轨道微粒背景。初始构图与横竖屏取景由 `orbital/cabinView.ts` 与 `orbital/spacecraftFlight.ts` 计算。
 - `orbital/useWorldController.ts` 管理世界状态、动作适配器和转场生命周期。
-- `orbital/wardrobe/` 管理住民装扮选择和模型资源。点击高衣柜或在近处按提示键会走近并拉开柜门。选装页展示三套实装缩略图，确认后黑屏直到新骨骼挂载，接着播放原地检视。[模型与坐姿修形](../../assets/models/resident/README.md)
+- `orbital/OrbitalScene.tsx` 控制场景首次挂载和家具、设备、玩偶、猫的加载批次。舱外巡航的预取与入舱共用舱体加载缓存。服装 GLB 和座椅接触缓存分别由 `orbital/wardrobe/residentAssets.ts` 管理。启动顺序见 [SPEC.md](../../SPEC.md#4-轻量化与资源约定)。
+- `orbital/wardrobe/` 管理住民装扮选择和模型资源。点击高衣柜或在近处按提示键会走近并拉开柜门。衣柜按「日常装」「蝴蝶结外套」「丁香针织开衫」的顺序显示缩略图和穿着状态，确认试穿后保存选择。旧装扮标识回退到日常装。[模型与坐姿修形](../../assets/models/resident/README.md)
 - `orbital/journal/` 管理实体翻页、纸面编辑、逐页日期和天气、存档及迁移。
 - `orbital/library/` 管理书柜存档、文本导入、实体书和取还书动作。
 - `orbital/schedule/` 管理日程迁移、同步、纸页、贴纸、纸团和相关测试。
@@ -34,7 +35,7 @@
 
 ## 舱体模型
 
-[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，浅橡木拼花贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出脚本切分拼花地板和固定陈设，将全景窗收进一层后墙，在一层书桌椅下方生成带编织棉纹理与流苏边的复古牛仔蓝平织地毯（并入 `Rugs` 以支持地面点击行走），并在二层右侧生成带复古灰绿墙裙和浅木框舷窗的整面侧墙。衣柜单独导出为 `Interactable_Wardrobe`，沿这面墙安装。上下两层共用同一套楼板底座与拼花木地板网格，通过高度差堆叠，并与左侧楼梯平台衔接。衣柜门框内沿在柜门关闭时挡住柜内视线。楼梯、开放平台和栏杆由运行时几何生成。
+[可编辑 Blender 场景](../../assets/models/cabin/open-cabin.blend) 按舱壁、拼花地板、收纳、墙饰、书柜上架和编织物分组，浅橡木拼花贴图以及拖鞋的绒面颜色和法线贴图均已打包在文件中。在仓库根目录运行以下命令可重新生成 [运行时模型](../../assets/public/models/cabin/open-cabin.glb)。导出脚本切分拼花地板和固定陈设，将全景窗收进一层后墙，在一层书桌椅下方生成带编织棉纹理与流苏边的复古牛仔蓝平织地毯（并入 `Rugs` 以支持地面点击行走），并在二层右侧生成带复古灰绿墙裙和浅木框舷窗的整面侧墙。衣柜单独导出为 `Interactable_Wardrobe`，沿这面墙安装。导出脚本也生成后墙挂架和两件自然垂挂的衣服，为开衫烘入一张 128 × 128 针织法线贴图，再并入 `Duplex_UpperShell`。上下两层共用同一套楼板底座与拼花木地板网格，通过高度差堆叠，并与左侧楼梯平台衔接。衣柜门框内沿在柜门关闭时挡住柜内视线。楼梯、开放平台和栏杆由运行时几何生成。
 
 ```sh
 blender --background assets/models/cabin/open-cabin.blend --python scripts/export-open-cabin.py
@@ -64,7 +65,7 @@ blender --background --factory-startup --python scripts/build-trash-can.py
 blender --background --factory-startup --python scripts/build-vinyl-rack.py
 ```
 
-电脑右侧的复古游戏卡带套件（[奶娃滑雪大冒险卡带](../../assets/models/furniture/cartridge-mario.blend)、[团团魔法录卡带](../../assets/models/furniture/cartridge-shooter.blend)、[双槽斜倾胡桃木展示架](../../assets/models/furniture/cartridge-stand.blend)与[奶油胡桃木卡带扩展坞](../../assets/models/furniture/cartridge-dock.blend)）由 `scripts/build-game-cartridges.py` 程序化生成并打包 16-bit 像素封绘与 PBR 贴图，在仓库根目录运行以下命令可一次重建全部 `.blend` 并导出 `assets/public/models/furniture/cartridge-*.glb`。
+电脑右侧的复古游戏卡带套件（[潮汐小馆卡带](../../assets/models/furniture/cartridge-mario.blend)、[团团魔法录卡带](../../assets/models/furniture/cartridge-shooter.blend)、[双槽斜倾胡桃木展示架](../../assets/models/furniture/cartridge-stand.blend)与[奶油胡桃木卡带扩展坞](../../assets/models/furniture/cartridge-dock.blend)）由 `scripts/build-game-cartridges.py` 程序化生成并打包 16-bit 像素封绘与 PBR 贴图，在仓库根目录运行以下命令可一次重建全部 `.blend` 并导出 `assets/public/models/furniture/cartridge-*.glb`。
 
 ```sh
 blender --background --factory-startup --python scripts/build-game-cartridges.py

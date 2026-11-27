@@ -200,8 +200,8 @@ test('ordinary idle visibly moves head and hands while preserving planted feet',
   } finally { rig.dispose(); }
 });
 
-test('云朵连帽衫的两个待机动作均可绑定，并驱动两侧手腕', async () => {
-  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-cloudhoodie.glb', import.meta.url));
+test('丁香针织开衫的两个待机动作均可绑定，并驱动两侧手腕', async () => {
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-cardigan.glb', import.meta.url));
   const fitted = [clip, lookClip].map(original => {
     const motion = gltf.animations.find(animation => animation.name === original.name);
     assert.ok(motion, original.name);
@@ -229,20 +229,20 @@ test('云朵连帽衫的两个待机动作均可绑定，并驱动两侧手腕',
   }
 });
 
-test('云朵装两侧 Shape Keys 随各自的手臂受压和回弹', async () => {
+test('针织开衫两侧 Shape Keys 随各自的手臂受压和回弹', async () => {
   const { createSleeveContact } = compile('./wardrobe/sleeveContact.ts');
-  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-cloudhoodie.glb', import.meta.url));
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-cardigan.glb', import.meta.url));
   const rig = createResidentRig(gltf.scene, gltf.animations.find(a => a.name === 'Walk_Grounded_Loop'), true);
   try {
     const update = createSleeveContact(gltf.scene);
     const cloth = gltf.scene.getObjectByProperty('isSkinnedMesh', true);
     const left = cloth.morphTargetDictionary.SleeveContact_L, right = cloth.morphTargetDictionary.SleeveContact_R;
     const offsets = cloth.geometry.morphAttributes.position;
-    assert.ok(offsets[left].array.some(value => value < -.01));
-    assert.ok(offsets[right].array.some(value => value > .01));
+    assert.ok(offsets[left].array.some(value => value < -.005));
+    assert.ok(offsets[right].array.some(value => value > .005));
     rig.applyPose(0, 0);
     update();
-    assert.deepEqual([cloth.morphTargetInfluences[left], cloth.morphTargetInfluences[right]], [1, 1]);
+    assert.deepEqual([cloth.morphTargetInfluences[left], cloth.morphTargetInfluences[right]], [0, 0]);
     const yawn = gltf.animations.find(a => a.name === 'Luna_Yawn');
     const gesture = createIdlePlayer(rig.mesh, yawn);
     const state = createIdleState(random);
@@ -260,12 +260,12 @@ test('云朵装两侧 Shape Keys 随各自的手臂受压和回弹', async () =>
     assert.ok(asymmetric && intermediate);
     rig.applyPose(0, 0);
     update();
-    assert.deepEqual([cloth.morphTargetInfluences[left], cloth.morphTargetInfluences[right]], [1, 1]);
+    assert.deepEqual([cloth.morphTargetInfluences[left], cloth.morphTargetInfluences[right]], [0, 0]);
   } finally { rig.dispose(); }
 });
 
-test('云朵装贴臂时两只袖筒在肘部上下都保有宽度和厚度', async () => {
-  const path = new URL('../../../assets/public/models/resident/luna-cloudhoodie.glb', import.meta.url);
+test('针织开衫自然站立时两只袖筒在肘部上下都保有宽度和厚度', async () => {
+  const path = new URL('../../../assets/public/models/resident/luna-cardigan.glb', import.meta.url);
   const { gltf } = await load(path);
   const rig = createResidentRig(gltf.scene, gltf.animations.find(a => a.name === 'Walk_Grounded_Loop'), true);
   try {
@@ -300,17 +300,37 @@ test('云朵装贴臂时两只袖筒在肘部上下都保有宽度和厚度', as
   } finally { rig.dispose(); }
 });
 
-test('云朵装站定和呼吸时双臂垂在身侧，腰与两袖的正面轮廓连续', async () => {
-  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-cloudhoodie.glb', import.meta.url));
+test('针织开衫站立和呼吸时两侧袖口与衣身留有空隙', async () => {
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-cardigan.glb', import.meta.url));
   const rig = createResidentRig(gltf.scene, gltf.animations.find(a => a.name === 'Walk_Grounded_Loop'), true);
   try {
-    rig.mesh.userData.outfit = 'cloudhoodie';
+    rig.mesh.userData.outfit = 'cardigan';
     const idle = createIdlePlayer(rig.mesh);
     const updateCloth = compile('./wardrobe/sleeveContact.ts').createSleeveContact(gltf.scene);
     const mesh = gltf.scene.getObjectByProperty('isSkinnedMesh', true);
-    const { geometry, skeleton } = mesh;
-    const indices = geometry.index.array;
-    const points = Array.from({ length: geometry.attributes.position.count }, () => new THREE.Vector3());
+    const { index, attributes } = mesh.geometry;
+    const points = Array.from({ length: attributes.position.count }, () => new THREE.Vector3());
+    const groups = { Left: [], Right: [], body: [] };
+    for (let i = 0; i < index.count; i += 3) {
+      const ids = [index.getX(i), index.getX(i + 1), index.getX(i + 2)];
+      const names = ids.map(id => mesh.skeleton.bones[attributes.skinIndex.getX(id)].name);
+      for (const side of ['Left', 'Right']) {
+        if (names.every(name => name.includes(side) && /Arm|Hand/.test(name))) groups[side].push(ids);
+      }
+      if (names.every(name => /Hips|Spine|UpLeg|Dress/.test(name))) groups.body.push(ids);
+    }
+    function edge(triangles, y, sign, nearest) {
+      let boundary = nearest ? Infinity : -Infinity;
+      for (const ids of triangles) {
+        for (let k = 0; k < 3; k++) {
+          const a = points[ids[k]], b = points[ids[(k + 1) % 3]];
+          if ((a.y > y) === (b.y > y)) continue;
+          const x = sign * THREE.MathUtils.lerp(a.x, b.x, (y - a.y) / (b.y - a.y));
+          boundary = nearest ? Math.min(boundary, x) : Math.max(boundary, x);
+        }
+      }
+      return boundary;
+    }
     const state = createIdleState(random);
     for (const phase of [0, 2.25, 4.5, 6.75]) {
       rig.applyPose(0, 0);
@@ -319,37 +339,105 @@ test('云朵装站定和呼吸时双臂垂在身侧，腰与两袖的正面轮�
       idle(state);
       updateCloth();
       rig.mesh.updateMatrixWorld(true);
-      const joint = name => mesh.worldToLocal(skeleton.getBoneByName('mixamorig' + name).getWorldPosition(new THREE.Vector3()));
+      points.forEach((point, id) => mesh.getVertexPosition(id, point));
       for (const side of ['Left', 'Right']) {
-        const shoulder = joint(side + 'Arm'), elbow = joint(side + 'ForeArm'), wrist = joint(side + 'Hand');
-        for (const end of [elbow, wrist]) {
-          const slope = Math.abs(end.x - shoulder.x) / (shoulder.y - end.y);
-          assert.ok(slope < Math.tan(6 * Math.PI / 180), side + ' arm flares outward');
-        }
-      }
-      points.forEach((v, i) => mesh.getVertexPosition(i, v));
-      const elbow = joint('LeftForeArm'), wrist = joint('LeftHand');
-      for (const fraction of [.24, .4, .55, .7, .85, 1]) {
-        const y = THREE.MathUtils.lerp(wrist.y, elbow.y, fraction);
-        const intervals = [];
-        for (let i = 0; i < indices.length; i += 3) {
-          const a = points[indices[i]], b = points[indices[i + 1]], c = points[indices[i + 2]];
-          if (y < Math.min(a.y, b.y, c.y) || y >= Math.max(a.y, b.y, c.y)) continue;
-          const xs = [];
-          for (const [p, q] of [[a, b], [b, c], [c, a]]) {
-            if ((p.y > y) !== (q.y > y)) xs.push(THREE.MathUtils.lerp(p.x, q.x, (y - p.y) / (q.y - p.y)));
-          }
-          if (xs.length === 2) intervals.push([Math.min(...xs), Math.max(...xs)]);
-        }
-        intervals.sort((a, b) => a[0] - b[0]);
-        assert.ok(intervals.length > 0);
-        let edge = intervals[0][1];
-        for (const [start, end] of intervals) {
-          assert.ok(start - edge < .002, '腰侧透光 ' + JSON.stringify({ phase, fraction, gap: start - edge }));
-          edge = Math.max(edge, end);
+        const sign = side === 'Left' ? 1 : -1;
+        const joint = name => mesh.worldToLocal(mesh.skeleton.getBoneByName('mixamorig' + side + name)
+          .getWorldPosition(new THREE.Vector3()));
+        const shoulder = joint('Arm'), elbow = joint('ForeArm'), wrist = joint('Hand');
+        const spread = THREE.MathUtils.radToDeg(Math.atan2(Math.abs(elbow.x - shoulder.x), shoulder.y - elbow.y));
+        assert.ok(spread > 12 && spread < 21.5, side + ' upper arm angle ' + spread);
+        for (const fraction of [.75, .9]) {
+          const y = THREE.MathUtils.lerp(elbow.y, wrist.y, fraction);
+          const gap = edge(groups[side], y, sign, true) - edge(groups.body, y, sign, false);
+          assert.ok(gap > .004 && gap < .04, JSON.stringify({ side, phase, fraction, gap }));
         }
       }
     }
+  } finally { rig.dispose(); }
+});
+
+test('开衫领口和袖山在垂臂、摆臂与抬手时保持布面宽度', async () => {
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-cardigan.glb', import.meta.url));
+  const clip = name => gltf.animations.find(c => c.name === name);
+  const rig = createResidentRig(gltf.scene, clip('Walk_Grounded_Loop'), true);
+  const mesh = gltf.scene.getObjectByProperty('isSkinnedMesh', true);
+  const mixer = new THREE.AnimationMixer(gltf.scene);
+  try {
+    const { index, attributes } = mesh.geometry;
+    const bind = Array.from({ length: attributes.position.count }, (_, i) =>
+      new THREE.Vector3().fromBufferAttribute(attributes.position, i));
+    const center = new THREE.Vector3(), triangle = new THREE.Triangle();
+    const panels = [[], []];
+    for (let i = 0; i < index.count; i += 3) {
+      const ids = [index.getX(i), index.getX(i + 1), index.getX(i + 2)];
+      if (ids.some(id => /Hair|Head/.test(mesh.skeleton.bones[attributes.skinIndex.getX(id)].name))) continue;
+      triangle.set(...ids.map(id => bind[id])).getMidpoint(center);
+      const x = Math.abs(center.x);
+      if (x > .038 && x < .09 && center.y > .70 && center.y < .76 && center.z > .025) {
+        panels[Number(center.x > 0)].push({ ids, area: triangle.getArea() });
+      }
+    }
+    for (const panel of panels) assert.ok(panel.length > 50);
+    const vertexIds = new Set(panels.flat().flatMap(({ ids }) => ids));
+    const positions = new Map([...vertexIds].map(id => [id, new THREE.Vector3()]));
+    for (const [pose, time] of [['stand', 0], ['walk', 0], ['walk', .25], ['walk', .5], ['walk', .75],
+      ['Library_Pickup_2', 1.8], ['Luna_Yawn', 3.4]]) {
+      mixer.stopAllAction();
+      rig.applyPose(time, Number(pose === 'walk'));
+      const gesture = clip(pose);
+      if (pose !== 'stand' && pose !== 'walk') assert.ok(gesture, pose);
+      if (gesture) { mixer.clipAction(gesture).reset().play(); mixer.setTime(time); }
+      rig.mesh.updateMatrixWorld(true);
+      for (const [id, point] of positions) mesh.getVertexPosition(id, point);
+      for (const panel of panels) {
+        const ratios = panel.map(({ ids, area }) =>
+          triangle.set(...ids.map(id => positions.get(id))).getArea() / area).sort((a, b) => a - b);
+        const nearMinimum = ratios[Math.floor(ratios.length * .01)];
+        assert.ok(nearMinimum > (gesture ? .20 : .42), pose + ' collar compression ' + nearMinimum);
+      }
+    }
+  } finally { mixer.stopAllAction(); rig.dispose(); }
+});
+
+test('针织开衫后摆中央在完整步态中连续变形', async () => {
+  const { gltf } = await load(new URL('../../../assets/public/models/resident/luna-cardigan.glb', import.meta.url));
+  const rig = createResidentRig(gltf.scene, gltf.animations.find(a => a.name === 'Walk_Grounded_Loop'), true);
+  try {
+    const mesh = gltf.scene.getObjectByProperty('isSkinnedMesh', true);
+    const { position } = mesh.geometry.attributes;
+    const index = mesh.geometry.index;
+    const vertices = Array.from({ length: position.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(position, i));
+    // Follow five points across the visible back rib, including points between mesh vertices.
+    const band = [-.036, -.018, 0, .018, .036].map(x => {
+      const ray = new THREE.Ray(new THREE.Vector3(x, .487, -1), new THREE.Vector3(0, 0, 1));
+      const hit = new THREE.Vector3();
+      let anchor;
+      for (let i = 0; i < index.count; i += 3) {
+        const ids = [index.getX(i), index.getX(i + 1), index.getX(i + 2)];
+        const [a, b, c] = ids.map(id => vertices[id]);
+        if (!ray.intersectTriangle(a, b, c, false, hit) || (anchor && hit.z >= anchor.rest.z)) continue;
+        anchor = { ids, rest: hit.clone(), weights: THREE.Triangle.getBarycoord(hit, a, b, c, new THREE.Vector3()).toArray() };
+      }
+      assert.ok(anchor && anchor.rest.z < 0);
+      return anchor;
+    });
+    const point = new THREE.Vector3();
+    let largestBend = 0;
+    for (let frame = 0; frame <= 24; frame++) {
+      rig.applyPose(frame / 24, 1);
+      rig.mesh.updateMatrixWorld(true);
+      const displacement = band.map(({ ids, weights, rest }) => {
+        const delta = rest.clone().negate();
+        ids.forEach((id, i) => delta.addScaledVector(mesh.getVertexPosition(id, point), weights[i]));
+        return delta;
+      });
+      for (let i = 1; i < displacement.length - 1; i++) {
+        const localBend = displacement[i - 1].clone().lerp(displacement[i + 1], .5).sub(displacement[i]);
+        largestBend = Math.max(largestBend, Math.hypot(localBend.y, localBend.z));
+      }
+    }
+    assert.ok(largestBend < .002, '后摆中央折差 ' + largestBend);
   } finally { rig.dispose(); }
 });
 

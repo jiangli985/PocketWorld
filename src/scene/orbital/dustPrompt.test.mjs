@@ -15,7 +15,11 @@ vm.runInNewContext(
 const {
   MAX_DUST_PARTICLES,
   createDustPromptState,
+  stepDustKeycapProgress,
+  dustPromptCoreProgress,
   decimatePoints,
+  formatPromptText,
+  layoutPromptShortcuts,
   splitPromptLines,
   setDustTargets,
   stepDustPrompt,
@@ -43,6 +47,47 @@ test('splitPromptLines wraps long hints cleanly at separator boundaries', () => 
   const lines = splitPromptLines('点击书页书写 · ← / → 翻页 · 自动保存 · Esc 返回', measure, 200);
   assert.equal(lines.length, 2);
   assert.ok(lines[0].length > 0 && lines[1].length > 0);
+});
+
+test('nearby shortcuts wrap between actions and keep the key paired with its label', () => {
+  const text = 'E · 查看藏书　Q · 打开柜门　T · 和团子互动';
+  const measure = value => value.length * 10;
+  const rows = width => Array.from(layoutPromptShortcuts(text, measure, width), row =>
+    Array.from(row, ({ keycaps, label }) => [keycaps[0].key, label]));
+  const actions = [['E', '查看藏书'], ['Q', '打开柜门'], ['T', '和团子互动']];
+  assert.deepEqual(rows(260), [actions]);
+  assert.deepEqual(rows(165), [actions.slice(0, 2), actions.slice(2)]);
+  assert.deepEqual(rows(110), actions.map(action => [action]));
+});
+
+test('plain flight and focused-object status text stays on its original path', () => {
+  const measure = value => value.length * 10;
+  for (const text of ['长按空格加速绕地 · 按 E 或点击飞船进入舱室', '点击书页书写 · Esc 返回', '请靠近书柜']) {
+    assert.equal(layoutPromptShortcuts(text, measure, 260).length, 0);
+  }
+});
+
+test('focused prompts keep both arrows together and give wide keys room', () => {
+  const entries = [
+    { label: '翻页', keys: ['←', '→'] },
+    { label: '撕下这页', keys: ['X'] },
+    { label: '切换视角', keys: ['V'] },
+    { label: '返回', keys: ['Esc'] },
+  ];
+  const rows = layoutPromptShortcuts(entries, value => value.length * 15, 180);
+  assert.equal(rows.length, 3);
+  assert.deepEqual(Array.from(rows[0][0].keycaps, ({ key, width }) => [key, width]), [['←', 23], ['→', 23]]);
+  assert.equal(rows[2][1].keycaps[0].key, 'Esc');
+  assert.ok(rows[2][1].keycaps[0].width > 23);
+  assert.equal(formatPromptText(entries), '翻页 ← / → · 撕下这页 X · 切换视角 V · 返回 Esc');
+});
+
+test('mixed instructions preserve unbound text and Space fits in one keycap', () => {
+  const entries = [{ label: '点击书页书写' }, { label: '长按加速', keys: ['Space'] }];
+  const [row] = layoutPromptShortcuts(entries, value => value.length * 10, 250);
+  assert.equal(row[0].keycaps.length, 0);
+  assert.ok(row[1].keycaps[0].width >= 40);
+  assert.equal(formatPromptText(entries), '点击书页书写 · 长按加速 Space');
 });
 
 test('particles converge onto glyph targets and disperse away when cleared', () => {
@@ -102,6 +147,67 @@ test('retargeting reuses active particles and disperses surplus', () => {
   for (let i = 0; i < 90; i++) stepDustPrompt(state, 1 / 60, false);
   assert.equal(state.particles.length, 4);
   assert.ok(state.particles.every(p => p.mode === 'converge'));
+});
+
+test('reused particles take the keycap or text style of their new target', () => {
+  const state = createDustPromptState();
+  setDustTargets(state, '查看藏书', [{ x: 280, y: 32 }, { x: 310, y: 32, keycap: true }], 300, 34);
+  assert.equal(state.particles[1].keycap, true);
+  setDustTargets(state, '打开日记', [{ x: 315, y: 32, keycap: true }, { x: 280, y: 32 }], 300, 34);
+  assert.equal(state.particles[0].keycap, true);
+  assert.equal(state.particles[1].keycap, undefined);
+});
+
+test('keycaps follow the text settling and fade through the dispersal frames', () => {
+  const state = createDustPromptState();
+  const rng = makeRng(17);
+  const points = [{ x: 280, y: 30 }, { x: 305, y: 36 }, { x: 320, y: 34 }];
+  setDustTargets(state, 'E · 查看藏书', points, 300, 34, false, rng);
+  let opacity = stepDustKeycapProgress(0, state.settleProgress, true, 1 / 60, false);
+  assert.equal(opacity, 0);
+  let fadingIn = false;
+  for (let i = 0; i < 100; i++) {
+    stepDustPrompt(state, 1 / 60);
+    opacity = stepDustKeycapProgress(opacity, state.settleProgress, true, 1 / 60, false);
+    fadingIn ||= opacity > 0.1 && opacity < 0.9;
+  }
+  assert.ok(fadingIn);
+  assert.ok(opacity > 0.99);
+
+  setDustTargets(state, '', [], 300, 34, false, rng);
+  stepDustPrompt(state, 1 / 60);
+  opacity = stepDustKeycapProgress(opacity, state.settleProgress, false, 1 / 60, false);
+  assert.ok(opacity > 0 && opacity < 0.99);
+  for (let i = 0; i < 12; i++) {
+    stepDustPrompt(state, 1 / 60);
+    opacity = stepDustKeycapProgress(opacity, state.settleProgress, false, 1 / 60, false);
+  }
+  assert.equal(opacity, 0);
+  assert.ok(state.particles.some(particle => particle.mode === 'disperse'));
+});
+
+test('new actions settle from zero and reduced motion settles both in one step', () => {
+  const state = createDustPromptState();
+  const first = [{ x: 280, y: 32 }];
+  setDustTargets(state, 'E · 使用唱机', first, 300, 34, true);
+  stepDustPrompt(state, 1 / 60, true);
+  assert.equal(stepDustKeycapProgress(0, state.settleProgress, true, 1 / 60, true), 1);
+  setDustTargets(state, 'E · 打开日记', [{ x: 325, y: 36 }], 300, 34);
+  assert.equal(state.settleProgress, 0);
+  assert.equal(stepDustKeycapProgress(1, state.settleProgress, true, 1 / 60, false), 0);
+});
+
+test('the solid parts of the prompt wait for the dust and fade on the same curve', () => {
+  assert.equal(dustPromptCoreProgress(0), 0);
+  assert.equal(dustPromptCoreProgress(.4), 0);
+  assert.ok(dustPromptCoreProgress(.4375) > 0 && dustPromptCoreProgress(.4375) < .02);
+  assert.ok(Math.abs(dustPromptCoreProgress(.675) - .5) < .0001);
+  assert.ok(dustPromptCoreProgress(.9125) > .98 && dustPromptCoreProgress(.9125) < 1);
+  assert.equal(dustPromptCoreProgress(.95), 1);
+  assert.equal(dustPromptCoreProgress(1), 1);
+  const departing = stepDustKeycapProgress(1, 0, false, .05, false);
+  assert.ok(dustPromptCoreProgress(departing) > .5 && dustPromptCoreProgress(departing) < 1);
+  assert.equal(dustPromptCoreProgress(stepDustKeycapProgress(departing, 0, false, .05, false)), 0);
 });
 
 test('reducedMotion settles immediately and clears cleanly', () => {

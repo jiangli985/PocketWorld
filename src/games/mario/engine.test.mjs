@@ -1,557 +1,562 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createRun, frontGap, stepRun, terrainAngle, terrainY } from './engine.ts';
-import { emptyInput, TRAILS } from './model.ts';
-import { playerBody, skiContacts } from './character.ts';
+import { FISH_CATALOG, RECIPE_CATALOG, ROD_CATALOG } from './catalog.ts';
+import { createFishingGame } from './engine.ts';
 
-
-const DT = 1 / 120;
-function tick(state, input = {}, count = 1) {
-  const events = [];
-  for (let i = 0; i < count; i++) {
-    stepRun(state, { ...emptyInput(), ...input, jumpPressed: i === 0 && !!input.jumpPressed }, DT);
-    events.push(...state.events);
-  }
-  return events;
-}
-function clearRun(trail = 'valley') {
-  const state = createRun(trail);
-  state.features = [];
-  state.nextSegment = 1e6;
-  state.chasers = [];
-  return state;
-}
-function addFeature(state, kind, x = state.player.x, width = 44) {
-  state.features.push({ id: state.nextId++, kind, x, width, y: terrainY(x + width / 2, state.trail), used: false });
-}
-function airborne(state, height, vy = 0) {
-  const p = state.player;
-  p.grounded = false;
-  p.coyote = 0;
-  p.y = terrainY(p.x, state.trail) - height;
-  p.vy = vy;
+function seed(value) {
+  return () => ((value = (Math.imul(value, 1664525) + 1013904223) >>> 0) / 2 ** 32);
 }
 
-test('three trails start at x=200 with feet on a continuous, bounded slope', () => {
-  for (const { id } of TRAILS) {
-    const state = createRun(id);
-    assert.equal(state.player.x, 200);
-    assert.equal(state.player.y, terrainY(200, id));
-    assert.equal(state.player.angle, terrainAngle(200, id));
-    assert.equal(state.distance, 0);
-    assert.equal(state.chasers.length, 8);
-    const left = Math.min(...playerBody(state.player).map(circle => circle.x - circle.radius));
-    assert.equal(frontGap(state), left - state.chasers[0].x - 14);
-    assert.ok(!state.features.some(f => f.kind === 'gap' || f.kind === 'branch'));
-    for (let x = -500; x < 20000; x += 71) {
-      assert.ok(terrainY(x, id) > 375 && terrainY(x, id) < 465);
-      const derivative = (terrainY(x + 0.01, id) - terrainY(x - 0.01, id)) / 0.02;
-      assert.ok(Math.abs(Math.tan(terrainAngle(x, id)) - derivative) < 1e-8);
-    }
+function progress(fishCounts = {}, overrides = {}) {
+  return {
+    version: 2, coins: 0, rodLevel: 1,
+    fishCounts: Object.fromEntries(FISH_CATALOG.map(({ id }) => [id, fishCounts[id] ?? 0])),
+    discoveredFishIds: Object.keys(fishCounts), orders: [], ...overrides,
+  };
+}
+
+function play(options) {
+  const game = createFishingGame({ random: () => 0, ...options });
+  assert.equal(game.startTrip().ok, true);
+  return game;
+}
+
+const sold = (fishId, recipeId, price, score, highScore = score) =>
+  ({ type: 'order-sold', fishId, recipeId, price, score, highScore });
+const caught = (fishId, firstDiscovery) => ({ type: 'fish-caught', fishId, firstDiscovery });
+const rejected = (reason) => ({ ok: false, reason });
+
+test('batch cooking reserves all ingredients, slots and proceeds before queuing portions', () => {
+  const game = play({ progress: progress({ sardine: 3 }) });
+  const before = game.getProgress();
+  assert.deepEqual(game.queueOrder('sardine', 'grilled', 1.5), rejected('invalid-quantity'));
+  assert.deepEqual(game.queueOrder('sardine', 'grilled', 4), rejected('queue-full'));
+  assert.deepEqual(game.queueOrder('sardine', 'steamed', 2), rejected('ineligible-fish'));
+  assert.deepEqual(game.getProgress(), before);
+
+  const nearLimit = play({ progress: progress({ sardine: 2 }, { coins: Number.MAX_SAFE_INTEGER - 6 }) });
+  assert.deepEqual(nearLimit.queueOrder('sardine', 'grilled', 2), rejected('balance-limit'));
+  assert.equal(nearLimit.getSnapshot().fishCount, 2);
+
+  assert.deepEqual(game.queueOrder('sardine', 'grilled', 2), {
+    ok: true, events: [{ type: 'order-queued', fishId: 'sardine', recipeId: 'grilled', quantity: 2 }],
+  });
+  assert.equal(game.getSnapshot().fishCount, 1);
+  assert.deepEqual(game.queueOrder('sardine', 'basic', 2), rejected('queue-full'));
+  assert.deepEqual(game.advance(5_000, false), [sold('sardine', 'grilled', 6, 6)]);
+  assert.deepEqual(game.queueOrder('sardine', 'basic', 2), rejected('no-fish'));
+  assert.deepEqual(game.advance(5_000, false), [{
+    ...sold('sardine', 'grilled', 6, 20), guest: { name: '修船的陈师傅', bonus: 8 },
+  }]);
+  assert.equal(game.getProgress().coins, 20);
+});
+
+test('guest orders advance only on matching completed dishes and respect paused sales', () => {
+  const game = play({ progress: progress({ sardine: 3, 'sea-bass': 1, mackerel: 1, snapper: 1 }) });
+  const ticket = () => {
+    const { guestIndex, guestPortions } = game.getSnapshot();
+    return [guestIndex, guestPortions];
+  };
+  game.queueOrder('sardine', 'basic');
+  game.queueOrder('sardine', 'grilled', 2);
+  assert.deepEqual(ticket(), [0, 0]);
+  game.advance(9_000, false);
+  assert.deepEqual(ticket(), [0, 1]);
+  game.pause();
+  assert.deepEqual(game.advance(5_000, false), []);
+  assert.deepEqual(ticket(), [0, 1]);
+  game.resume();
+  const [second] = game.advance(5_000, false);
+  assert.equal(second.guest.bonus, 8);
+  assert.deepEqual(ticket(), [1, 0]);
+  for (const [fish, recipe, bonus] of [
+    ['sea-bass', 'gingerSeaBass', 7], ['mackerel', 'misoMackerel', 9], ['snapper', 'steamedSnapper', 15],
+  ]) {
+    assert.equal(game.queueOrder(fish, recipe).ok, true);
+    assert.equal(game.advance(RECIPE_CATALOG[recipe].durationMs, false)[0].guest.bonus, bonus);
   }
+  assert.deepEqual(ticket(), [4, 0]);
+  assert.equal(game.getProgress().coins, 94);
+  game.finishTrip();
+  game.returnHome();
+  game.startTrip();
+  assert.deepEqual(ticket(), [0, 0]);
 });
 
-test('events are per call; zero, invalid dt, and ended runs freeze simulation', () => {
-  const state = clearRun();
-  state.events.push('coin');
-  stepRun(state, emptyInput(), 0);
-  assert.deepEqual(state.events, []);
-  const snapshot = structuredClone(state);
-  for (const dt of [-1, NaN, Infinity]) stepRun(state, emptyInput(), dt);
-  assert.deepEqual(state, snapshot);
-  state.over = true;
-  const ended = structuredClone(state);
-  tick(state, { jumpPressed: true }, 30);
-  assert.deepEqual(state, ended);
+test('guest tips cannot spend balance reserved for another pending order', () => {
+  const game = play({ progress: progress({ sardine: 3 }, { coins: Number.MAX_SAFE_INTEGER - 18 }) });
+  game.queueOrder('sardine', 'grilled', 2);
+  game.queueOrder('sardine', 'basic');
+  const sales = game.advance(14_000, false);
+  assert.equal(sales[1].guest.bonus, 1);
+  assert.equal(game.getProgress().coins, Number.MAX_SAFE_INTEGER);
+  assert.equal(game.getProgress().orders.length, 0);
 });
 
-test('holding jump gives more height than tapping, and flip starts once per flight', () => {
-  const tap = clearRun();
-  const hold = clearRun();
-  tick(tap, { jump: true, jumpPressed: true });
-  tick(hold, { jump: true, jumpPressed: true });
-  const events = tick(hold, { jump: true }, 55);
-  tick(tap, {}, 55);
-  assert.ok(hold.player.y < tap.player.y - 25);
-  assert.equal(events.filter(e => e === 'flip').length, 1);
-  assert.equal(hold.flips, 0);
-  assert.equal(hold.bonus, 0);
+test('two-fish dishes multiply ingredients per portion and pay per finished dish', () => {
+  const game = play({ progress: progress({ squid: 3, sardine: 4 }) });
+  const before = game.getProgress();
+  assert.deepEqual(game.queueOrder('sardine', 'squidSkewers', 1), rejected('ineligible-fish'));
+  assert.deepEqual(game.queueOrder('squid', 'squidSkewers', 2), rejected('no-fish'));
+  assert.deepEqual(game.getProgress(), before);
+  assert.equal(game.queueOrder('sardine', 'sardineRoll', 2).ok, true);
+  assert.equal(game.getProgress().fishCounts.sardine, 0);
+  assert.equal(game.queueOrder('squid', 'squidSkewers', 1).ok, true);
+  assert.equal(game.getProgress().fishCounts.squid, 1);
+  assert.deepEqual(game.advance(6_999, false), []);
+  assert.deepEqual(game.advance(7_001, false), [sold('sardine', 'sardineRoll', 12, 12), sold('sardine', 'sardineRoll', 12, 24)]);
+  assert.deepEqual(game.advance(12_000, false), [sold('squid', 'squidSkewers', 30, 54)]);
 });
 
-test('release assists upright landing and only landing banks completed rotations', () => {
-  const state = clearRun();
-  airborne(state, 210, -150);
-  const events = tick(state, { jump: true }, 125);
-  assert.equal(events.filter(e => e === 'flip').length, 1);
-  assert.equal(state.flips, 0);
-  assert.ok(Math.abs(state.player.rotation) >= Math.PI * 2);
-  const landing = tick(state, {}, 180);
-  assert.ok(landing.includes('land'));
-  assert.ok(!landing.includes('crash'));
-  assert.equal(state.flips, 1);
-  assert.equal(state.bonus, 120);
-  assert.equal(state.combo, 1);
-  assert.ok(state.player.grounded);
-});
-
-test('a natural ground jump has enough airtime for one banked backflip', () => {
-  const state = clearRun();
-  let released = false;
-  const events = [];
-  for (let i = 0; i < 240; i++) {
-    if (Math.abs(state.player.rotation) >= Math.PI * 2) released = true;
-    events.push(...tick(state, { jump: !released, jumpPressed: i === 0 }));
+test('a new trip starts empty and catches once at the exact end of reeling', () => {
+  let draws = 0;
+  const game = createFishingGame({ random: () => { draws++; return 0; } });
+  assert.deepEqual(game.getSnapshot(), {
+    phase: 'home', active: true, progress: progress(), fishCount: 0, cast: { phase: 'idle' },
+    tapCooldownMs: 0, score: 0, highScore: 0, guestIndex: 0, guestPortions: 0, result: null,
+  });
+  assert.deepEqual(game.advance(60_000), []);
+  assert.deepEqual(game.startTrip(), { ok: true, events: [{ type: 'trip-started', score: 0, highScore: 0 }] });
+  for (const invalid of [0, -1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.deepEqual(game.advance(invalid), []);
   }
-  assert.equal(state.flips, 1);
-  assert.equal(state.bonus, 120);
-  assert.equal(events.filter(e => e === 'flip').length, 1);
-  assert.equal(events.filter(e => e === 'boost').length, 1);
-  assert.ok(!events.includes('crash'));
+  assert.equal(draws, 0);
+  assert.deepEqual(game.advance(10_999), [{ type: 'cast-started', waitMs: 11_000, rodLevel: 1 }]);
+  assert.equal(game.getSnapshot().cast.remainingMs, 1);
+  assert.deepEqual(game.advance(1), [{ type: 'bite', durationMs: 1_100 }]);
+  assert.deepEqual(game.getSnapshot().cast, { phase: 'reeling', remainingMs: 1_100, fishId: 'sardine' });
+  assert.deepEqual(game.advance(1_099), []);
+  assert.equal(draws, 2);
+  assert.equal(game.getSnapshot().fishCount, 0);
+  assert.deepEqual(game.advance(1), [caught('sardine', true)]);
+  assert.equal(draws, 2);
+  assert.deepEqual(game.getProgress().discoveredFishIds, ['sardine']);
+  assert.equal(game.advance(12_100).at(-1).firstDiscovery, false);
+  assert.equal(game.getProgress().fishCounts.sardine, 2);
+  assert.equal(game.getSnapshot().score, 0);
 });
 
-test('a full airborne turn grants a small immediate boost before landing, once per milestone', () => {
-  for (const direction of [-1, 1]) {
-    const state = clearRun();
-    airborne(state, 600);
-    Object.assign(state.player, { airTime: .3, rotation: direction * (Math.PI * 2 - .01) });
-    const baseline = structuredClone(state);
-    baseline.player.rotation = 0;
-    tick(baseline, { tilt: direction });
-    const events = tick(state, { tilt: direction });
-    assert.equal(events.filter(e => e === 'boost').length, 1);
-    assert.equal(state.player.grounded, false);
-    assert.equal(state.player.boostTime, .9);
-    assert.ok(Math.abs(state.player.speed - baseline.player.speed - 45) < 1e-6);
-    assert.equal(state.flips, 0);
-    assert.equal(state.bonus, 0);
-    assert.equal(state.player.airBoosts, 1);
-    // Crossing the same full-turn boundary again must not pay twice.
-    state.player.rotation = direction * (Math.PI * 2 - .01);
-    assert.ok(!tick(state, { tilt: direction }).includes('boost'));
-    state.player.rotation = direction * (Math.PI * 4 - .01);
-    assert.ok(tick(state, { tilt: direction }).includes('boost'));
-    assert.equal(state.player.airBoosts, 2);
-    assert.equal(state.player.boostTime, .9);
-  }
-});
-
-test('partial turns and automatic upright correction do not earn boosts', () => {
-  const state = clearRun();
-  airborne(state, 600);
-  Object.assign(state.player, { airTime: .3, rotation: -Math.PI * 1.9, angle: -Math.PI * 1.9 });
-  assert.ok(!tick(state, {}, 45).includes('boost'));
-  assert.equal(state.player.boostTime, 0);
-  assert.equal(state.player.airBoosts, 0);
-});
-
-test('boost speed is capped, its timer expires, and frozen simulation preserves the effect', () => {
-  const state = clearRun();
-  airborne(state, 600);
-  Object.assign(state.player, { airTime: .3, rotation: -Math.PI * 2 + .01, speed: 469 });
-  assert.ok(tick(state, { jump: true }).includes('boost'));
-  assert.equal(state.player.speed, 470);
-  const frozen = structuredClone(state);
-  for (const dt of [0, -1, NaN, Infinity]) stepRun(state, emptyInput(), dt);
-  state.events = frozen.events;
-  assert.deepEqual(state, frozen);
-  tick(state, {}, 120);
-  assert.equal(state.player.boostTime, 0);
-  assert.equal(state.player.boostFlash, 0);
-  assert.ok(state.player.speed < 470);
-});
-
-test('reduced motion preserves flip boosts and scores without decorative particles', () => {
-  const state = clearRun();
-  airborne(state, 600);
-  Object.assign(state.player, { airTime: .3, rotation: -Math.PI * 2 + .01 });
-  const reduced = structuredClone(state);
-  stepRun(state, { ...emptyInput(), jump: true }, DT, false);
-  stepRun(reduced, { ...emptyInput(), jump: true }, DT, true);
-  assert.ok(state.events.includes('boost'));
-  assert.ok(state.particles.length > 0);
-  assert.equal(reduced.particles.length, 0);
-  state.particles = [];
-  assert.deepEqual(state, reduced);
-});
-
-test('every trail layout generates continuous snow without holes', () => {
-  for (const { id } of TRAILS) {
-    const state = clearRun(id);
-    for (let segment = 0; segment < 12; segment++) {
-      const x = segment * 2400 + 200;
-      Object.assign(state.player, { x, y: terrainY(x, id), angle: terrainAngle(x, id) });
-      state.features = [];
-      state.nextSegment = segment;
-      const events = tick(state);
-      assert.ok(state.features.length > 0);
-      assert.ok(state.features.every(f => f.kind !== 'gap'), `${id}: segment ${segment}`);
-      assert.equal(state.player.grounded, true);
-      assert.ok(!events.includes('crash'));
-    }
-  }
-});
-
-test('upside-down landing crashes once, loses unbanked flips and resets combo', () => {
-  const state = clearRun();
-  airborne(state, 1, 150);
-  state.player.angle = Math.PI;
-  state.player.rotation = -Math.PI * 3;
-  state.combo = 3;
-  const events = tick(state, { tilt: 1 }, 10);
-  assert.equal(events.filter(e => e === 'crash').length, 1);
-  assert.equal(state.flips, 0);
-  assert.equal(state.combo, 0);
-  assert.equal(state.bonus, 0);
-});
-
-test('ski-first landings accept near-vertical boards on every trail and settle continuously', () => {
-  for (const { id } of TRAILS) {
-    for (const degrees of [-90, -80, -65, 65, 80, 90]) {
-      const state = clearRun(id);
-      airborne(state, 1, 120);
-      state.player.angle = terrainAngle(state.player.x, id) + degrees * Math.PI / 180;
-      state.player.rotation = -Math.PI * 2;
-      const events = tick(state);
-      assert.ok(events.includes('land'), `${id}: ${degrees} degrees`);
-      assert.ok(!events.includes('crash'), `${id}: ${degrees} degrees`);
-      assert.equal(state.flips, 1);
-      assert.ok(Math.abs(state.player.angle - terrainAngle(state.player.x, id)) > 0.85);
-      const recovery = tick(state, {}, 30);
-      assert.ok(!recovery.includes('crash'));
-      assert.equal(state.player.grounded, true);
-      assert.ok(Math.abs(state.player.angle - terrainAngle(state.player.x, id)) < 0.02);
-      for (const circle of [...playerBody(state.player), ...skiContacts(state.player)]) {
-        assert.ok(circle.y + circle.radius <= terrainY(circle.x, id) + 0.1);
+test('catalog weights, exact cutoff selection, and inclusive wait bounds at each level', () => {
+  assert.deepEqual(FISH_CATALOG.map(({ id, weight }) => [id, weight]), [
+    ['sardine', 22], ['anchovy', 20], ['mackerel', 16], ['herring', 14],
+    ['sea-bass', 10], ['snapper', 8], ['squid', 6], ['bluefin', 4],
+    ['flying-fish', 8], ['yellow-croaker', 7], ['flatfish', 6], ['lanternfish', 4],
+  ]);
+  const starts = [0, 22, 42, 58, 72, 82, 90, 96, 100, 108, 115, 121].map(weight => weight / 125);
+  const nearOne = 1 - Number.EPSILON;
+  assert.equal(new Set(FISH_CATALOG.map(fish => fish.extraWaitMs)).size, FISH_CATALOG.length);
+  assert.equal(new Set(FISH_CATALOG.map(fish => fish.reelMs)).size, FISH_CATALOG.length);
+  for (const [level, min, max] of [[1, 10_000, 14_000], [2, 8_000, 11_000], [3, 7_000, 9_000]]) {
+    for (const [i, { id, rarity, extraWaitMs, reelMs }] of FISH_CATALOG.entries()) {
+      const upper = starts[i + 1] ?? 1;
+      for (const [waitRoll, base, fishRoll] of [[0, min, starts[i]], [nearOne, max, upper - Number.EPSILON]]) {
+        const durationMs = reelMs + (waitRoll === nearOne ? 600 : 0);
+        const rolls = [waitRoll, fishRoll];
+        const game = play({ random: () => rolls.shift() ?? 0, progress: progress({}, { rodLevel: level }) });
+        const waitMs = base + extraWaitMs - (rarity === '稀有' && level === 3 ? 2_000 : 0);
+        assert.deepEqual(game.advance(waitMs - 1), [{ type: 'cast-started', waitMs, rodLevel: level }]);
+        if (rarity === '稀有') {
+          assert.deepEqual(game.advance(1), [{ type: 'fight-started' }]);
+          let result;
+          for (let n = 0; n < 3; n++) result = game.fight(game.getSnapshot().cast.key);
+          assert.deepEqual(result.events, [{ type: 'reel-started', durationMs }]);
+        } else assert.deepEqual(game.advance(1), [{ type: 'bite', durationMs }]);
+        assert.deepEqual(game.getSnapshot().cast, { phase: 'reeling', remainingMs: durationMs, fishId: id });
+        assert.deepEqual(game.advance(durationMs - 1), []);
+        assert.equal(game.getSnapshot().fishCount, 0);
+        assert.deepEqual(game.advance(1), [caught(id, true)]);
+        assert.equal(rolls.length, 0);
       }
     }
   }
 });
 
-test('head-first contact crashes while the foot anchor is still above the snow', () => {
-  for (const { id } of TRAILS) {
-    const state = clearRun(id);
-    airborne(state, 4, 120);
-    state.player.angle = terrainAngle(state.player.x, id) + Math.PI;
-    const events = tick(state, { tilt: 1 });
-    assert.ok(events.includes('crash'), id);
-    assert.equal(state.player.crashTime, 1.25);
-    assert.equal(state.flips, 0);
+test('bait changes the next cast, and a heavier specimen takes longer and updates career', () => {
+  function land(bait) {
+    const rolls = [0, .12];
+    const game = play({ random: () => rolls.shift() ?? 0, progress: progress({}, { coins: 20 }) });
+    game.selectBait(bait);
+    const [{ waitMs }] = game.advance(1);
+    const [{ durationMs }] = game.advance(waitMs - 1);
+    assert.equal(game.getSnapshot().lastCatch, undefined);
+    game.advance(durationMs);
+    return { game, waitMs, durationMs, card: game.getSnapshot().lastCatch };
   }
+  const bare = land('none');
+  const heavy = land('fish');
+  const quick = land('shrimp');
+  assert.equal(quick.waitMs, bare.waitMs - 1_500);
+  assert.equal(heavy.card.fishId, bare.card.fishId);
+  assert(heavy.card.grams > bare.card.grams);
+  assert.equal(heavy.durationMs, bare.durationMs + 600);
+  assert.deepEqual(heavy.game.getProgress().angling, {
+    bait: 'fish', stock: { shrimp: 3, fish: 2 }, counts: { sardine: 1 },
+    best: { fishId: 'sardine', grams: heavy.card.grams },
+  });
+  assert.equal(heavy.game.buyBait('fish').ok, true);
+  assert.equal(heavy.game.getProgress().coins, 8);
+  assert.equal(heavy.game.getProgress().angling.stock.fish, 7);
+  assert.equal(heavy.game.buyBait('fish').ok, false);
+  heavy.game.advance(12_100);
+  assert.equal(heavy.game.getSnapshot().lastCatch.record, false);
+  assert.equal(heavy.game.getProgress().angling.counts.sardine, 2);
+  assert.equal(heavy.game.getProgress().angling.best.grams, heavy.card.grams);
 });
 
-test('ski-tip contact begins landing before the foot anchor reaches the surface', () => {
-  const state = clearRun();
-  airborne(state, 10, 120);
-  state.player.angle = terrainAngle(state.player.x, state.trail) + Math.PI / 3;
-  assert.ok(tick(state).includes('land'));
-  assert.ok(state.player.y < terrainY(state.player.x, state.trail) - 10);
-  assert.equal(state.player.crashTime, 0);
-});
-
-test('the ski tip hits a rock before the torso reaches it', () => {
-  const state = clearRun();
-  state.player.boostTime = .8;
-  state.player.boostFlash = .4;
-  addFeature(state, 'rock', state.player.x + 30);
-  const events = tick(state);
-  assert.ok(events.includes('crash'));
-  assert.equal(state.player.boostTime, 0);
-  assert.equal(state.player.boostFlash, 0);
-  assert.equal(state.features[0].used, true);
-});
-
-test('jump buffer and coyote grace both accept near-edge inputs', () => {
-  const buffered = clearRun();
-  airborne(buffered, 4, 100);
-  tick(buffered, { jump: true, jumpPressed: true });
-  assert.ok(buffered.player.jumpBuffer > 0);
-  tick(buffered, { jump: true }, 5);
-  assert.equal(buffered.player.grounded, false);
-  assert.ok(buffered.player.vy < 0);
-  const coyote = clearRun();
-  airborne(coyote, 2);
-  coyote.player.coyote = 0.07;
-  tick(coyote, { jumpPressed: true, jump: true });
-  assert.ok(coyote.player.vy < -300);
-  const late = clearRun();
-  airborne(late, 50);
-  tick(late, { jumpPressed: true, jump: true });
-  assert.ok(late.player.vy >= 0);
-});
-
-test('repeated fresh presses recover faster but holding a key does not retrigger', () => {
-  const taps = clearRun();
-  const hold = clearRun();
-  addFeature(taps, 'rock');
-  addFeature(hold, 'rock');
-  tick(taps);
-  tick(hold);
-  assert.ok(taps.player.crashTime > 1);
-  for (let i = 0; i < 5; i++) {
-    tick(taps, { jumpPressed: true, jump: true });
-    tick(taps, {}, 5);
+test('taps enforce active-time cooldown and the 30% per-cast limit', () => {
+  const game = play();
+  assert.deepEqual(game.tapRod(), rejected('not-waiting'));
+  game.advance(1);
+  const tap = (reducedMs) => assert.deepEqual(game.tapRod(), {
+    ok: true, events: [{ type: 'rod-tapped', reducedMs }],
+  });
+  tap(350);
+  assert.deepEqual(game.tapRod(), rejected('tap-cooldown'));
+  game.advance(249);
+  game.pause();
+  assert.deepEqual(game.advance(60_000), []);
+  assert.equal(game.getSnapshot().tapCooldownMs, 1);
+  assert.deepEqual(game.tapRod(), rejected('wrong-phase'));
+  game.resume();
+  assert.deepEqual(game.tapRod(), rejected('tap-cooldown'));
+  game.advance(1);
+  for (let i = 0; i < 8; i++) {
+    tap(350);
+    game.advance(250);
   }
-  tick(hold, { jump: true, jumpPressed: true }, 30);
-  assert.equal(taps.player.crashTime, 0);
-  assert.ok(hold.player.crashTime > 0.5);
-  assert.ok(taps.player.invulnerable > 0);
+  tap(150);
+  game.advance(250);
+  assert.deepEqual(game.tapRod(), rejected('tap-limit'));
+  assert.equal(game.getSnapshot().cast.tappedMs, 3_300);
+  assert.equal(game.getSnapshot().cast.remainingMs, 5_199);
+
+  const lateTap = play();
+  lateTap.advance(10_999);
+  assert.deepEqual(lateTap.tapRod(), { ok: true, events: [{ type: 'rod-tapped', reducedMs: 1 }, { type: 'bite', durationMs: 1_100 }] });
+  assert.deepEqual(lateTap.tapRod(), rejected('not-waiting'));
+  assert.deepEqual(lateTap.advance(1_100), [caught('sardine', true)]);
+  lateTap.advance(1);
+  assert.equal(lateTap.getSnapshot().cast.tappedMs, 0);
 });
 
-test('slide mount absorbs one hit and partner replacement never stacks shields', () => {
-  const state = clearRun();
-  addFeature(state, 'slide');
-  assert.ok(tick(state).includes('mount'));
-  assert.equal(state.player.partner, 'slide');
-  assert.equal(state.player.shield, true);
-  const support = skiContacts(state.player)[0];
-  assert.ok(Math.abs(support.y - terrainY(support.x, state.trail)) < 0.1);
-  tick(state, {}, 10);
-  assert.equal(state.player.partner, 'slide');
-  addFeature(state, 'branch');
-  assert.ok(!tick(state).includes('crash'));
-  assert.equal(state.player.partner, null);
-  assert.equal(state.player.shield, false);
-  tick(state, {}, 45);
-  addFeature(state, 'rock');
-  assert.ok(tick(state).includes('crash'));
-
-  const replacement = clearRun();
-  addFeature(replacement, 'slide');
-  tick(replacement);
-  addFeature(replacement, 'charge');
-  assert.ok(tick(replacement).includes('mount'));
-  assert.equal(replacement.player.partner, 'charge');
-  assert.equal(replacement.player.shield, false);
+test('a full basket takes no random draws and frees the next cast only on positive time', () => {
+  let draws = 0;
+  const game = play({ random: () => { draws++; return 0; }, progress: progress({ sardine: 31 }) });
+  assert.equal(game.advance(30 * 60_000).filter(({ type }) => type === 'fish-caught').length, 1);
+  assert.equal(draws, 2);
+  assert.equal(game.getSnapshot().fishCount, 32);
+  assert.deepEqual(game.getSnapshot().cast, { phase: 'full' });
+  assert.deepEqual(game.tapRod(), rejected('not-waiting'));
+  assert.deepEqual(game.advance(100_000), []);
+  assert.equal(draws, 2);
+  assert.equal(game.queueOrder('sardine', 'basic').ok, true);
+  assert.deepEqual(game.getSnapshot().cast, { phase: 'idle' });
+  assert.deepEqual(game.advance(0), []);
+  assert.equal(draws, 2);
+  assert.deepEqual(game.advance(1), [{ type: 'cast-started', waitMs: 11_000, rodLevel: 1 }]);
+  assert.equal(draws, 4);
 });
 
-test('both mounts last indefinitely without harmful contact and survive safe jumps', () => {
-  for (const { id } of TRAILS) {
-    for (const kind of ['slide', 'charge']) {
-      const state = clearRun(id);
-      addFeature(state, kind);
-      assert.ok(tick(state).includes('mount'));
-      const mountedX = state.player.x;
-      const events = tick(state, {}, 10 * 60 * 120);
-      assert.equal(state.player.partner, kind, `${id}: ${kind}`);
-      assert.ok(state.player.x - mountedX > 1900 * 50);
-      assert.equal(state.player.crashTime, 0);
-      assert.ok(!events.includes('crash'));
-      tick(state, { jump: true, jumpPressed: true });
-      assert.equal(state.player.grounded, false);
-      assert.ok(tick(state, {}, 240).includes('land'));
-      assert.equal(state.player.partner, kind);
-    }
+test('orders validate before debiting fish and pay once in FIFO order', () => {
+  const game = play({ progress: progress({ sardine: 2, bluefin: 1, snapper: 1 }) });
+  const before = game.getProgress();
+  assert.deepEqual(game.queueOrder('sardine', 'special'), rejected('ineligible-fish'));
+  assert.deepEqual(game.queueOrder('mackerel', 'basic'), rejected('no-fish'));
+  assert.deepEqual(game.queueOrder('__proto__', 'basic'), rejected('unknown-fish'));
+  assert.deepEqual(game.queueOrder('sardine', 'toString'), rejected('unknown-recipe'));
+  assert.deepEqual(game.getProgress(), before);
+  assert.deepEqual(game.queueOrder('bluefin', 'special'), {
+    ok: true, events: [{ type: 'order-queued', fishId: 'bluefin', recipeId: 'special' }],
+  });
+  assert.equal(game.queueOrder('sardine', 'basic').ok, true);
+  assert.equal(game.queueOrder('snapper', 'special').ok, true);
+  const queued = game.getProgress();
+  assert.deepEqual(queued.fishCounts, progress({ sardine: 1 }).fishCounts);
+  assert.deepEqual(game.queueOrder('sardine', 'basic'), rejected('queue-full'));
+  assert.deepEqual(game.getProgress(), queued);
+  game.advance(5_999);
+  assert.deepEqual(game.getProgress().orders.map(({ remainingMs }) => remainingMs), [1, 4_000, 6_000]);
+  assert.equal(game.getProgress().coins, 0);
+  assert.deepEqual(game.advance(1), [sold('bluefin', 'special', 11, 11)]);
+  const sales = game.advance(10_000).filter(({ type }) => type === 'order-sold');
+  assert.deepEqual(sales, [sold('sardine', 'basic', 5, 16), sold('snapper', 'special', 11, 27)]);
+  assert.deepEqual(game.getProgress().orders, []);
+  assert.equal(game.getProgress().coins, 27);
+  assert.equal(game.getSnapshot().score, 27);
+  assert.equal(game.advance(60_000).some(({ type }) => type === 'order-sold'), false);
+  assert.equal(game.getProgress().coins, 27);
+});
+
+test('four basic sales fund Lv.2 and upgrades affect only the next cast, not the score', () => {
+  const game = play({ progress: progress({ sardine: 4 }) });
+  assert.deepEqual(game.upgradeRod(), rejected('not-enough-coins'));
+  for (let i = 0; i < 3; i++) assert.equal(game.queueOrder('sardine', 'basic').ok, true);
+  game.advance(4_000);
+  assert.equal(game.queueOrder('sardine', 'basic').ok, true);
+  game.advance(11_999);
+  assert.equal(game.getProgress().coins, 15);
+  assert.deepEqual(game.upgradeRod(), rejected('not-enough-coins'));
+  game.advance(1);
+  const cast = game.getSnapshot().cast;
+  assert.equal(cast.rodLevel, 1);
+  assert.deepEqual(game.upgradeRod(), { ok: true, events: [{ type: 'rod-upgraded', rodLevel: 2, cost: 20 }] });
+  assert.deepEqual(game.getSnapshot().cast, cast);
+  assert.equal(game.getProgress().coins, 0);
+  assert.equal(game.getSnapshot().score, 20);
+  assert.equal(game.getSnapshot().highScore, 20);
+  game.advance(cast.remainingMs + 1_100);
+  assert.deepEqual(game.advance(1), [{ type: 'cast-started', waitMs: 9_000, rodLevel: 2 }]);
+  assert.deepEqual(game.finishTrip(), { ok: true, events: [{ type: 'trip-finished', result: { score: 20, highScore: 20, victory: true } }] });
+
+  const lv3 = play({ progress: progress({}, { coins: 75 }) });
+  assert.equal(lv3.upgradeRod().ok, true);
+  assert.deepEqual(lv3.upgradeRod(), { ok: true, events: [{ type: 'rod-upgraded', rodLevel: 3, cost: 55 }] });
+  assert.equal(lv3.getProgress().coins, 0);
+  assert.deepEqual(lv3.upgradeRod(), rejected('max-rod-level'));
+  assert.deepEqual(lv3.advance(1), [{ type: 'cast-started', waitMs: 8_000, rodLevel: 3 }]);
+});
+
+test('external and internal pause freeze the timers; finish from pause is one-shot', () => {
+  const game = play({ highScore: 33, progress: progress({ squid: 1 }) });
+  game.queueOrder('squid', 'special');
+  game.advance(5_990);
+  const running = game.getSnapshot();
+  game.setActive(false);
+  assert.deepEqual(game.advance(90_000), []);
+  assert.deepEqual(game.getSnapshot(), { ...running, active: false });
+  assert.deepEqual(game.tapRod(), rejected('inactive'));
+  assert.deepEqual(game.finishTrip(), rejected('inactive'));
+  game.setActive(true);
+  assert.deepEqual(game.getSnapshot(), running);
+  game.pause();
+  game.setActive(false);
+  game.setActive(true);
+  assert.deepEqual(game.advance(90_000), []);
+  assert.deepEqual(game.getSnapshot(), { ...running, phase: 'paused' });
+  game.resume();
+  assert.deepEqual(game.advance(9), []);
+  assert.deepEqual(game.advance(1), [sold('squid', 'special', 11, 11, 33)]);
+  game.advance(6_100);
+  game.queueOrder('sardine', 'basic');
+  game.advance(1_000);
+  game.pause();
+  const saved = game.getProgress();
+  const { events: [finished] } = game.finishTrip();
+  assert.deepEqual(finished, { type: 'trip-finished', result: { score: 11, highScore: 33, victory: false } });
+  assert.deepEqual(game.finishTrip(), rejected('wrong-phase'));
+  assert.deepEqual(game.startTrip(), rejected('wrong-phase'));
+  assert.deepEqual(game.advance(90_000), []);
+  assert.equal(game.returnHome().ok, true);
+  assert.deepEqual(game.advance(90_000), []);
+  assert.deepEqual(game.getProgress(), saved);
+  assert.deepEqual(game.startTrip(), { ok: true, events: [{ type: 'trip-started', score: 0, highScore: 33 }] });
+  assert.equal(game.getSnapshot().result, null);
+  assert.equal(game.getSnapshot().cast.phase, 'idle');
+  assert.equal(game.advance(2_999).some(({ type }) => type === 'order-sold'), false);
+  assert.deepEqual(game.advance(1), [sold('sardine', 'basic', 5, 5, 33)]);
+});
+
+test('coincident deadlines keep sale-before-catch order under different step partitions', () => {
+  function setup() {
+    const game = play({ random: seed(1234), progress: progress({ snapper: 1 }) });
+    const [{ waitMs }] = game.advance(1);
+    game.advance(waitMs + 900 - 4_000 - 1);
+    assert.equal(game.queueOrder('snapper', 'basic').ok, true);
+    return game;
   }
-});
-
-test('slide absorbs a rock collision and immediately ends the mount', () => {
-  const state = clearRun();
-  addFeature(state, 'slide');
-  tick(state);
-  state.player.boostTime = .8;
-  addFeature(state, 'rock');
-  assert.ok(!tick(state).includes('crash'));
-  assert.equal(state.player.partner, null);
-  assert.equal(state.player.boostTime, 0);
-  assert.equal(state.player.shield, false);
-  assert.ok(state.player.invulnerable > 0);
-});
-
-test('charge keeps riding through rocks but a branch ends the mount', () => {
-  const rocks = clearRun();
-  addFeature(rocks, 'charge');
-  tick(rocks);
-  addFeature(rocks, 'rock');
-  const rock = rocks.features[rocks.features.length - 1];
-  assert.ok(!tick(rocks).includes('crash'));
-  assert.equal(rock.used, true);
-  assert.equal(rocks.bonus, 30);
-  assert.equal(rocks.player.partner, 'charge');
-  addFeature(rocks, 'branch');
-  assert.ok(tick(rocks).includes('crash'));
-  assert.equal(rocks.player.partner, null);
-});
-
-test('tucking passes under branches, normal stance crashes; ramp launches and coins score once', () => {
-  const tucked = clearRun();
-  const standing = clearRun();
-  addFeature(tucked, 'branch');
-  addFeature(standing, 'branch');
-  assert.ok(!tick(tucked, { tuck: true }, 45).includes('crash'));
-  assert.ok(tick(standing).includes('crash'));
-  const ramp = clearRun();
-  addFeature(ramp, 'ramp', ramp.player.x - 60, 76);
-  tick(ramp);
-  assert.equal(ramp.player.grounded, false);
-  assert.ok(ramp.player.vy < -400);
-  const coins = clearRun();
-  addFeature(coins, 'coin');
-  coins.features[0].y -= 32;
-  const events = tick(coins, {}, 10);
-  assert.equal(events.filter(e => e === 'coin').length, 1);
-  assert.equal(coins.coins, 1);
-  assert.ok(coins.coinFlash > 0);
-  assert.ok(coins.particles.some(p => p.color === '#FFD475'));
-  assert.equal(coins.score, Math.floor(coins.distance) + 25);
-});
-
-test('only body contact catches; airborne clearance and transparent margin are safe', () => {
-  const state = clearRun();
-  state.player.speed = 0;
-  state.chasers = [{ x: state.player.x - 50, offset: 0, lane: 0, phase: 0 }];
-  tick(state);
-  assert.equal(state.over, false);
-  const jumping = clearRun();
-  airborne(jumping, 140);
-  jumping.chasers = [{ x: jumping.player.x - 10, offset: 0, lane: 2, phase: 0 }];
-  tick(jumping);
-  assert.equal(jumping.over, false);
-  const touching = clearRun();
-  touching.chasers = [{ x: touching.player.x - 20, offset: 0, lane: 0, phase: 0 }];
-  touching.player.invulnerable = 99;
-  assert.deepEqual(tick(touching), ['caught']);
-  assert.equal(touching.over, true);
-  assert.deepEqual(tick(touching), []);
-});
-
-test('swept bodies catch crossings at extreme speed, including while riding', () => {
-  const crossing = clearRun();
-  crossing.player.speed = 30000;
-  crossing.chasers = [{ x: crossing.player.x + 80, offset: 0, lane: 0, phase: 0 }];
-  assert.ok(tick(crossing).includes('caught'));
-  assert.ok(crossing.player.x > 350);
-  for (const partner of ['slide', 'charge']) {
-    const state = clearRun();
-    state.player.partner = partner;
-    state.player.shield = true;
-    state.player.invulnerable = 99;
-    state.chasers = [{ x: state.player.x, offset: 0, lane: 0, phase: 0 }];
-    assert.ok(tick(state).includes('caught'), partner);
-    assert.equal(state.player.partner, null);
-    assert.equal(state.over, true);
+  const whole = setup();
+  const split = setup();
+  const events = whole.advance(4_000);
+  assert.deepEqual(events.map(({ type }) => type), ['bite', 'order-sold', 'fish-caught']);
+  assert.deepEqual(events, [...split.advance(1_337), ...split.advance(1_763), ...split.advance(899), ...split.advance(1)]);
+  const later = whole.advance(400_000);
+  const splitLater = [];
+  for (let remaining = 400_000; remaining > 0;) {
+    const elapsed = Math.min(997, remaining);
+    splitLater.push(...split.advance(elapsed));
+    remaining -= elapsed;
   }
+  assert.deepEqual(later, splitLater);
+  assert.deepEqual(whole.getSnapshot(), split.getSnapshot());
 });
 
-test('reduced motion preserves gameplay and limits only particles', () => {
-  const full = clearRun();
-  const reduced = clearRun();
-  addFeature(full, 'slide');
-  addFeature(reduced, 'slide');
-  stepRun(full, emptyInput(), DT, false);
-  stepRun(reduced, emptyInput(), DT, true);
-  assert.ok(full.particles.length > 0);
-  assert.equal(reduced.particles.length, 0);
-  full.particles = [];
-  assert.deepEqual(full, reduced);
+test('progress is detached from callers, resumes an unpaid head, and cannot repay a sold order', () => {
+  const initial = progress({ squid: 1 }, { coins: 9, rodLevel: 2 });
+  const game = play({ progress: initial });
+  initial.fishCounts.squid = 0;
+  initial.discoveredFishIds.length = 0;
+  assert.equal(game.queueOrder('squid', 'special').ok, true);
+  game.advance(1_234);
+  const snapshot = game.getSnapshot();
+  const save = JSON.parse(JSON.stringify(game.getProgress()));
+  snapshot.progress.orders[0].remainingMs = 1;
+  snapshot.progress.fishCounts.squid = 99;
+  snapshot.cast.remainingMs = 1;
+  assert.deepEqual(game.getProgress(), save);
+  assert.equal(game.getSnapshot().cast.remainingMs, 9_000 - 1_234);
+  assert.deepEqual(save, progress({}, {
+    coins: 9, rodLevel: 2, discoveredFishIds: ['squid'], orders: [{ fishId: 'squid', recipeId: 'special', remainingMs: 4_766 }],
+  }));
+  const restored = play({ progress: save });
+  save.orders.length = 0;
+  restored.advance(4_765);
+  assert.equal(restored.getProgress().coins, 9);
+  assert.deepEqual(restored.advance(1), [sold('squid', 'special', 11, 11)]);
+  assert.deepEqual(restored.getProgress().orders, []);
+  assert.equal(restored.getProgress().fishCounts.squid, 0);
+  const reloaded = play({ progress: restored.getProgress(), highScore: restored.getSnapshot().highScore });
+  reloaded.advance(20_000);
+  assert.equal(reloaded.getProgress().coins, 20);
+  assert.equal(reloaded.getSnapshot().score, 0);
+  assert.equal(reloaded.getSnapshot().highScore, 11);
 });
 
-test('one 1/60 call agrees with two 1/120 steps and an oversized frame is capped', () => {
-  const one = clearRun();
-  const two = clearRun();
-  stepRun(one, { ...emptyInput(), jump: true, jumpPressed: true }, 1 / 60);
-  tick(two, { jump: true, jumpPressed: true }, 2);
-  assert.deepEqual(one.player, two.player);
-  const capped = clearRun();
-  stepRun(capped, emptyInput(), 10);
-  assert.ok(Math.abs(capped.time - 0.1) < 1e-9);
+test('accepted sales reserve exact safe integer credit even near the balance limit', () => {
+  const max = Number.MAX_SAFE_INTEGER;
+  const game = play({ progress: progress({ sardine: 2 }, { coins: max - 5 }) });
+  assert.equal(game.queueOrder('sardine', 'basic').ok, true);
+  const before = game.getProgress();
+  assert.deepEqual(game.queueOrder('sardine', 'basic'), rejected('balance-limit'));
+  assert.deepEqual(game.getProgress(), before);
+  assert.deepEqual(game.advance(4_000).at(-1), sold('sardine', 'basic', 5, 5));
+  assert.equal(game.getProgress().coins, max);
+  assert.equal(game.upgradeRod().ok, true);
+  assert.equal(game.queueOrder('sardine', 'basic').ok, true);
 });
 
-test('without mounts, idle players recover from the first rock but repeated mistakes end every trail', () => {
-  for (const { id } of TRAILS) {
-    const state = createRun(id);
-    let crashes = 0;
-    let caught = 0;
-    let recoveredFirstCrash = false;
-    for (let i = 0; i < 120 * 120 && !state.over; i++) {
-      // Isolate recovery and pursuit from the now unlimited mount protection.
-      state.features = state.features.filter(f => f.kind !== 'slide' && f.kind !== 'charge');
-      stepRun(state, emptyInput(), DT);
-      crashes += Number(state.events.includes('crash'));
-      caught += Number(state.events.includes('caught'));
-      if (crashes === 1 && state.player.crashTime === 0 && !state.over) recoveredFirstCrash = true;
-    }
-    assert.equal(recoveredFirstCrash, true, id);
-    assert.ok(crashes >= 2, id);
-    assert.equal(state.over, true, id);
-    assert.ok(state.time > 10 && state.time < 90, `${id}: ${state.time}s`);
-    assert.equal(caught, 1, id);
-    assert.deepEqual(tick(state), []);
-  }
-});
-
-test('steady skiing maintains a close gap and indefinite mounts keep a bounded lead', () => {
-  for (const { id } of TRAILS) {
-    for (const partner of ['slide', 'charge']) {
-      const state = createRun(id);
-      state.features = [];
-      state.nextSegment = 1e6;
-      state.time = 40;
-      tick(state, {}, 60 * 120);
-      const baseline = frontGap(state);
-      assert.ok(baseline >= 200 && baseline <= 260, `${id}: baseline ${baseline}`);
-      addFeature(state, partner);
-      assert.ok(tick(state).includes('mount'));
-      tick(state, {}, 2 * 120);
-      assert.ok(frontGap(state) > baseline + 50, `${id}: ${partner} boost`);
-      tick(state, {}, 18 * 120);
-      assert.equal(state.player.partner, partner);
-      const mountedGap = frontGap(state);
-      assert.ok(mountedGap > baseline + 50 && mountedGap < 500, `${id}: mounted ${mountedGap}`);
-      assert.equal(state.over, false);
-    }
-  }
-});
-
-test('hand-authored route patterns admit safe jump/tuck paths without invulnerability', () => {
-  for (const { id } of TRAILS) {
-    const state = createRun(id);
-    let crashes = 0;
-    for (let i = 0; i < 180 * 120 && !state.over; i++) {
-      const p = state.player;
-      const obstacle = state.features.find(f => !f.used
-        && ((f.kind === 'rock' && p.partner !== 'charge') || (f.kind === 'branch' && p.partner))
-        && f.x > p.x && f.x - p.x < 115);
-      const tuck = !p.partner && state.features.some(f => f.kind === 'branch'
-        && f.x - p.x < 120 && f.x + f.width > p.x - 30);
-      const pressed = !!obstacle && p.grounded;
-      stepRun(state, { jump: pressed || (!p.grounded && p.airTime < 0.2), jumpPressed: pressed, tuck: !!tuck, tilt: 0 }, DT);
-      crashes += Number(state.events.includes('crash'));
-    }
-    assert.equal(state.over, false, id);
-    assert.equal(crashes, 0, id);
-    assert.ok(state.distance > 5000, id);
-  }
-});
-
-test('thirty-minute runs keep every live collection bounded with finite capped difficulty', () => {
-  for (const { id } of TRAILS) {
-    const state = createRun(id);
-    let maxFeatures = 0;
-    let maxParticles = 0;
-    for (let i = 0; i < 30 * 60 * 120; i++) {
-      // Isolate streaming/resource lifetime from failure; collision/recovery are tested above.
-      state.player.invulnerable = 1;
-      if (frontGap(state) < 160) {
-        for (const chaser of state.chasers) chaser.x -= 300;
+test('seeded 30-minute active run keeps the basket, queue, discoveries and ledger bounded', () => {
+  const game = play({ random: seed(0xc0ffee) });
+  const input = seed(0x12345678);
+  const counts = { ...progress().fishCounts };
+  const seen = new Set();
+  const queued = [];
+  let coins = 0;
+  let revenue = 0;
+  let rodLevel = 1;
+  let sales = 0;
+  let catches = 0;
+  const observe = (events) => {
+    for (const event of events) {
+      switch (event.type) {
+        case 'fish-caught':
+          assert.equal(event.firstDiscovery, !seen.has(event.fishId));
+          seen.add(event.fishId);
+          counts[event.fishId]++;
+          catches++;
+          break;
+        case 'order-queued':
+          counts[event.fishId]--;
+          queued.push([event.fishId, event.recipeId]);
+          break;
+        case 'order-sold': {
+          assert.deepEqual(queued.shift(), [event.fishId, event.recipeId]);
+          const price = RECIPE_CATALOG[event.recipeId].price;
+          assert.equal(event.price, price);
+          coins += price;
+          revenue += price;
+          sales++;
+          assert.equal(event.score, revenue);
+          assert.equal(event.highScore, revenue);
+          break;
+        }
+        case 'rod-upgraded':
+          rodLevel++;
+          assert.equal(event.rodLevel, rodLevel);
+          assert.equal(event.cost, ROD_CATALOG[rodLevel].upgradeCost);
+          coins -= event.cost;
+          break;
       }
-      const obstacle = state.features.find(f => !f.used && f.kind === 'rock'
-        && f.x > state.player.x && f.x - state.player.x < 115);
-      const branch = state.features.some(f => f.kind === 'branch' && f.x - state.player.x < 120
-        && f.x + f.width > state.player.x - 30);
-      stepRun(state, { jump: false, jumpPressed: !!obstacle && state.player.grounded, tuck: branch, tilt: 0 }, DT, i % 2 === 0);
-      assert.equal(state.over, false);
-      maxFeatures = Math.max(maxFeatures, state.features.length);
-      maxParticles = Math.max(maxParticles, state.particles.length);
-      assert.equal(state.chasers.length, 8);
-      assert.ok(state.events.length <= 8);
     }
-    assert.ok(state.distance > 50000);
-    assert.ok(maxFeatures <= 72);
-    assert.ok(maxParticles <= 80);
-    assert.ok(state.player.speed <= 470);
-    assert.ok(Number.isFinite(state.player.y));
-    assert.ok(Number.isFinite(state.score));
-    assert.ok(state.features.every(f => f.x + f.width > state.player.x - 450));
-    assert.ok(state.nextSegment < state.player.x / 2400 + 2);
+  };
+  let remaining = 30 * 60_000;
+  const idleWarmup = 700_000;
+  observe(game.advance(idleWarmup));
+  remaining -= idleWarmup;
+  assert.equal(game.getSnapshot().fishCount, 32);
+  while (remaining > 0) {
+    const elapsed = Math.min(1 + Math.floor(input() * 997), remaining);
+    remaining -= elapsed;
+    observe(game.advance(elapsed));
+    const fight = game.getSnapshot().cast;
+    if (fight.phase === 'fight') observe(game.fight(fight.key).events);
+    const roll = input();
+    if (roll < 0.5) game.tapRod();
+    if (roll < 0.25) {
+      const available = FISH_CATALOG.filter(({ id }) => counts[id] > 0);
+      if (available.length > 0) {
+        const fish = available[Math.floor(input() * available.length)];
+        const result = game.queueOrder(fish.id, RECIPE_CATALOG.special.fishIds.includes(fish.id) ? 'special' : 'basic');
+        if (result.ok) observe(result.events);
+      }
+    }
+    if (roll > 0.95) {
+      const result = game.upgradeRod();
+      if (result.ok) observe(result.events);
+    }
+    const state = game.getSnapshot();
+    const { progress: saved } = state;
+    assert.deepEqual(saved.fishCounts, counts);
+    assert.ok(Object.values(counts).every((count) => Number.isSafeInteger(count) && count >= 0));
+    assert.equal(state.fishCount, Object.values(counts).reduce((a, b) => a + b, 0));
+    assert.ok(state.fishCount <= 32);
+    assert.ok(saved.orders.length <= 3);
+    assert.deepEqual(saved.orders.map(({ fishId, recipeId }) => [fishId, recipeId]), queued);
+    for (const [i, order] of saved.orders.entries()) {
+      const duration = RECIPE_CATALOG[order.recipeId].durationMs;
+      assert.ok(order.remainingMs > 0 && order.remainingMs <= duration);
+      if (i > 0) assert.equal(order.remainingMs, duration);
+    }
+    assert.equal(saved.coins, coins);
+    assert.ok(coins >= 0);
+    assert.equal(saved.rodLevel, rodLevel);
+    assert.equal(state.score, revenue);
+    assert.equal(state.highScore, revenue);
+    assert.deepEqual(saved.discoveredFishIds, FISH_CATALOG.filter(({ id }) => seen.has(id)).map(({ id }) => id));
+    assert.ok(saved.discoveredFishIds.length <= FISH_CATALOG.length);
+    assert.equal(catches, state.fishCount + queued.length + sales);
   }
+  assert.ok(catches > 70 && sales > 70);
+  assert.equal(rodLevel, 3);
+  assert.equal(game.getSnapshot().phase, 'playing');
+  assert.equal(game.finishTrip().events[0].result.victory, true);
+});
+
+test('rare prompt rotates, misses cost progress, and paused time cannot land or lose a fish', () => {
+  const rolls = [0, .75, 0, .99, .5, 0, 0];
+  const game = play({ random: () => rolls.shift() ?? 0 });
+  game.advance(17_000);
+  assert.deepEqual(game.getSnapshot().cast, { phase: 'fight', remainingMs: 8000, key: 'D', progress: 0 });
+  assert.deepEqual(game.fight('D').events, [{ type: 'fight-hit' }]);
+  assert.equal(game.getSnapshot().cast.key, 'Y');
+  assert.deepEqual(game.fight('D').events, [{ type: 'fight-miss' }]);
+  assert.equal(game.getSnapshot().cast.progress, 0);
+  game.advance(7_000);
+  game.pause(); game.advance(60_000);
+  assert.equal(game.fight('Y').ok, false);
+  assert.equal(game.getSnapshot().cast.remainingMs, 1_000);
+  game.resume(); game.setActive(false); game.advance(60_000);
+  assert.equal(game.fight('Y').ok, false);
+  game.setActive(true);
+  for (let n = 0; n < 3; n++) {
+    const { key } = game.getSnapshot().cast;
+    const result = game.fight(key);
+    if (n === 2) assert.deepEqual(result.events, [{ type: 'reel-started', durationMs: 2_850 }]);
+    else assert.notEqual(game.getSnapshot().cast.key, key);
+  }
+  game.pause();
+  assert.deepEqual(game.advance(5_000), []);
+  game.resume();
+  assert.deepEqual(game.advance(2_849), []);
+  assert.deepEqual(game.advance(1), [caught('squid', true)]);
+  assert.equal(game.getProgress().fishCounts.squid, 1);
+});
+
+test('an unattended rare encounter escapes at the deadline and the next cast still starts', () => {
+  const rolls = [0, .99, .5, 0, 0];
+  const game = play({ random: () => rolls.shift() ?? 0 });
+  game.advance(26_499);
+  assert.equal(game.getSnapshot().cast.remainingMs, 1);
+  assert.deepEqual(game.advance(1), [{ type: 'fish-escaped' }]);
+  assert.deepEqual(game.getProgress(), progress());
+  assert.deepEqual(game.advance(12_100).at(-1), caught('sardine', true));
 });

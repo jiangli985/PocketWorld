@@ -1,5 +1,29 @@
 # Luna 动画制作源
 
+## 第二套 · 蝴蝶结外套
+
+[可编辑角色](./Luna-Ribbon.blend)使用用户提供的蝴蝶结外套、短裤与长袜模型，五官参照日常装绘制，下巴尖端略微上提，两侧过渡成圆弧。下巴前缘随头骨转动，往颈部逐渐恢复颈骨权重。贴图已打包。游戏中的角色使用 91 根骨骼，保留独立的手指与头发骨链。底色图在 Blender 中由原始 4096 × 4096 缩至 2048 × 2048，从日常装读取底色倍率、全身底色补光和法线强度，并复用同一套暖桃色肤色着色。服装卡片使用该运行时材质的全身渲染。
+
+`scripts/fit-luna-ribbon.py` 接收已绑定的 `Luna-Ribbon.glb`，用 NumPy 基于两套骨架的局部绑定偏移重定向动作。走路与地毯动作按实际蒙皮校准高度，固定椅按坐垫轮廓生成独立接触缓存。取书及沙发动作随第二套模型载入，生活舱动作独立加载。
+
+```sh
+python scripts/fit-luna-ribbon.py /path/to/Luna-Ribbon.glb --motions assets/public/models/resident --output assets/public/models/resident
+```
+
+## 生活舱日常动作
+
+地毯的盘腿坐地使用 MotionSmith Take 2 原地版，盘腿起身、捡东西、揉眼睛、托腮思考和向高处取物均使用 Take 1。摘取姿态来自 UE5 Manny 的 30 fps 骨骼动画。脚底和骨盆按 Luna 日常装的实际蒙皮校准。盘腿时，裙装的前幅分别越过左右膝，中间略低，末端向下折落。侧幅绕向膝外侧，后摆在地毯上摊开。入座和起身时沿动作过渡。脸部手势保留原片时序，腕位按 Luna 的脸型缩放。书架目录使用托下巴动作的抬手段并保持姿势。拾物在 1.9 秒把纸团交给右手。拾娃娃复用同一动作，起身后双手托住，放下时反向播放。高处取物在书本接触前交回书柜原动作。
+
+五条待机同样按日常装导出。从 [Feminine Idle](https://cosindra.ai/motionsmith/motions/idle-feminine) Take 1 提取躯干与左臂，并按日常装调整掌面朝向和腰侧落点。[Neck Stretch](https://cosindra.ai/motionsmith/motions/idle-neck-stretch) Take 2 使用胸部以上旋转。[Seated Dozing Idle](https://cosindra.ai/motionsmith/motions/seated-dozing-idle) Take 1 保留点头回抬的节奏，用躯干辅助前倾。[Seated Idle](https://cosindra.ai/motionsmith/motions/sit-chair-idle) Take 5 和 [Floor Sitting Idle](https://cosindra.ai/motionsmith/motions/sit-floor-idle) Take 1 保留原片的视线方向，用淡入淡出形成转头。三段坐姿只叠加脊柱、颈或头的相对旋转。叠加时保留原坐姿接触和地毯蒙皮。
+
+原片放在仓库外同一个目录，每个文件保留 MotionSmith 的默认名。使用 Node.js 24 重建日常装的动画 GLB。
+
+```bash
+node scripts/bake-luna-cabin-actions.mjs /path/to/downloads
+```
+
+来源、Take 和源文件校验值见[素材登记](../../models.sources.json)。
+
 ## 楼梯步态
 
 Luna 上、下楼各取 MotionSmith Take 1 中连续的左右两步。原文件均为 UE5 Manny 骨架、30 fps。帧号从 0 开始，上楼两个步段的边界为 48、64、80，下楼为 57、76、94，分别取脚趾开始离开踏面的帧。导出脚踝推进与抬升、脚掌俯仰、躯干倾斜、双膝屈曲、髋踝相对位置和双侧肩、肘、腕的运动方向。运行时按腿长和踏面尺寸重定向，并在首末级与平台衔接。两个方向都用支撑踝定位骨盆，按原片的前移曲线跨过左右脚换重的瞬间。骨盆至颈部的倾角驱动躯干，头部俯仰单独采样。上楼时，骨盆的抬升曲线限制承重腿伸直时身体的上升速度。下楼时，骨盆的降高曲线控制左右脚换重。前脚掌靠近踏板前缘，后跟越过台阶后逐渐下降，落脚时膝盖保留原片的轻微弯曲。[上楼原片](https://cosindra.ai/motionsmith/motions/walk-upstairs) · [下楼原片](https://cosindra.ai/motionsmith/motions/walk-downstairs)
@@ -10,29 +34,29 @@ Luna 上、下楼各取 MotionSmith Take 1 中连续的左右两步。原文件�
 node scripts/bake-luna-stairs.mjs /path/to/MotionSmith_walk_upstairs_take1.glb /path/to/MotionSmith_walk_downstairs_take1.glb
 ```
 
-## 云朵连帽衫绑定
+## 丁香针织开衫绑定
 
-[Blender 制作源](./Luna-CloudHoodie.blend)采用用户提供的 Tripo 模型 `1115d436-5d3e-444c-be63-a6141e1f346c.glb`。蓝发、云朵发饰、五官、连帽衫和短裤沿用这份模型。底色图在原 UV 上调整了唇线与眼部高光。袖子与衣身粘连的部分沿腋下拆开，补入两侧布面，以便抬臂取书。下颌尖端已收短并拓圆，主要随头骨运动。贴臂站姿下，衣侧在前臂压到的位置内收，袖子前后两侧的衣料保留蓬度，长袖在肘部上下保留椭圆截面，袖口权重从前臂渐变至手腕，使手腕弯曲时袖口保持开口。制作源包含 115 根骨骼、10 个角色动作和 4 张打包贴图。
+衣柜第三套采用用户提供的 Tripo 文件 `anime girl 3d model.glb`。开衫、胸前蝴蝶结、条纹长袜与蓝色长发沿用原网格和 UV。日常装的虹膜、高光、眼睑、鼻尖、双颊和唇形已按新头部正面与刘海边界重新绘入底色。下巴尖端略微上提，沿下颌两侧逐渐收回。下巴前缘随头骨运动，颈部保持平滑过渡。第三格的预览标识为 `cardigan`。
+
+[Blender 制作源](./Luna-Cardigan.blend)内置贴图、骨架、袖侧修形与动作。[运行模型](../../public/models/resident/luna-cardigan.glb)使用 Luna 的 115 根骨骼。制作源打开时显示自然站姿，上臂外展约 18°。领口主要随胸廓，袖山向锁骨和上臂逐渐过渡，侧腰略收以留出袖口间距。行走时，左右臂按日常装的肩肘轨迹与对侧脚交替摆动，手掌朝向按开衫网格上的指根定位。手臂靠近衣身时才触发对应侧的衣料修形。后腰罗纹和下摆褶边以骨盆为支撑，平滑分配左右腿的影响。两侧袖子和手指独立绑定，发束随头部和发链运动，袜底保存步态支撑点。固定椅的[接触缓存](../../public/models/resident/luna-cardigan-seat.bin)按新网格对坐垫和扶手采样 98 帧。编辑网格或坐姿时须同时更新缓存及 `_CONTACT_ID`。
+
+## 云朵连帽衫制作源（已下架）
+
+[Blender 制作源](./Luna-CloudHoodie.blend)采用用户提供的 Tripo 模型 `1115d436-5d3e-444c-be63-a6141e1f346c.glb`。用户未附独立角色许可声明。蓝发、云朵发饰、五官、连帽衫和短裤沿用这份模型。底色图在原 UV 上调整了唇线与眼部高光。袖子与衣身粘连的部分沿腋下拆开，补入两侧布面，以便抬臂取书。下颌尖端已收短并拓圆，主要随头骨运动。贴臂站姿下，衣侧在前臂压到的位置内收，袖子前后两侧的衣料保留蓬度，长袖在肘部上下保留椭圆截面，袖口权重从前臂渐变至手腕，使手腕弯曲时袖口保持开口。制作源包含 115 根骨骼、10 个角色动作和 4 张打包贴图。
 
 在 Blender 场景菜单选择 `Hoodie | Cloth Simulation`，回到第 1 帧后连续播放到第 72 帧，即可重算布料。衣身、左袖、右袖各有一个 Cloth 修改器。衣身固定在肩部和髋部罗纹，袖筒固定在肩口和袖口。两侧前臂从略微张开的位置收至腰侧，躯干及手臂碰撞体限制布料的活动空间。
 
-将最后 10 帧的平均位移映射到衣身、袖筒及口袋，再按站姿和步态为刺绣布面留出间距。游戏端通过两个相对形态键 `SleeveContact_L`、`SleeveContact_R` 混合烘焙的结果。在 Blender 中可分别调节两侧，0 为放松，1 为贴臂受压。每个动作带有对应的衣料权重曲线。生活舱使用同名 glTF 变形目标，在动作混合与取书手部定位完成后，根据两侧手腕相对肩膀的位置分别计算权重。
+将最后 10 帧的平均位移映射到衣身、袖筒及口袋，再按站姿和步态为刺绣布面留出间距。制作源通过两个相对形态键 `SleeveContact_L`、`SleeveContact_R` 混合烘焙的结果。在 Blender 中可分别调节两侧，0 为放松，1 为贴臂受压。每个动作带有对应的衣料权重曲线。
 
 双脚在堆袜下沿裁去原鞋面、鞋底和鞋跟。新袜脚按 Luna 的足跟、内侧足弓和前掌轮廓接入，沿切口采样袜色，并匹配两侧 98 个边界点的位置、法线与骨骼权重。行走动作以袜底重新求解双腿 IK。走停混合阶段按袜脚几何的 `soleContacts` 支撑点修正脚尖高度。
 
-[运行模型](../../public/models/resident/luna-cloudhoodie.glb)包含 57,543 个三角形，内嵌行走、打哈欠、环顾、固定椅、低沙发及三层取书动作，另保留供制作参考的上床动作。固定椅使用[专属接触缓存](../../public/models/resident/luna-cloudhoodie-seat.bin)，按新网格在椅子局部坐标中逐帧采样坐垫和扶手，98 帧、744 个修形点。重新编辑网格或坐姿后，须同步重烘缓存与模型中的 `_CONTACT_ID`。衣柜标识为 `cloudhoodie`。
-
-## 雪花裙装绑定
+## 雪花裙装制作源（已下架）
 
 [Luna-Snowflower.blend](./Luna-Snowflower.blend) 是生活舱雪花裙装的可编辑制作源。造型与原贴图来自用户提供的 Tripo 文件 `ab1c7402-ed3c-428e-bf63-d4d73a8b9d7d.glb`，未附独立许可声明。脚踝以下按 Luna 的裸脚尺寸重建为连续的包脚袜，保留原小腿、袜口和蝴蝶结。新袜脚贴图已与原始底色、法线、粗糙度／金属度贴图一起打包。脚踝接缝的袜脚粗糙度按小腿对应贴图取样设为 0.53，两侧用相同的补光和高光色。
 
 面部按用户提供的《蓝发少女与雪花裙装》原画精修。眼睑、蓝色虹膜、唇色和肤色使用独立 UV 与材质 `Luna | Snowflower Face`。虹膜与皮肤各有粗糙度，鼻尖和双唇的起伏直接做在网格上。额前发束单独修正了混入发色的肤色斑。相关贴图均已打包，可在 Blender 中继续绘制。
 
 文件默认打开站立姿势的脸部近景。在骨架的 Action Editor 中可选择行走、站立、转椅落座、低沙发落座、环顾、伸懒腰、三层取书或上床。角色沿用 Luna 的 115 个骨骼及父子关系，五官跟随头骨，下颌向颈部渐变。手指、发束和裙骨按角色位置对齐，取书时前裙骨随抬膝量调整。袜脚分别使用小腿、脚掌与脚趾权重，脚踝接缝两侧权重一致。26 节发骨的 `hairDrape` 和 `hairSway` 分别控制每节的下垂补偿和回摆幅度，导出至 GLB 节点的 `extras`。发中和发尾的权重高于发根，后发的回摆大于脸侧发束。更新材质和发骨参数时保留 GLB 网格、动作及 `_CONTACT_ID` 索引。
-
-生活舱从衣柜按需加载 [luna-snowflower.glb](../../public/models/resident/luna-snowflower.glb)，共 54,784 个三角形。运行时使用适配该骨架的行走、固定椅、沙发与三层取书动作。书本的位姿沿用既有书架标记，环顾与伸懒腰共用原有上身旋转资源。室内材质为雪纺、发色和眼睛加入了低强度的贴图补光。
-
-固定椅使用独立的 [luna-snowflower-seat.bin](../../public/models/resident/luna-snowflower-seat.bin)。制作时以 30 fps 采样雪花裙装的 98 帧坐姿，根据实际软垫和扶手表面高度计算位移，再按每个顶点的蒙皮矩阵反解回绑定空间。GLB 的 `_CONTACT_ID` 对应缓存的 1,740 个修形点。角色和缓存须成对替换。
 
 ## 地毯旁的懒人沙发
 
@@ -51,11 +75,17 @@ blender --background --python scripts/bake-luna-sofa.py -- "$CMU_SUBJECT_75" /tm
 
 ### 运行资源
 
-- `assets/public/models/resident/luna-walk-room.glb`：保留 `Walk_Grounded_Loop`，加入 `ChairSit_Contact`（第 1–98 帧，30 fps，时间归零后 97/30 秒）。31,140 个三角形，10,406,152 bytes。
+- `assets/public/models/resident/luna-walk-room.glb`：保留 `Walk_Grounded_Loop`，加入 `ChairSit_Contact`（第 1–98 帧，30 fps，时间归零后 97/30 秒）。31,140 个三角形，10,123,612 bytes。
 - 同目录 `luna-seat-contact.bin`：98 帧、3,251 个局部顶点的蒙皮前修形，1,911,608 bytes。不能只替换 GLB 而遗漏该文件；普通 glTF 查看器只显示骨骼动作，不会自动应用此缓存。
-- GLB 与接触缓存合计 12.32 MB；源 `.blend` 不在 `assets/public/`，不进入网页构建。
+- GLB 与接触缓存合计 12.04 MB；源 `.blend` 不在 `assets/public/`，不进入网页构建。
 
-原始 4096 × 4096 底色 JPEG 来自用户提供的 Tripo GLB，在 Git 提交 `2e1ff72` 的 `art/resident/animated-transfer/walk-repair/luna-walk-repaired.glb` 中也有相同副本。法线与粗糙度／金属度图保留 2048 × 2048。当前材质将法线强度设为 0.18、金属系数设为 0，并复用底色作为 0.55 强度的自发光，用来减轻室内近景的发际线和眼周暗块。
+原始 4096 × 4096 底色 JPEG 来自用户提供的 Tripo GLB，在 Git 提交 `2e1ff72` 的 `art/resident/animated-transfer/walk-repair/luna-walk-repaired.glb` 中也有相同副本。当前运行时与 `Luna-ArmContact.blend` 底色已在 Blender 中缩为 2048 × 2048；法线与粗糙度／金属度图维持原有 2048 × 2048 数据。当前材质将法线强度设为 0.18、金属系数设为 0，并复用底色作为 0.55 强度的自发光，用来减轻室内近景的发际线和眼周暗块。
+
+### 人物贴图 2K 上限
+
+在仓库根目录运行 `blender --background --python scripts/resize-luna-textures.py`。脚本只缩小日常装、蝴蝶结外套与丁香开衫中最长边超过 2048 的图片，保持宽高比；同步打包对应 Blender 制作源。GLB 中仅替换缩放图片的 bufferView，校验其余二进制数据和模型描述不变，避免重新导出网格破坏 `_CONTACT_ID`、修形或动画。已达上限的图片不重新编码，重复执行不会改写资源。可用 `-- --report <仓库外路径>` 保存处理报告。完成其他模型制作脚本后，应再运行此命令，确保运行资源符合 2K 上限。
+
+日常装 GLB 为 9.65 MiB，蝴蝶结外套为 6.86 MiB；丁香开衫原本即为 2K，保持 7.43 MiB。两张底色由 4096² 降为 2048²，各减少 75% 像素；文件体积不按像素数等比下降，仍包含未改动的贴图、几何和动作。
 
 ### 复建
 
@@ -78,7 +108,7 @@ python scripts/pack-luna-chair.py --output <外部目录>
 
 ## 坐姿待机
 
-懒人沙发托腮采用 CMU `13_04` 的左肘弯曲和头部转向（120 Hz，第 1573–2149 帧）。桌前固定椅晃腿采用 CMU `01_06` 坐在高处时的左右膝屈伸（120 Hz，第 985–1357 帧）。两段均从原始记录取坐稳后的片段，并导出为 10 Hz 曲线，托腮的放手段略放慢。网页在既有落座姿势上求解手掌接触和小腿摆角。懒人沙发保留原有骨盆、贴地双脚和坐垫承重。固定椅保留臀部与膝位。三个服装使用各自的下颌接触点，连帽衫的空闲手放在腿上以给袖口留空间。
+懒人沙发托腮采用 CMU `13_04` 的左肘弯曲和头部转向（120 Hz，第 1573–2149 帧）。桌前固定椅晃腿采用 CMU `01_06` 坐在高处时的左右膝屈伸（120 Hz，第 985–1357 帧）。两段均从原始记录取坐稳后的片段，并导出为 10 Hz 曲线，托腮的放手段略放慢。网页在既有落座姿势上求解手掌接触和小腿摆角。懒人沙发保留原有骨盆、贴地双脚和坐垫承重。固定椅保留臀部与膝位。日常装的左手贴住下颌，右手托住左前臂。
 
 下载 [13_04.amc](https://mocap.cs.cmu.edu/subjects/13/13_04.amc) 和 [01_06.amc](https://mocap.cs.cmu.edu/subjects/01/01_06.amc) 到仓库外的同一目录，从仓库根目录运行以下命令生成 `src/scene/orbital/seatedIdleFrames.ts`。
 

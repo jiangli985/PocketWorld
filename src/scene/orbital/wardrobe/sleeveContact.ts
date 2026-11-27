@@ -26,7 +26,7 @@ export function createSleeveContact(asset: Object3D) {
       shoulder.getWorldPosition(shoulderPoint).applyMatrix4(toBind);
       wrist.getWorldPosition(reach).applyMatrix4(toBind).sub(shoulderPoint);
       // Distances are in the garment's unscaled bind space. Release on lift, spread or forward reach.
-      const weight = smooth(-reach.y, .115, .185) * (1 - smooth(Math.abs(reach.x), .082, .133))
+      const weight = smooth(-reach.y, .115, .185) * (1 - smooth(Math.abs(reach.x), .034, .078))
         * (1 - smooth(Math.abs(reach.z), .105, .173));
       for (const surface of surfaces) surface.morphTargetInfluences![surface.morphTargetDictionary![key]] = weight;
     }

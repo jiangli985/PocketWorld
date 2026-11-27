@@ -5,13 +5,14 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import * as computerLayout from './computerLayout.ts';
 import * as cartridgeMotion from './cartridge-motion.ts';
+import { HIGHSCORE_KEY as fishingScoreKey } from '../../../games/mario/storage.ts';
 
 const source = fs.readFileSync(process.env.MEDIA_EXIT_SOURCE ?? new URL('./MediaObjects.tsx', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source.replace(/const gameModules = .*;/, 'const gameModules = globalThis.gameModules;'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
 }).outputText;
 
-function mount({ game = null, modules = {}, focusedObject = 'computer', width = 1280, height = 720 } = {}) {
+function mount({ game = null, modules = {}, focusedObject = 'computer', width = 1280, height = 720, localStorage } = {}) {
   const slots = [];
   let cursor = 0, dirty = true, tree;
   const effects = [];
@@ -60,7 +61,7 @@ function mount({ game = null, modules = {}, focusedObject = 'computer', width = 
   };
   const document = Object.assign(new EventTarget(), { hidden: false, activeElement: { blur() { blurred++; } } });
   const context = {
-    exports: {}, gameModules: modules, window: target, document,
+    exports: {}, gameModules: modules, window: target, document, localStorage,
     require(name) {
       if (name === 'react') return react;
       if (name === '@react-three/drei') return { Html: 'Html' };
@@ -213,7 +214,7 @@ test('leaving during insertion cancels the transfer and ignores its stale comple
   } finally { view.dispose(); }
 });
 
-test('rejected seated-access checks leave both cartridges on the rack without delayed insertion', () => {
+test('a rejected approach request leaves both cartridges on the rack without delayed insertion', () => {
   const view = mount({ focusedObject: null });
   const requests = [], actions = [];
   try {
@@ -274,6 +275,71 @@ test('one cartridge selection from the room waits for the computer, then inserts
   } finally { view.dispose(); }
 });
 
+test('mario loads only on selection and ignores a late import after leaving', async () => {
+  const Game = () => null;
+  let loads = 0, finish;
+  const view = mount({ modules: { '../../../games/mario/index.tsx': () => {
+    loads++;
+    return loads === 1 ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ default: Game });
+  } } });
+  try {
+    await view.settle();
+    assert.equal(loads, 0);
+    assert.match(view.find(node => node.props?.id === 'game-cartridge-mario').props.hint, /潮汐小馆/);
+    view.props.activeGame = 'mario';
+    view.render();
+    assert.equal(loads, 1);
+    view.key();
+    assert.deepEqual(view.changes, [null]);
+    view.props.activeGame = null;
+    view.props.focusedObject = null;
+    view.render();
+    finish({ default: Game });
+    await view.settle();
+    assert.equal(view.find(node => node.type === Game), undefined);
+    view.props.activeGame = 'mario';
+    view.props.focusedObject = 'computer';
+    view.render();
+    await view.settle();
+    assert.equal(loads, 2);
+    assert.equal(view.find(node => node.type === Game).props.isActive, true);
+  } finally { view.dispose(); }
+});
+
+test('room score callbacks keep fishing, legacy ski and shooter records separate', async () => {
+  const Game = () => null;
+  const legacy = 'pocketworld:mario:highscore', shooter = 'pocketworld:shooter:highscore';
+  const data = new Map([[legacy, '99999'], [fishingScoreKey, '1e3'], [shooter, '12']]);
+  const reads = [], writes = [];
+  const localStorage = {
+    getItem(key) { reads.push(key); return data.get(key) ?? null; },
+    setItem(key, value) { writes.push(key); data.set(key, value); },
+  };
+  const view = mount({ game: 'mario', localStorage, modules: {
+    '../../../games/mario/index.tsx': () => Promise.resolve({ default: Game }),
+    '../../../games/shooter/index.tsx': () => Promise.resolve({ default: Game }),
+  } });
+  try {
+    await view.settle();
+    const fishing = view.find(node => node.type === Game).props;
+    fishing.onScoreChange(5, 5);
+    fishing.onGameOver({ score: 4, highScore: 4, victory: false });
+    assert.equal(data.get(fishingScoreKey), '5');
+    assert.equal(data.get(legacy), '99999');
+    assert.equal(data.get(shooter), '12');
+    assert.deepEqual(reads, [fishingScoreKey, fishingScoreKey]);
+    assert.deepEqual(writes, [fishingScoreKey]);
+    view.props.activeGame = 'shooter';
+    view.render();
+    await view.settle();
+    view.find(node => node.type === Game).props.onScoreChange(15, 15);
+    assert.equal(data.get(shooter), '15');
+    assert.equal(data.get(fishingScoreKey), '5');
+    assert.deepEqual(reads, [fishingScoreKey, fishingScoreKey, shooter]);
+    assert.deepEqual(writes, [fishingScoreKey, shooter]);
+  } finally { view.dispose(); }
+});
+
 test('other keys, other focused objects and disposal do not retain the computer Escape handler', () => {
   const view = mount();
   try {
@@ -324,4 +390,129 @@ test('desktop explicitly expands and resumes embedded without replacing the cart
     host().props.onCollapse(); view.render(); assert.equal(view.find(node => node.type === Game).props.isActive, false);
     host().props.onResume(); view.render(); assert.equal(host().props.expanded, false); assert.equal(view.find(node => node.type === Game).props.isActive, true);
   } finally { view.dispose(); }
+});
+
+test('computer overview handles yield to close-up interaction so focused clicks cannot re-inspect', () => {
+  const view = mount();
+  try {
+    const computerHandle = view.find(node => node.props?.id === 'computer');
+    assert.equal(computerHandle.props.panoramaOnly, true);
+    const deskSource = fs.readFileSync(new URL('../FurnitureDesk.tsx', import.meta.url), 'utf8');
+    assert.match(deskSource, /<ObjectHandle\s+id="computer"\s+action="inspect"\s+panoramaOnly\b/);
+  } finally { view.dispose(); }
+});
+
+test('collapsed ComputerScreen captures clicks on the CRT display to resume or re-expand', () => {
+  const screenSource = fs.readFileSync(new URL('./ComputerScreen.tsx', import.meta.url), 'utf8');
+  const compiledScreen = ts.transpileModule(screenSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
+  }).outputText;
+  const hooks = {
+    useRef: value => ({ current: value }),
+    useMemo: fn => fn(),
+  };
+  const react = {
+    ...hooks,
+    createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
+  };
+  const ctx = {
+    exports: {},
+    require(name) {
+      if (name === 'react') return react;
+      if (name === '@react-three/drei') return { Html: 'Html' };
+      if (name === '@react-three/fiber') return { useFrame() {} };
+      if (name === 'three') return { Vector3: class { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; } } };
+      if (name === './computerLayout') return computerLayout;
+      if (name === './screen-layout') return { fitComputerDisplay() {}, fitExpandedDisplay() {} };
+      throw new Error(`Unexpected dependency: ${name}`);
+    },
+  };
+  vm.runInNewContext(compiledScreen, ctx);
+  const collect = node => {
+    if (!node || typeof node !== 'object') return [];
+    if (Array.isArray(node)) return node.flatMap(collect);
+    return [node, ...collect(node.props?.children)];
+  };
+  const renderScreen = props => collect(ctx.exports.ComputerScreen({
+    visible: true, interactive: false, controls: true, children: null, ...props,
+  }));
+
+  let resumed = 0, expanded = 0, stopped = 0;
+  const desktopNodes = renderScreen({
+    collapsed: true, allowEmbeddedResume: true,
+    onResume: () => resumed++, onExpand: () => expanded++,
+  });
+  const desktopSurface = desktopNodes.find(n => n.props?.['data-computer-display'] === 'native');
+  assert.equal(desktopSurface.props.style.pointerEvents, 'auto');
+  const resumeBtn = desktopNodes.find(n => n.props?.className === 'computer-game-resume-surface');
+  assert.ok(resumeBtn);
+  resumeBtn.props.onClick({ stopPropagation() { stopped++; } });
+  assert.equal(resumed, 1);
+  assert.equal(expanded, 0);
+  assert.equal(stopped, 1);
+
+  const narrowNodes = renderScreen({
+    collapsed: true, allowEmbeddedResume: false,
+    onResume: () => resumed++, onExpand: () => expanded++,
+  });
+  narrowNodes.find(n => n.props?.className === 'computer-game-resume-surface')
+    .props.onClick({ stopPropagation() { stopped++; } });
+  assert.equal(resumed, 1);
+  assert.equal(expanded, 1);
+  assert.equal(stopped, 2);
+
+  const expandedNodes = renderScreen({ expanded: true, collapsed: true, interactive: true });
+  assert.equal(expandedNodes.find(n => n.props?.className === 'computer-game-resume-surface'), undefined);
+
+  const idleNodes = renderScreen({ controls: false, collapsed: false, interactive: false });
+  assert.equal(idleNodes.find(n => n.props?.['data-computer-display'] === 'native').props.style.pointerEvents, 'none');
+  assert.equal(idleNodes.find(n => n.props?.className === 'computer-game-resume-surface'), undefined);
+});
+
+test('useWorldController ignores duplicate inspect on an already-active focused object', async () => {
+  const controllerSource = fs.readFileSync(new URL('../useWorldController.ts', import.meta.url), 'utf8');
+  const compiledCtrl = ts.transpileModule(controllerSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
+  }).outputText;
+  const slots = [];
+  let cursor = 0, dirty = true, value;
+  const same = (a, b) => a && b && a.length === b.length && a.every((item, i) => Object.is(item, b[i]));
+  const hooks = {
+    useRef: init => { const i = cursor++; return slots[i] ??= { current: init }; },
+    useState: init => {
+      const i = cursor++;
+      const slot = slots[i] ??= { value: typeof init === 'function' ? init() : init };
+      slot.set ??= next => {
+        const v = typeof next === 'function' ? next(slot.value) : next;
+        if (!Object.is(v, slot.value)) { slot.value = v; dirty = true; }
+      };
+      return [slot.value, slot.set];
+    },
+    useCallback: (cb, deps) => { const i = cursor++; if (!same(slots[i]?.deps, deps)) slots[i] = { deps, cb }; return slots[i].cb; },
+    useEffect: () => {},
+  };
+  const ctx = {
+    exports: {},
+    AbortController,
+    require(name) {
+      if (name === 'react') return hooks;
+      if (name === 'gsap') return { __esModule: true, default: { timeline: ({ onComplete }) => ({ to() { onComplete?.(); return this; }, call() { return this; }, kill() {} }) } };
+      if (name === '../audioEngine') return { roomAudio: { playSfx() {} } };
+      if (name === './wardrobe/outfit') return { initialOutfit: () => 'everyday', isOutfit: () => false, rememberOutfit() {} };
+      if (name === '../../types/world') return { CLOSED_OBJECT: { open: false, active: false, page: 0, value: 0 } };
+      throw new Error(`Unexpected dependency: ${name}`);
+    },
+  };
+  vm.runInNewContext(compiledCtrl, ctx);
+  const pump = () => { while (dirty) { dirty = false; cursor = 0; value = ctx.exports.useWorldController(); } };
+  pump();
+  await value.onAction({ sceneId: 'habitat', objectId: 'computer', kind: 'inspect' });
+  pump();
+  assert.equal(value.focusedObject, 'computer');
+  assert.equal(value.transition.phase, 'active');
+  const settledId = value.transition.id;
+  await value.onAction({ sceneId: 'habitat', objectId: 'computer', kind: 'inspect' });
+  pump();
+  assert.equal(value.transition.id, settledId);
+  assert.equal(value.transition.phase, 'active');
 });

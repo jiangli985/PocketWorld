@@ -17,18 +17,18 @@ function restore(bone: THREE.Bone, pose: BonePose) {
 }
 const tilt = (from: THREE.Vector3, to: THREE.Vector3) => Math.atan2(to.z - from.z, from.y - to.y);
 
-function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE.Vector3, sole: THREE.Quaternion, kneeDirection?: THREE.Vector3) {
+export function placeLimbEnd([base, middle, tip]: THREE.Bone[], point: THREE.Vector3, tipRotation: THREE.Quaternion, bendDirection?: THREE.Vector3) {
   const worldPosition = (joint: THREE.Bone) => joint.getWorldPosition(new THREE.Vector3());
   const worldRotation = (joint: THREE.Object3D) => joint.getWorldQuaternion(new THREE.Quaternion());
-  const hip = worldPosition(thigh), knee = worldPosition(shin), ankle = worldPosition(foot);
-  const upper = knee.distanceTo(hip), lower = ankle.distanceTo(knee);
-  const axis = point.clone().sub(hip);
+  const start = worldPosition(base), bend = worldPosition(middle), end = worldPosition(tip);
+  const upper = bend.distanceTo(start), lower = end.distanceTo(bend);
+  const axis = point.clone().sub(start);
   const distance = THREE.MathUtils.clamp(axis.length(), Math.abs(upper - lower) + .0001, upper + lower - .0001);
   axis.normalize();
-  const pole = kneeDirection ?? knee.clone().sub(hip);
+  const pole = bendDirection ?? bend.clone().sub(start);
   pole.addScaledVector(axis, -pole.dot(axis)).normalize();
   const along = (upper * upper - lower * lower + distance * distance) / (2 * distance);
-  const bentKnee = hip.clone().addScaledVector(axis, along)
+  const bendPoint = start.clone().addScaledVector(axis, along)
     .addScaledVector(pole, Math.sqrt(Math.max(0, upper * upper - along * along)));
   const setWorldRotation = (joint: THREE.Bone, rotation: THREE.Quaternion) => {
     joint.quaternion.copy(worldRotation(joint.parent!).invert()).multiply(rotation);
@@ -38,10 +38,10 @@ function plantResidentLeg([thigh, shin, foot]: THREE.Bone[], point: THREE.Vector
     const delta = new THREE.Quaternion().setFromUnitVectors(from.normalize(), to.normalize());
     setWorldRotation(joint, delta.multiply(worldRotation(joint)));
   };
-  aim(thigh, knee.clone().sub(hip), bentKnee.clone().sub(hip));
-  const movedKnee = worldPosition(shin);
-  aim(shin, worldPosition(foot).sub(movedKnee), hip.addScaledVector(axis, distance).sub(movedKnee));
-  setWorldRotation(foot, sole);
+  aim(base, bend.clone().sub(start), bendPoint.clone().sub(start));
+  const movedBend = worldPosition(middle);
+  aim(middle, worldPosition(tip).sub(movedBend), start.addScaledVector(axis, distance).sub(movedBend));
+  setWorldRotation(tip, tipRotation);
 }
 
 /** A spring with an analytic update so its settling time is independent of the display rate. */
@@ -242,8 +242,8 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     hips.position.copy(hips.parent!.worldToLocal(hipPosition.clone().setZ(forward)));
     hips.quaternion.copy(hips.parent!.getWorldQuaternion(new THREE.Quaternion()).invert()).multiply(balancedRotation);
     hips.updateWorldMatrix(false, true);
-    plantResidentLeg(leftLeg, leftSupport.point, leftSupport.sole);
-    plantResidentLeg(rightLeg, rightSupport.point, rightSupport.sole);
+    placeLimbEnd(leftLeg, leftSupport.point, leftSupport.sole);
+    placeLimbEnd(rightLeg, rightSupport.point, rightSupport.sole);
   }
   asset.updateMatrixWorld(true);
   const mesh = new THREE.Group();
@@ -366,7 +366,7 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
       if (lowest >= floor) continue;
       const foot = joints[2];
       foot.getWorldPosition(ankle).y += floor - lowest + .0002;
-      plantResidentLeg(joints, ankle, foot.getWorldQuaternion(footRotation));
+      placeLimbEnd(joints, ankle, foot.getWorldQuaternion(footRotation));
     }
   }
 
@@ -562,7 +562,7 @@ export function createResidentRig(asset: THREE.Object3D, clip: THREE.AnimationCl
     hips.position.copy(hips.parent!.worldToLocal(ankleGoal));
     for (const [side, leg] of stairLegs.entries()) {
       kneeDirection.set(side === 0 ? -.11 : .11, 0, 1).applyQuaternion(meshYaw);
-      plantResidentLeg(leg.joints, leg.goal, leg.sole, kneeDirection);
+      placeLimbEnd(leg.joints, leg.goal, leg.sole, kneeDirection);
       const [thigh, shin] = leg.joints;
       thighDirection.copy(shin.getWorldPosition(soleEdge)).sub(thigh.getWorldPosition(soleGoal)).applyQuaternion(meshYawInverse);
       kneeLift[side] = THREE.MathUtils.clamp(Math.atan2(thighDirection.z, -thighDirection.y) - .08, 0, 1.28);

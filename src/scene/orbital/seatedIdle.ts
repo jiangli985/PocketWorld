@@ -3,15 +3,23 @@ import type { ResidentRig } from './ResidentModel';
 import type { ResidentOutfit } from './wardrobe/outfit';
 import { CHAIR_LEG_SWING, SEATED_IDLE_FPS, SOFA_CHEEK_REST } from './seatedIdleFrames';
 
-type SeatedIdleKind = 'sofa' | 'chair';
+type SeatedIdleKind = 'sofa' | 'chair' | 'floor';
+type SeatedOverlay = 'sofaDoze' | 'chairGlance' | 'floorGlance';
+type SeatedClips = Partial<Record<SeatedOverlay, { duration: number }>>;
 const motions = {
-  sofa: { samples: SOFA_CHEEK_REST, delay: 1.1, rest: 7.2 },
-  chair: { samples: CHAIR_LEG_SWING, delay: .75, rest: 4.6 },
-};
+  sofa: { samples: SOFA_CHEEK_REST, delay: 1.1, rest: 7.2, overlay: 'sofaDoze' },
+  chair: { samples: CHAIR_LEG_SWING, delay: .75, rest: 4.6, overlay: 'chairGlance' },
+  floor: { samples: null, delay: 5.5, rest: 13, overlay: 'floorGlance' },
+} as const;
 const duration = (samples: readonly number[]) => (samples.length / 2 - 1) / SEATED_IDLE_FPS;
 
 export function createSeatedIdle() {
-  return { seat: null as SeatedIdleKind | null, elapsed: 0, time: 0, weight: 0, release: 0 };
+  return { seat: null as SeatedIdleKind | null, overlay: null as SeatedOverlay | null,
+    time: 0, weight: 0, release: 0 };
+}
+
+export function seatedIdleWeight(idle: ReturnType<typeof createSeatedIdle>) {
+  return idle.weight * (1 - MathUtils.smoothstep(idle.release, 0, 1));
 }
 
 /** Keep the last seated pose under an interrupted gesture until it returns to neutral. */
@@ -20,10 +28,15 @@ export function stepSeatedIdle(
   dt: number,
   seat: SeatedIdleKind | null,
   exiting: boolean,
+  clips?: SeatedClips,
 ) {
-  if (seat !== idle.seat || !seat) {
+  if (seat !== idle.seat) {
+    Object.assign(idle, createSeatedIdle());
     idle.seat = seat;
-    idle.elapsed = idle.time = idle.weight = idle.release = 0;
+    if (seat) {
+      idle.time = -motions[seat].delay;
+      if (seat === 'floor') idle.overlay = motions.floor.overlay;
+    }
   }
   if (!seat) return false;
   if (exiting) {
@@ -33,18 +46,26 @@ export function stepSeatedIdle(
     idle.weight = 0;
     return false;
   }
-  const { samples, delay, rest } = motions[seat];
-  const length = duration(samples);
-  idle.elapsed += dt;
-  idle.time = (idle.elapsed - delay) % (length + rest);
-  idle.weight = MathUtils.smoothstep(idle.time, 0, .35) * (1 - MathUtils.smoothstep(idle.time, length - .4, length));
+  const { samples, rest, overlay } = motions[seat];
+  const length = idle.overlay ? clips?.[idle.overlay]?.duration ?? 0 : samples ? duration(samples) : 0;
+  idle.release = 0;
+  idle.time += dt;
+  if (idle.time >= length) {
+    idle.time -= length + rest;
+    idle.overlay = seat === 'floor' || (!idle.overlay && clips?.[overlay]) ? overlay : null;
+    idle.weight = 0;
+    return false;
+  }
+  const blend = idle.overlay ? .85 : .35;
+  idle.weight = MathUtils.smoothstep(idle.time, 0, blend)
+    * (1 - MathUtils.smoothstep(idle.time, length - blend - .05, length));
   return false;
 }
 
 const cheekContact: Record<ResidentOutfit, [number, number, number]> = {
   everyday: [.053, .014, -.045],
-  snowflower: [.044, .016, -.034],
-  cloudhoodie: [.058, .018, -.055],
+  ribbon: [.053, .014, -.045],
+  cardigan: [.058, .018, -.055],
 };
 
 export function createSeatedIdlePlayer(rig: ResidentRig, outfit: ResidentOutfit) {
@@ -69,7 +90,7 @@ export function createSeatedIdlePlayer(rig: ResidentRig, outfit: ResidentOutfit)
   const left = arm('Left'), right = arm('Right');
   const leftHip = bone('LeftUpLeg'), leftKnee = bone('LeftLeg');
   const rightHip = bone('RightUpLeg'), rightKnee = bone('RightLeg');
-  const freeHandOnLap = outfit === 'cloudhoodie';
+  const freeHandOnLap = outfit === 'cardigan';
   const legs = (['Left', 'Right'] as const).map(side => ({ shin: bone(side + 'Leg'), foot: bone(side + 'Foot') }));
   const point = new Vector3();
   const basis = new Matrix4();
@@ -163,7 +184,7 @@ export function createSeatedIdlePlayer(rig: ResidentRig, outfit: ResidentOutfit)
     right.upper.getWorldPosition(bend)
       .addScaledVector(roomY, -.15).addScaledVector(roomX, -.14);
     if (freeHandOnLap) {
-      // The hoodie cuff needs more space than the dress sleeves when the arms cross.
+      // The cardigan cuff needs more space than the dress sleeves when the arms cross.
       rightHip.getWorldPosition(target).lerp(rightKnee.getWorldPosition(point), .46)
         .addScaledVector(roomY, .076).addScaledVector(roomX, -.024);
       normal.copy(roomY).negate();
@@ -178,13 +199,13 @@ export function createSeatedIdlePlayer(rig: ResidentRig, outfit: ResidentOutfit)
   }
 
   return (idle: ReturnType<typeof createSeatedIdle>) => {
-    if (!idle.seat || !idle.weight) return;
+    if (!idle.seat || idle.seat === 'floor' || idle.overlay || !idle.weight) return;
     const { samples } = motions[idle.seat];
     const frame = MathUtils.clamp(idle.time, 0, duration(samples)) * SEATED_IDLE_FPS;
     const start = Math.floor(frame), end = Math.min(start + 1, samples.length / 2 - 1);
     const first = MathUtils.lerp(samples[start * 2], samples[end * 2], frame - start);
     const second = MathUtils.lerp(samples[start * 2 + 1], samples[end * 2 + 1], frame - start);
-    const weight = idle.weight * (1 - MathUtils.smoothstep(idle.release, 0, 1));
+    const weight = seatedIdleWeight(idle);
     rig.mesh.getWorldQuaternion(room);
     roomX.set(1, 0, 0).applyQuaternion(room);
     if (idle.seat === 'chair') {

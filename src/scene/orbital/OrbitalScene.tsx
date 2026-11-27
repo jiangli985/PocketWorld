@@ -1,7 +1,7 @@
+import type { PaperPickup } from './cabinActions';
 import { previewOutfit, readOutfit, type ResidentOutfit } from './wardrobe/outfit';
-import { CLOCK_POSITION, LAMP_POSITION, UPPER_DECK_OFFSET, WARDROBE_STAND } from './cabinLayout';
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { CLOCK_POSITION, LAMP_POSITION, UPPER_DECK_OFFSET, WARDROBE_STAND, type CabinDeck } from './cabinLayout';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, events, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import type { OrbitControls as Controls } from 'three-stdlib';
@@ -9,11 +9,13 @@ import * as THREE from 'three';
 import { SCENE_ORIGINS, type WorldAction, type WorldObjectState, type WorldSceneId, type WorldSceneProps } from '../../types/world';
 import { roomAudio } from '../audioEngine';
 import { CAMERA_FOV, HOME_TARGET, HOME_ZOOM, OUTFIT_TARGET, outfitCameraPosition, cabinCameraFrame, stairCameraFrames, type CabinView } from './cabinView';
-import { CabinUpperDeck, UpperDeckVisibility } from './CabinUpperDeck';
+import { CabinFadeGroup, CabinOpacityContext, CabinUpperDeck } from './CabinUpperDeck';
+import { CabinZoomRenderer } from './CabinZoomRenderer';
+import { cabinDeckOpacity, cabinZoomIsolation, quickCabinFrame, QUICK_CABIN_DURATION, type CabinOpacity } from './cabinCutaway';
 import { BedroomGuard, CabinStaircase } from './CabinStructure';
-import { stairDestination, type CabinResidentView } from './cabinStairs';
+import { stairApproachPoint, stairLanding, type CabinResidentView } from './cabinStairs';
 import { Cosmos, createSunState, type SunState } from './Cosmos';
-import { HabitatShell } from './HabitatShell';
+import { HabitatShell, preloadHabitatShell } from './HabitatShell';
 import { SpacecraftHull } from './SpacecraftHull';
 import {
   BOOST_FOV_KICK,
@@ -22,6 +24,7 @@ import {
   REDUCED_TRANSITION_DURATION,
   SHIP_TARGET,
   approachStartPosition,
+  cabinOpacityForTransition,
   createFlightState,
   easeInOutCubic,
   easeOutQuart,
@@ -66,20 +69,22 @@ interface OrbitalSceneProps extends WorldSceneProps {
   boosting: boolean;
   onViewModeChange: (mode: SpacecraftViewMode) => void;
   onEnterCabin: () => void;
+  onLeaveCabin?: () => void;
 }
 interface CabinCameraProps {
   cabinView: CabinView;
   viewRevision: number;
-  cutToDeck: boolean;
-  quickAscent: React.MutableRefObject<(() => boolean) | null>;
-  onQuickAscentAvailable: (available: boolean) => void;
+  quickDeck: CabinDeck | null;
+  quickTravel: React.MutableRefObject<((target: CabinDeck) => boolean) | null>;
+  onQuickTravelFinish: () => void;
+  onQuickTravelTarget: (target: CabinDeck | null) => void;
   onCabinViewChange: (view: CabinView) => void;
 }
 type CameraRigProps = OrbitalSceneProps & CabinCameraProps & {
   flight: SpacecraftFlightState;
   outfitPreview: boolean;
   residentView: React.MutableRefObject<CabinResidentView>;
-  onUpperVisibility: (visible: boolean) => void;
+  deckOpacity: React.MutableRefObject<CabinOpacity>;
 };
 
 function CameraRig(props: CameraRigProps) {
@@ -104,12 +109,19 @@ function CameraRig(props: CameraRigProps) {
     lower: cabinCameraFrame('lower', aspect),
     upper: cabinCameraFrame('upper', aspect),
   }), [aspect]);
+  const floorFramingDistance = Math.min(cabinFrames.lower.distance, cabinFrames.upper.distance);
   const stairFrames = useMemo(() => stairCameraFrames(aspect), [aspect]);
-  const deckCamera = useRef({ viewRevision: props.viewRevision, settling: false, onStairs: false, upperVisible: !props.outfitPreview });
+  const deckCamera = useRef({ viewRevision: props.viewRevision, settling: false, onStairs: false, zoomRatio: null as number | null });
+  const quickFlight = useRef<{ elapsed: number; start: CabinOpacity; zoom: number; moved: boolean } | null>(null);
   const stairEye = useRef(new THREE.Vector3());
   const stairTarget = useRef(new THREE.Vector3());
   const orbitDistance = useMemo(() => orbitDistanceForAspect(aspect), [aspect]);
   const zoomFlight = useRef([HOME_ZOOM, HOME_ZOOM]);
+  const cabinFrameScale = (distance: number) => {
+    const ratio = deckCamera.current.zoomRatio;
+    if (ratio === null) return 1;
+    return THREE.MathUtils.clamp(ratio * floorFramingDistance, 5, cabinFrames.overview.distance * 1.5) / distance;
+  };
   const cameraView = props.library?.cameraView;
   const sideView = props.focusedObject === 'book-01' && cameraView === 'side';
   const sideSlot = sideView ? props.library?.view.book?.slotId : undefined;
@@ -144,7 +156,9 @@ function CameraRig(props: CameraRigProps) {
       const frame = cabinFrames[props.cabinView];
       const look = origin.clone().add(showOutfit ? OUTFIT_TARGET : frame.target);
       if (camera instanceof THREE.PerspectiveCamera) { camera.zoom = HOME_ZOOM; camera.fov = CAMERA_FOV; camera.updateProjectionMatrix(); }
-      camera.position.copy(showOutfit ? outfitCameraPosition(aspect) : frame.position).add(origin);
+      if (showOutfit) camera.position.copy(outfitCameraPosition(aspect));
+      else camera.position.lerpVectors(frame.target, frame.position, cabinFrameScale(frame.distance));
+      camera.position.add(origin);
       deckCamera.current.viewRevision = props.viewRevision;
       deckCamera.current.settling = false;
       controls.current.target.copy(look);
@@ -155,11 +169,13 @@ function CameraRig(props: CameraRigProps) {
     props.flight.mode = props.viewMode;
     if (props.viewMode === 'orbit' || props.viewMode === 'approach') {
       props.flight.hullOpacity = 1;
+      props.deckOpacity.current.interior = 0;
       viewFlight.current.active = false;
       return;
     }
     if (props.viewMode === 'cabin') {
       props.flight.hullOpacity = 0;
+      props.deckOpacity.current.interior = 1;
       viewFlight.current.active = false;
       return;
     }
@@ -171,9 +187,10 @@ function CameraRig(props: CameraRigProps) {
     fromLens.current.set(lens?.enabled ? lens.offsetX : 0, lens?.enabled ? lens.offsetY : 0);
     toLens.current.set(0, 0);
     if (props.viewMode === 'entering-cabin') {
+      props.deckOpacity.current.resident = 1;
       const frame = cabinFrames[props.cabinView];
       target.current.copy(origin).add(frame.target);
-      destination.current.copy(origin).add(frame.position);
+      destination.current.lerpVectors(frame.target, frame.position, cabinFrameScale(frame.distance)).add(origin);
       if (camera instanceof THREE.PerspectiveCamera) zoomFlight.current = [camera.zoom, HOME_ZOOM];
       viewFlight.current = { active: true, elapsed: 0, duration: props.reducedMotion ? REDUCED_TRANSITION_DURATION : ENTER_CABIN_DURATION, mode: 'entering-cabin' };
     } else {
@@ -235,7 +252,8 @@ function CameraRig(props: CameraRigProps) {
     } else {
       const frame = cabinFrames[props.cabinView];
       target.current.copy(origin).add(frame.target);
-      destination.current.copy(origin).add(frame.position);
+      const scale = props.transition.toScene === 'habitat' ? cabinFrameScale(frame.distance) : 1;
+      destination.current.lerpVectors(frame.target, frame.position, scale).add(origin);
     }
     if (props.transition.phase === 'error') {
       if (camera instanceof THREE.PerspectiveCamera) { camera.zoom = zoomFlight.current[1]; camera.updateProjectionMatrix(); }
@@ -248,6 +266,7 @@ function CameraRig(props: CameraRigProps) {
   }, [props.transition.id, props.focusedObject, props.transition.phase === 'error', props.viewMode, size.width, size.height, cameraView, sideSlot, sideReading]);
   useFrame((_, delta) => {
     const flight = props.flight;
+    props.deckOpacity.current.zoomFade = null;
     flight.boosting = props.boosting && (flight.mode === 'orbit' || flight.mode === 'approach');
     const finishedApproach = stepFlightState(flight, delta, props.reducedMotion);
     roomAudio.setThrusterBoost(flight.boost);
@@ -284,7 +303,8 @@ function CameraRig(props: CameraRigProps) {
       vf.elapsed = Math.min(vf.duration, vf.elapsed + Math.min(delta, 0.1));
       const raw = vf.duration > 0 ? vf.elapsed / vf.duration : 1;
       const eased = easeInOutCubic(raw);
-      flight.hullOpacity = hullOpacityForTransition(vf.mode, eased);
+      flight.hullOpacity = hullOpacityForTransition(vf.mode, raw);
+      props.deckOpacity.current.interior = cabinOpacityForTransition(vf.mode, raw);
       if (camera instanceof THREE.PerspectiveCamera) {
         camera.zoom = THREE.MathUtils.lerp(zoomFlight.current[0], zoomFlight.current[1], eased);
         camera.updateProjectionMatrix();
@@ -309,8 +329,57 @@ function CameraRig(props: CameraRigProps) {
     const inHabitat = flight.mode === 'cabin' && props.sceneId === 'habitat';
     const ascent = inHabitat ? resident.stairAscent : null;
     const onStairs = ascent !== null;
-    const cut = props.cutToDeck && deck.viewRevision !== props.viewRevision;
-    if (deck.onStairs && !onStairs && inHabitat && !cut) {
+    const opacity = props.deckOpacity.current;
+    const zoomRatio = camera.position.distanceTo(controls.current.target) / floorFramingDistance;
+    if (inHabitat && !locked && !moving.current && !deck.settling && !onStairs && !deck.onStairs
+      && !quickFlight.current && deck.viewRevision === props.viewRevision) deck.zoomRatio = zoomRatio;
+    const isolation = cabinZoomIsolation(deck.zoomRatio ?? zoomRatio);
+    if (props.quickDeck && inHabitat && !locked) {
+      const nextDeck = props.quickDeck;
+      controls.current.enabled = false;
+      if (!quickFlight.current) {
+        fromPosition.current.copy(camera.position);
+        fromTarget.current.copy(controls.current.target);
+        quickFlight.current = { elapsed: 0, start: { ...opacity }, zoom: camera instanceof THREE.PerspectiveCamera ? camera.zoom : HOME_ZOOM, moved: false };
+        moving.current = false;
+      }
+      const quick = quickFlight.current;
+      quick.elapsed += Math.min(delta, .1);
+      const progress = props.reducedMotion ? 1 : Math.min(quick.elapsed / QUICK_CABIN_DURATION, 1);
+      const frame = quickCabinFrame(progress, quick.start, nextDeck, isolation);
+      opacity.lower = frame.lower;
+      opacity.upper = frame.upper;
+      opacity.resident = frame.resident;
+      if (frame.relocate && !quick.moved) {
+        if (!props.quickTravel.current?.(nextDeck)) {
+          deck.settling = true;
+          props.onQuickTravelFinish();
+          return;
+        }
+        quick.moved = true;
+        opacity.resident = props.reducedMotion ? 1 : 0;
+        props.onCabinViewChange(nextDeck);
+      }
+      const blend = easeInOutCubic(progress);
+      const end = cabinFrames[nextDeck];
+      const eye = stairEye.current.lerpVectors(end.target, end.position, cabinFrameScale(end.distance));
+      camera.position.lerpVectors(fromPosition.current, eye, blend);
+      controls.current.target.lerpVectors(fromTarget.current, end.target, blend);
+      if (camera instanceof THREE.PerspectiveCamera) {
+        camera.zoom = THREE.MathUtils.lerp(quick.zoom, HOME_ZOOM, blend);
+        camera.updateProjectionMatrix();
+      }
+      camera.lookAt(controls.current.target);
+      if (progress === 1) {
+        deck.onStairs = false;
+        deck.settling = true;
+        props.onQuickTravelFinish();
+      }
+      return;
+    }
+    quickFlight.current = null;
+    const landed = deck.onStairs && !onStairs && inHabitat;
+    if (landed) {
       props.onCabinViewChange(resident.deck);
       deck.settling = true;
     }
@@ -319,21 +388,41 @@ function CameraRig(props: CameraRigProps) {
       deck.viewRevision = props.viewRevision;
       deck.settling = true;
     }
-    const upperVisible = !inHabitat || (props.focusedObject
-      ? (props.focusedObject === 'clock' || props.focusedObject === 'wardrobe')
-      : onStairs || props.cabinView !== 'lower');
-    if (deck.upperVisible !== upperVisible) {
-      deck.upperVisible = upperVisible;
-      props.onUpperVisibility(upperVisible);
+    const focusDeck = props.focusedObject === 'clock' || props.focusedObject === 'wardrobe' ? 'upper' : 'lower';
+    const activeDeck = landed || props.cabinView === 'overview' ? resident.deck : props.cabinView;
+    const view = !inHabitat ? 'overview' : props.focusedObject ? focusDeck : activeDeck;
+    const fade = cabinDeckOpacity(view, props.focusedObject ? 1 : isolation, ascent, resident.stairFrom);
+    if (flight.mode === 'cabin') {
+      for (const part of ['lower', 'upper'] as const) {
+        const next = props.reducedMotion ? fade[part] : THREE.MathUtils.damp(opacity[part], fade[part], 11, delta);
+        opacity[part] = Math.abs(next - fade[part]) < .008 ? fade[part] : next;
+      }
     }
+    if (inHabitat && !locked && !moving.current && !onStairs && !landed && !deck.settling) {
+      const other = activeDeck === 'lower' ? 'upper' : 'lower';
+      if (opacity[activeDeck] === 1 && opacity[other] > 0 && opacity[other] < 1) opacity.zoomFade = other;
+    }
+    opacity.resident = 1;
     if (!moving.current) {
       const adjusting = inHabitat && !locked && (onStairs || deck.settling);
       controls.current.enabled = !locked && !adjusting;
-      if (!adjusting) return;
-      const end = cabinFrames[props.cabinView];
-      const eye = onStairs ? stairEye.current.lerpVectors(stairFrames.lower.position, stairFrames.upper.position, ascent) : end.position;
+      if (!adjusting) {
+        if (inHabitat && !locked && props.cabinView === 'overview') {
+          const pivot = stairTarget.current.lerpVectors(HOME_TARGET, cabinFrames[resident.deck].target, isolation);
+          const shift = stairEye.current.subVectors(pivot, controls.current.target);
+          if (!props.reducedMotion) shift.multiplyScalar(1 - Math.exp(-Math.min(delta, .1) * 12));
+          camera.position.add(shift);
+          controls.current.target.add(shift);
+          camera.lookAt(controls.current.target);
+        }
+        return;
+      }
+      const end = cabinFrames[landed ? resident.deck : props.cabinView];
+      const eye = onStairs
+        ? stairEye.current.lerpVectors(stairFrames.lower.position, stairFrames.upper.position, ascent)
+        : stairEye.current.lerpVectors(end.target, end.position, cabinFrameScale(end.distance));
       const pivot = onStairs ? stairTarget.current.lerpVectors(stairFrames.lower.target, stairFrames.upper.target, ascent) : end.target;
-      const blend = cut || props.reducedMotion ? 1 : 1 - Math.exp(-Math.min(delta, .1) * (onStairs ? 6 : 10));
+      const blend = props.reducedMotion ? 1 : 1 - Math.exp(-Math.min(delta, .1) * (onStairs ? 6 : 10));
       camera.position.lerp(eye, blend);
       controls.current.target.lerp(pivot, blend);
       if (camera instanceof THREE.PerspectiveCamera && Math.abs(camera.zoom - HOME_ZOOM) > .001) {
@@ -373,7 +462,8 @@ function CameraRig(props: CameraRigProps) {
   const locked = inTransition || props.gestureActive || !!props.focusedObject || !['idle', 'active', 'error'].includes(props.transition.phase);
   const inCabin = props.viewMode === 'cabin';
   return <OrbitControls ref={controls} enabled={!locked} enablePan={false} enableDamping dampingFactor={0.08}
-    minDistance={inCabin ? 5 : 16} maxDistance={inCabin ? cabinFrames.overview.distance * 1.5 : orbitDistance * 2.4}
+    minDistance={inCabin || props.viewMode === 'entering-cabin' ? 5 : 16}
+    maxDistance={inCabin ? cabinFrames.overview.distance * 1.5 : orbitDistance * 2.4}
     minPolarAngle={0} maxPolarAngle={Math.PI}
     onStart={() => {
       if (props.flight.mode === 'approach') {
@@ -393,9 +483,13 @@ const GROUND_DAY_COLOR = new THREE.Color('#d4c7b8');
 const GROUND_DUSK_COLOR = new THREE.Color('#685a64');
 const GROUND_SHADOW_COLOR = new THREE.Color('#393d4e');
 const EARTHSHINE_DAY_COLOR = new THREE.Color('#9ec4ee');
+const EARTHSHINE_ORBIT_COLOR = new THREE.Color('#78b8ff');
 const EARTHSHINE_DUSK_COLOR = new THREE.Color('#f0b48c');
 const EARTHSHINE_NIGHT_COLOR = new THREE.Color('#7ca8e2');
 const SUN_INTENSITY = 1.65;
+const ORBIT_SUN_INTENSITY = 2.25;
+const CABIN_EARTHSHINE_POS = new THREE.Vector3(-11, 4.5, -10);
+const ORBIT_EARTHSHINE_POS = new THREE.Vector3(7.5, -4.8, 13.5);
 
 function OrbitalLighting({ objects, sceneId, sun }: Pick<WorldSceneProps, 'objects' | 'sceneId'> & { sun: SunState }) {
   const lamp = useRef<THREE.PointLight>(null);
@@ -410,23 +504,33 @@ function OrbitalLighting({ objects, sceneId, sun }: Pick<WorldSceneProps, 'objec
   useFrame((_, delta) => {
     const daylight = sun.daylight.value;
     const warmth = sun.warmth;
+    const orbit = sun.orbitUniform.value;
     if (lamp.current) lamp.current.intensity = THREE.MathUtils.damp(lamp.current.intensity, objects.lamp?.active === false ? 0 : 4.8, 5, delta);
-    if (roomWarm.current) roomWarm.current.intensity = THREE.MathUtils.damp(roomWarm.current.intensity, 2.4 + 0.6 * (1 - daylight), 3, delta);
+    if (roomWarm.current) roomWarm.current.intensity = THREE.MathUtils.damp(roomWarm.current.intensity, (2.4 + 0.6 * (1 - daylight)) * (1 - orbit * 0.45), 3, delta);
     if (ambient.current) {
-      ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, 0.48 + 0.44 * daylight + 0.08 * warmth, 3, delta);
+      const targetAmbient = THREE.MathUtils.lerp(0.48 + 0.44 * daylight + 0.08 * warmth, 0.24 + 0.28 * daylight + 0.08 * warmth, orbit);
+      ambient.current.intensity = THREE.MathUtils.damp(ambient.current.intensity, targetAmbient, 3, delta);
       ambient.current.color.lerpColors(SKY_SHADOW_COLOR, SKY_DAY_COLOR, daylight).lerp(SKY_DUSK_COLOR, warmth * 0.45);
       ambient.current.groundColor.lerpColors(GROUND_SHADOW_COLOR, GROUND_DAY_COLOR, daylight).lerp(GROUND_DUSK_COLOR, warmth * 0.38);
     }
     if (key.current) {
       key.current.position.copy(sun.light).multiplyScalar(18);
-      key.current.intensity = SUN_INTENSITY * daylight;
+      key.current.intensity = THREE.MathUtils.lerp(SUN_INTENSITY, ORBIT_SUN_INTENSITY, orbit) * daylight;
       key.current.color.lerpColors(SUN_DAY_COLOR, SUN_LIMB_COLOR, warmth * 0.85);
     }
     if (earthshine.current) {
-      earthshine.current.intensity = 0.38 + 0.24 * (1 - daylight) + 0.14 * warmth;
-      earthshine.current.color.lerpColors(EARTHSHINE_NIGHT_COLOR, EARTHSHINE_DAY_COLOR, daylight).lerp(EARTHSHINE_DUSK_COLOR, warmth * 0.55);
+      earthshine.current.position.lerpVectors(CABIN_EARTHSHINE_POS, ORBIT_EARTHSHINE_POS, orbit);
+      const cabinFill = 0.38 + 0.24 * (1 - daylight) + 0.14 * warmth;
+      const orbitFill = 0.34 + 0.56 * daylight + 0.20 * warmth;
+      earthshine.current.intensity = THREE.MathUtils.lerp(cabinFill, orbitFill, orbit);
+      earthshine.current.color
+        .lerpColors(EARTHSHINE_NIGHT_COLOR, EARTHSHINE_DAY_COLOR, daylight)
+        .lerp(EARTHSHINE_ORBIT_COLOR, orbit * 0.55)
+        .lerp(EARTHSHINE_DUSK_COLOR, warmth * 0.55);
     }
-    scene.environmentIntensity = 0.44 + 0.46 * daylight;
+    const cabinEnv = 0.44 + 0.46 * daylight;
+    const orbitEnv = 0.22 + 0.38 * daylight;
+    scene.environmentIntensity = THREE.MathUtils.lerp(cabinEnv, orbitEnv, orbit);
   });
   return <>
     <primitive object={sunTarget} />
@@ -439,11 +543,35 @@ function OrbitalLighting({ objects, sceneId, sun }: Pick<WorldSceneProps, 'objec
     <pointLight ref={roomWarm} position={[2.1, 2.2, 0.2]} color="#faf3e8" intensity={2.4} distance={9.5} decay={1.85} />
   </>;
 }
+function useCabinLoadStage(open: boolean, residentSettled: boolean) {
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    if (!open || stage === 4) return;
+    let frame = 0;
+    // Give the current batch a paint before letting the next batch start parsing.
+    // Slow or failed character loads must not hold the rest of the room indefinitely.
+    const delay = stage === 0 ? (residentSettled ? 0 : 1200) : 200;
+    const timer = window.setTimeout(() => {
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => setStage(stage + 1));
+      });
+    }, delay);
+    return () => { window.clearTimeout(timer); cancelAnimationFrame(frame); };
+  }, [open, stage, residentSettled]);
+  return { furniture: stage >= 1, equipment: stage >= 2, plush: stage >= 3, cat: stage >= 4 };
+}
+
 function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpen: boolean; outfitPreview: boolean }) {
   const [walkTarget, setWalkTarget] = useState<[number, number, number] | null>(null);
-  const [upperVisible, setUpperVisible] = useState(!props.outfitPreview);
-  const residentView = useRef<CabinResidentView>({ deck: 'lower', stairAscent: null });
+  const deckOpacity = useRef<CabinOpacity>({
+    ...cabinDeckOpacity(props.cabinView, props.outfitPreview ? 1 : 0),
+    resident: 1,
+    interior: props.viewMode === 'cabin' ? 1 : 0,
+    zoomFade: null,
+  });
+  const residentView = useRef<CabinResidentView>({ deck: 'lower', stairAscent: null, stairFrom: null });
   const sofaTime = useRef<number | null>(null);
+  const paperPickup = useRef<PaperPickup | null>(null);
   const interaction = useRef<NonNullable<WorldSceneProps['onApproach']> | null>(null);
   const sun = useMemo(createSunState, []);
   const flight = useMemo(() => createFlightState(props.viewMode), []);
@@ -457,25 +585,55 @@ function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpe
   }, []);
   const inCabin = props.viewMode === 'cabin';
   const showInterior = inCabin || props.viewMode === 'entering-cabin' || props.viewMode === 'leaving-cabin';
+  const [visitedCabin, setVisitedCabin] = useState(showInterior);
+  const [visitedObservatory, setVisitedObservatory] = useState(false);
+  const needsUpperDeck = !outfitPreview || props.cabinView !== 'lower';
+  const [visitedUpperDeck, setVisitedUpperDeck] = useState(needsUpperDeck);
+  const [hullReady, setHullReady] = useState(false);
+  const [residentSettled, setResidentSettled] = useState(false);
+  const onHullReady = useCallback(() => setHullReady(true), []);
+  const onResidentMounted = useCallback((outfit: ResidentOutfit, ready: boolean) => {
+    setResidentSettled(true);
+    props.onOutfitMounted(outfit, ready);
+  }, [props.onOutfitMounted]);
+  const isTravelling = props.transition.action?.kind === 'travel'
+    && props.transition.phase !== 'active' && props.transition.phase !== 'error';
+  const needsObservatory = props.sceneId === 'observatory'
+    || (isTravelling && props.transition.toScene === 'observatory');
+  const cabinLoading = useCabinLoadStage(showInterior, residentSettled);
   const canWalk = inCabin && !props.catMenuOpen && !props.focusedObject && !props.gestureActive
     && (!props.library || props.library.flow.current.phase === 'idle') && ['idle', 'active', 'error'].includes(props.transition.phase);
   const walkTo = (id: WorldSceneId, point: [number, number, number]) => {
-    if (!canWalk || props.sceneId !== id) return;
+    if (!canWalk || props.quickDeck || props.sceneId !== id) return;
     void roomAudio.unlock();
-    setWalkTarget(point);
+    // Crossing decks is a manual stair action: walk to this deck's landing and wait for E.
+    setWalkTarget(id === 'habitat' ? stairApproachPoint(residentView.current.deck, [point[0], point[2]]) : point);
   };
   useEffect(() => { setWalkTarget(null); }, [props.sceneId, inCabin]);
+  useEffect(() => {
+    if (!showInterior) return;
+    setVisitedCabin(true);
+    if (needsObservatory) setVisitedObservatory(true);
+    if (needsUpperDeck) setVisitedUpperDeck(true);
+  }, [showInterior, needsObservatory, needsUpperDeck]);
+  useEffect(() => {
+    if (!hullReady || props.viewMode !== 'orbit' || visitedCabin) return;
+    const timer = window.setTimeout(preloadHabitatShell, 1200);
+    return () => window.clearTimeout(timer);
+  }, [hullReady, props.viewMode, visitedCabin]);
   return <ScheduleProvider adapters={props.adapters}>
     <color attach="background" args={['#080714']} />
     <PerspectiveCamera makeDefault fov={CAMERA_FOV} position={initialCameraPos} near={0.08} far={2000} />
-    <CameraRig {...props} flight={flight} residentView={residentView} onUpperVisibility={setUpperVisible} />
+    <CameraRig {...props} flight={flight} residentView={residentView} deckOpacity={deckOpacity} />
+    <CabinZoomRenderer opacity={deckOpacity} />
     <Cosmos reducedMotion={props.reducedMotion} sun={sun} flight={flight} />
     <Environment resolution={128} frames={1}>
       <Lightformer form="rect" intensity={1.55} color="#faf7f2" position={[0, 5, -2]} rotation={[Math.PI / 2, 0, 0]} scale={[10, 8, 1]} />
       <Lightformer intensity={0.85} color="#c8e0f6" position={[5, 1, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[5, 4, 1]} />
     </Environment>
-    <UpperDeckVisibility.Provider value={upperVisible}>
+    <CabinOpacityContext.Provider value={deckOpacity}>
     {(['habitat', 'observatory'] as WorldSceneId[]).map(id => {
+      if (id === 'observatory' && !needsObservatory && !visitedObservatory) return null;
       const focusedObject = inCabin && id === props.sceneId ? props.focusedObject : null;
       const world = { ...props, sceneId: id, objects: props.sceneObjects[id], focusedObject,
         onHover: (objectId: string | null, hint?: string) => {
@@ -487,78 +645,98 @@ function WorldContent(props: OrbitalSceneProps & CabinCameraProps & { catMenuOpe
         },
         // A panorama click is a request to walk over; once focused, the props are already in reach.
         onApproach: (point: [number, number, number], action: WorldAction, perform: () => void) => {
-          if (!inCabin || id !== props.sceneId) return false;
+          if (!inCabin || props.quickDeck || id !== props.sceneId) return false;
           if (focusedObject) { perform(); return true; }
           return interaction.current?.(point, action, perform) ?? false;
         },
       };
       const onFloorClick = (point: [number, number, number]) => walkTo(id, point);
-      return <group key={id} position={SCENE_ORIGINS[id]} visible={id === props.sceneId || (props.transition.action?.kind === 'travel' && props.transition.phase !== 'active' && props.transition.phase !== 'error')}>
+      const onWalkToStairs = () => {
+        const [x, z] = stairLanding(residentView.current.deck);
+        walkTo(id, [x, 0, z]);
+      };
+      return <group key={id} position={SCENE_ORIGINS[id]} visible={id === props.sceneId || isTravelling}>
         {id === props.sceneId && <OrbitalLighting objects={world.objects} sceneId={id} sun={sun} />}
-        {id === 'habitat' && <SpacecraftHull flight={flight} sun={sun} reducedMotion={props.reducedMotion} onEnterCabin={props.onEnterCabin} />}
-        <group visible={showInterior}>
-          <HabitatShell world={world} deck="lower" onFloorClick={onFloorClick} />
-          {id === 'habitat' && <ScheduleSurfaces {...world} visible={inCabin && props.sceneId === 'habitat'} />}
+        {id === 'habitat' && (!inCabin || hullReady) && <SpacecraftHull flight={flight} sun={sun} reducedMotion={props.reducedMotion}
+          onEnterCabin={props.onEnterCabin} onReady={onHullReady} />}
+        {(showInterior || visitedCabin) && <group visible={showInterior}>
+          <CabinFadeGroup part="lower" name={id === 'habitat' ? 'Cabin_LowerDeck' : undefined}>
+            <HabitatShell world={world} deck="lower" onFloorClick={onFloorClick} />
+            {id === 'habitat' && cabinLoading.furniture && <ScheduleSurfaces {...world} paperPickup={paperPickup}
+              visible={inCabin && props.sceneId === 'habitat'} />}
+            {cabinLoading.furniture && <>
+              <Suspense fallback={null}><HabitatFurniture {...world} /></Suspense>
+              <FeatureSurfaces {...world} />
+            </>}
+            {(cabinLoading.equipment || focusedObject === 'computer' || focusedObject === 'music-player')
+              && <Suspense fallback={null}><MediaObjects {...world} /></Suspense>}
+          </CabinFadeGroup>
           {id === 'habitat' && <>
-            <CabinStaircase residentView={residentView} onCross={() => walkTo(id, stairDestination(residentView.current.deck))} />
+            <CabinFadeGroup part="interior" name="Cabin_Staircase_View">
+              <CabinStaircase residentView={residentView} onWalkToStairs={onWalkToStairs} />
+            </CabinFadeGroup>
             <CabinUpperDeck>
               <HabitatShell world={world} deck="upper" onFloorClick={onFloorClick} />
               <BedroomGuard />
-              <AlarmClock3D {...world} />
-              <Suspense fallback={null}><HabitatBedroom world={world} sofaTime={sofaTime} /></Suspense>
+              {cabinLoading.furniture && (needsUpperDeck || visitedUpperDeck) && <>
+                <AlarmClock3D {...world} />
+                <Suspense fallback={null}><HabitatBedroom world={world} sofaTime={sofaTime} /></Suspense>
+              </>}
             </CabinUpperDeck>
           </>}
-          <Suspense fallback={null}><HabitatFurniture {...world} /><MediaObjects {...world} /></Suspense>
-          <FeatureSurfaces {...world} />
           {id === props.sceneId && <>
-            <OrbitalResidents {...world} outfit={readOutfit(props.sceneObjects.habitat.wardrobe?.itemId)} catMenuOpen={props.catMenuOpen} sofaTime={sofaTime} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} interaction={interaction}
+            <OrbitalResidents {...world} outfit={readOutfit(props.sceneObjects.habitat.wardrobe?.itemId)} catMenuOpen={props.catMenuOpen} sofaTime={sofaTime} paperPickup={paperPickup} onHover={(objectId, hint) => { if (inCabin) props.onHover(objectId, hint); }} interaction={interaction}
               inspectionId={focusedObject === 'wardrobe' && props.transition.phase === 'active' && props.transition.action?.kind === 'select' ? props.transition.id : undefined}
-              onInspectionEnd={props.onReturn} onOutfitMounted={props.onOutfitMounted}
-              deckView={residentView} upperVisible={upperVisible} quickAscent={props.quickAscent} onQuickAscentAvailable={props.onQuickAscentAvailable}
+              onInspectionEnd={props.onReturn} onOutfitMounted={onResidentMounted}
+              prefetchSeat={cabinLoading.equipment} loadPlush={cabinLoading.plush} loadCat={cabinLoading.cat}
+              deckView={residentView} deckOpacity={deckOpacity} quickTravel={props.quickTravel} onQuickTravelTarget={props.onQuickTravelTarget}
               showNearbyHints={props.cabinView === 'overview' || props.cabinView === residentView.current.deck}
               approachEnabled={inCabin && !props.focusedObject && ['idle', 'active', 'error'].includes(props.transition.phase)}
               walkTarget={walkTarget} onArrive={() => setWalkTarget(null)}
               enabled={canWalk && (!props.library || props.library.view.phase === 'idle')} />
           </>}
-        </group>
+        </group>}
       </group>;
     })}
-    </UpperDeckVisibility.Provider>
+    </CabinOpacityContext.Provider>
   </ScheduleProvider>;
 }
 const visibleSceneEvents: NonNullable<React.ComponentProps<typeof Canvas>['events']> = state => ({
   ...events(state),
   filter: hits => hits.filter(hit => {
     for (let node: THREE.Object3D | null = hit.object; node; node = node.parent) {
-      if (!node.visible) return false;
+      if (!node.visible || node.userData.cabinInteractive === false) return false;
     }
     return true;
   }),
 });
 
-const CABIN_VIEWS: [CabinView, string][] = [['overview', '全景'], ['lower', '一层'], ['upper', '二层']];
-
 export function OrbitalScene(props: OrbitalSceneProps) {
   const container = useRef<HTMLDivElement>(null);
   const [catMenu, setCatMenu] = useState<WorldAction | null>(null);
   const outfitPreview = useMemo(() => props.viewMode === 'cabin' && !!previewOutfit(window.location.search), []);
-  const quickAscent = useRef<(() => boolean) | null>(null);
-  const [canAscend, setCanAscend] = useState(false);
-  const [blackout, setBlackout] = useState<'black' | 'reveal' | null>(null);
-  const [view, setView] = useState<{ mode: CabinView; revision: number; cut: boolean }>({ cut: false, mode: outfitPreview ? 'lower' : 'overview', revision: 0 });
-  const selectView = (mode: CabinView, cut = false) => setView(current => ({ mode, cut, revision: current.revision + 1 }));
+  const quickTravel = useRef<((target: CabinDeck) => boolean) | null>(null);
+  const [quickTarget, setQuickTarget] = useState<CabinDeck | null>(null);
+  const [quickDeck, setQuickDeck] = useState<CabinDeck | null>(null);
+  const [view, setView] = useState<{ mode: CabinView; revision: number }>({ mode: outfitPreview ? 'lower' : 'overview', revision: 0 });
+  const selectView = (mode: CabinView) => setView(current => ({ mode, revision: current.revision + 1 }));
+  const showCabinControls = props.sceneId === 'habitat' && props.viewMode === 'cabin' && !props.focusedObject && !catMenu
+    && ['idle', 'active', 'error'].includes(props.transition.phase);
+  const canQuickTravel = showCabinControls && !props.gestureActive && !quickDeck;
   useEffect(() => {
-    if (blackout !== 'black') return;
-    // Leave a fully black frame on screen before moving the resident and selecting the upper camera.
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => {
-        if (quickAscent.current?.()) selectView('upper', true);
-        // Give the scene a render at the new deck before revealing it.
-        frame = requestAnimationFrame(() => setBlackout('reveal'));
-      });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [blackout]);
+    if (!canQuickTravel || !quickTarget) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'KeyR' || event.repeat || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return;
+      event.preventDefault();
+      setQuickDeck(quickTarget);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [canQuickTravel, quickTarget]);
+  useEffect(() => {
+    if (!showCabinControls || props.gestureActive) setQuickDeck(null);
+  }, [showCabinControls, props.gestureActive]);
   useEffect(() => {
     if (props.viewMode === 'cabin') return () => roomAudio.stopCatMeow();
   }, [props.viewMode]);
@@ -609,22 +787,24 @@ export function OrbitalScene(props: OrbitalSceneProps) {
     <Canvas events={visibleSceneEvents} shadows dpr={[1, 1.6]} gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.0 }}
       onCreated={({ gl }) => { gl.outputColorSpace = THREE.SRGBColorSpace; gl.shadowMap.type = THREE.PCFSoftShadowMap; }}>
       <WorldContent {...props} catMenuOpen={!!catMenu} outfitPreview={outfitPreview}
-        quickAscent={quickAscent} onQuickAscentAvailable={setCanAscend} cutToDeck={view.cut} cabinView={view.mode} viewRevision={view.revision} onCabinViewChange={selectView} onAction={action => {
+        quickDeck={quickDeck} quickTravel={quickTravel} onQuickTravelFinish={() => setQuickDeck(null)} onQuickTravelTarget={setQuickTarget}
+        cabinView={view.mode} viewRevision={view.revision} onCabinViewChange={selectView} onAction={action => {
+          if (quickDeck) return;
         if (action.kind === 'pet' && action.objectId === 'pet') setCatMenu(action);
         else props.onAction(action);
       }} />
     </Canvas>
-    {props.sceneId === 'habitat' && props.viewMode === 'cabin' && !props.focusedObject && !catMenu
-      && ['idle', 'active', 'error'].includes(props.transition.phase) && (
-      <nav className="orbital-floor-views" aria-label="生活舱视角">
-        {CABIN_VIEWS.map(([mode, label]) => <button key={mode} type="button" className="orbital-flight-pill"
-          aria-pressed={view.mode === mode} onClick={() => selectView(mode)}>{label}</button>)}
-        {canAscend && <button type="button" className="orbital-flight-pill is-primary"
-          disabled={!!blackout} onClick={() => setBlackout('black')}>快速上楼</button>}
+    {showCabinControls && (quickTarget || props.onLeaveCabin) && (
+      <nav className="orbital-cabin-controls" aria-label="生活舱导航">
+        {quickTarget && <button type="button" className="orbital-flight-pill" aria-keyshortcuts="R"
+          disabled={!canQuickTravel} onClick={() => setQuickDeck(quickTarget)}>
+          {quickTarget === 'upper' ? '快速上楼' : '快速下楼'}<kbd className="orbital-keycap" aria-hidden="true">R</kbd>
+        </button>}
+        {props.onLeaveCabin && <button type="button" className="orbital-flight-pill" aria-keyshortcuts="F" onClick={props.onLeaveCabin}>
+          出舱巡航<kbd className="orbital-keycap" aria-hidden="true">F</kbd>
+        </button>}
       </nav>
     )}
-    {blackout && createPortal(<div aria-hidden="true" className={`orbital-stair-blackout ${blackout}`}
-      onAnimationEnd={() => setBlackout(null)} />, document.body)}
     {catMenu && <CatInteraction onChoose={choice => {
       setCatMenu(null);
       if (choice) {

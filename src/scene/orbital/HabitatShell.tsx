@@ -14,13 +14,18 @@ interface HabitatShellProps {
   onFloorClick?: (point: [number, number, number]) => void;
 }
 
+const CABIN_MODEL_URL = `${import.meta.env.BASE_URL}models/cabin/open-cabin.glb`;
+export function preloadHabitatShell() {
+  useGLTF.preload(CABIN_MODEL_URL);
+}
+
 const LOWER_PARTS = ['Duplex_LowerShell', 'Duplex_DeckBase', 'Floor_Parquet', 'Stationery', 'Shelf_Gallery', 'Rugs'];
 const UPPER_PARTS = ['Duplex_UpperShell', 'Duplex_BedroomBase', 'Floor_Parquet_Bedroom', 'Nightstand', 'Interactable_Wardrobe', 'Rugs_Upper'];
 const OBSERVATORY_PARTS = ['Shell', 'Floor_Parquet', 'Floor_Parquet_Upper'];
 
 function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) {
   const variant = world.sceneId;
-  const { scene } = useGLTF(`${import.meta.env.BASE_URL}models/cabin/open-cabin.glb`);
+  const { scene } = useGLTF(CABIN_MODEL_URL);
   const cabin = useMemo(() => {
     const names = variant === 'observatory' ? OBSERVATORY_PARTS : deck === 'upper' ? UPPER_PARTS : LOWER_PARTS;
     const shell = new THREE.Group();
@@ -39,7 +44,9 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
     const wardrobe = shell.getObjectByName('Interactable_Wardrobe');
     wardrobe?.removeFromParent();
     const door = wardrobe?.getObjectByName('Wardrobe_SlidingDoor');
-    return { shell, wardrobe, door, closed: door?.position.clone() };
+    const rug = shell.getObjectByName('Rugs_Upper');
+    rug?.removeFromParent();
+    return { shell, wardrobe, rug, door, closed: door?.position.clone() };
   }, [scene, variant, deck]);
 
   const slide = useRef(0);
@@ -56,6 +63,10 @@ function CabinModel({ world, deck }: Pick<HabitatShellProps, 'world' | 'deck'>) 
   });
   return <>
     <primitive object={cabin.shell} dispose={null} />
+    {cabin.rug && <ObjectHandle id="rug-seat" action="sit" panorama world={world} hint="坐在地毯上"
+      onClick={event => event.stopPropagation()}>
+      <primitive object={cabin.rug} dispose={null} />
+    </ObjectHandle>}
     {cabin.wardrobe && <ObjectHandle id="wardrobe" action="open" panorama world={world} hint="打开衣柜"
       onClick={event => event.stopPropagation()}>
       <primitive object={cabin.wardrobe} dispose={null} />

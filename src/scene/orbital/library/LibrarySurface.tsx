@@ -93,7 +93,13 @@ export function LibrarySurface({ library }: { library: LibraryController }) {
         if (!pointers.current.size) multi.current = false;
       }} onPointerCancel={() => { pointers.current.clear(); multi.current = false; }}><span>{page?.text ?? '正在展开书页…'}</span></div>
       <footer><button disabled={view.phase !== 'reading' || view.page === 0} onClick={() => library.turn(-1)}>上一页</button><span aria-live="polite">{view.page + 1} / {Math.max(1, view.pages.length)}</span><button disabled={view.phase !== 'reading' || view.page >= view.pages.length - 1} onClick={() => library.turn(1)}>下一页</button></footer>
-      <p className="library-help">{view.phase === 'turn' ? '纸页翻动中…' : '左右键或单指横划翻页 · Esc 合书'}</p>
+      <p className="library-help library-shortcuts">
+        {view.phase === 'turn' ? '纸页翻动中…' : <>
+          <span>翻页 <kbd className="orbital-keycap">←</kbd><kbd className="orbital-keycap">→</kbd></span>
+          <span>也可单指横划</span>
+          <span>合书 <kbd className="orbital-keycap">Esc</kbd></span>
+        </>}
+      </p>
     </>}
     {form && <form aria-label="添加书籍表单" onSubmit={async e => { e.preventDefault(); if (busy) return; setBusy(true); setError(''); try { await library.add(title, author, text); setTitle(''); setAuthor(''); setText(''); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>
       <header><h2>留一本自己的书</h2><button type="button" onClick={cancelForm} disabled={busy}>取消</button></header>

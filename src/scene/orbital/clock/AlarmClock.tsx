@@ -7,11 +7,10 @@ import { roomAudio } from '../../audioEngine';
 import { CLOCK_POSITION } from '../cabinLayout';
 import { ObjectHandle } from '../ObjectHandle';
 import { ClockAudioPlayer } from './clockAudio';
+import { ClockDurationPicker, ClockTimePicker } from './ClockPickers';
 import {
   CLOCK_RINGTONES,
-  alarmTimeAfterMinutes,
   clockHandAngles,
-  dateMinuteKey,
   evaluateClockTick,
   formatClockTime,
   formatCountdown,
@@ -22,8 +21,6 @@ import {
   resetCountdown,
   saveClockState,
   startCountdown,
-  stepAlarmTime,
-  stepCountdownDuration,
   type ClockMode,
   type ClockPersistentState,
   type ClockRingingSource,
@@ -162,32 +159,6 @@ class ClockStore {
     this.emit();
   }
 
-  public stepAlarm(deltaHours: number, deltaMinutes: number): void {
-    this.audio.unlock();
-    const alarmTime = stepAlarmTime(this.state.alarmTime, deltaHours, deltaMinutes);
-    this.persist({
-      ...this.state,
-      alarmTime,
-      lastTriggeredKey: null,
-    });
-    this.emit();
-  }
-
-  public setQuickAlarmOffset(minutesFromNow: number): void {
-    this.audio.unlock();
-    const now = new Date();
-    const alarmTime = alarmTimeAfterMinutes(now, minutesFromNow);
-    const currentKey = dateMinuteKey(now);
-    this.persist({
-      ...this.state,
-      mode: 'alarm',
-      alarmTime,
-      alarmEnabled: true,
-      lastTriggeredKey: minutesFromNow === 0 ? null : currentKey,
-    });
-    this.emit();
-  }
-
   public toggleAlarmEnabled(): void {
     this.audio.unlock();
     const nextEnabled = !this.state.alarmEnabled;
@@ -203,19 +174,14 @@ class ClockStore {
     this.emit();
   }
 
-  public setCountdownPreset(seconds: number): void {
+  public setCountdownDuration(seconds: number): void {
+    if (this.state.countdownRunning) return;
     this.audio.unlock();
     if (this.ringingSource === 'countdown') {
       this.ringingSource = null;
       this.audio.stop();
     }
     this.persist(resetCountdown(this.state, seconds));
-    this.emit();
-  }
-
-  public stepCountdown(deltaSeconds: number): void {
-    this.audio.unlock();
-    this.persist(stepCountdownDuration(this.state, deltaSeconds));
     this.emit();
   }
 
@@ -334,7 +300,7 @@ export function AlarmClock3D(world: WorldSceneProps) {
       onPointerOver={event => {
         if (!world.focusedObject) {
           event.stopPropagation();
-          world.onHover('clock', snapshot.ringingSource ? '点击关闭闹钟响铃' : '点击或靠近按 E · 设置闹钟');
+          world.onHover('clock', snapshot.ringingSource ? '点击关闭闹钟响铃' : 'E · 点击或靠近设置闹钟');
         }
       }}
       onPointerOut={() => {
@@ -502,16 +468,6 @@ export function AlarmClock3D(world: WorldSceneProps) {
   );
 }
 
-const ALARM_PRESETS = ['07:00', '07:30', '08:00', '12:00', '22:30'] as const;
-const COUNTDOWN_PRESETS: readonly { label: string; seconds: number }[] = [
-  { label: '10 秒', seconds: 10 },
-  { label: '30 秒', seconds: 30 },
-  { label: '1 分钟', seconds: 60 },
-  { label: '5 分钟', seconds: 300 },
-  { label: '15 分钟', seconds: 900 },
-  { label: '25 分钟', seconds: 1500 },
-];
-
 export function AlarmClockSurface({
   focused,
   isMuted,
@@ -678,57 +634,15 @@ export function AlarmClockSurface({
             <div className="clock-big-digits" aria-label="设定闹钟时间">
               {state.alarmTime}
             </div>
-            <div className="clock-time-input-row">
-              <label htmlFor="clock-alarm-time-input" className="clock-section-label">
-                直接输入时间
-              </label>
-              <input
-                id="clock-alarm-time-input"
-                className="clock-time-input"
-                type="time"
-                aria-label="闹钟时间输入"
-                value={state.alarmTime}
-                onChange={e => clockStore.setAlarmTime(e.target.value)}
-              />
-            </div>
-            <div className="clock-steppers" role="group" aria-label="微调闹钟时间">
-              <button type="button" onClick={() => clockStore.stepAlarm(-1, 0)}>-1 小时</button>
-              <button type="button" onClick={() => clockStore.stepAlarm(1, 0)}>+1 小时</button>
-              <button type="button" onClick={() => clockStore.stepAlarm(0, -5)}>-5 分</button>
-              <button type="button" onClick={() => clockStore.stepAlarm(0, -1)}>-1 分</button>
-              <button type="button" onClick={() => clockStore.stepAlarm(0, 1)}>+1 分</button>
-              <button type="button" onClick={() => clockStore.stepAlarm(0, 5)}>+5 分</button>
-            </div>
+            <ClockTimePicker
+              value={state.alarmTime}
+              onChange={time => clockStore.setAlarmTime(time)}
+            />
             <p className="clock-substatus" role="status">
               {state.alarmEnabled
                 ? `已开启 · 将在 ${state.alarmTime} 响起（${formatTimeUntilAlarm(state.alarmTime, now)}）`
-                : '闹钟未开启 · 设定时间后点击下方开启'}
+                : '闹钟未开启 · 滚动选择时间后点击下方开启'}
             </p>
-          </div>
-
-          <div className="clock-presets">
-            <p className="clock-section-label">快捷闹钟时刻</p>
-            <div className="clock-preset-grid">
-              <button
-                type="button"
-                onClick={() => clockStore.setQuickAlarmOffset(1)}
-              >
-                1 分钟后
-              </button>
-              {ALARM_PRESETS.map(preset => (
-                <button
-                  key={preset}
-                  type="button"
-                  aria-pressed={state.alarmTime === preset && state.alarmEnabled}
-                  onClick={() => {
-                    clockStore.setAlarmTime(preset);
-                    if (!state.alarmEnabled) clockStore.toggleAlarmEnabled();
-                  }}
-                >
-                  {preset}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="clock-action-row">
@@ -750,57 +664,17 @@ export function AlarmClockSurface({
             <div className="clock-big-digits" aria-label="倒计时剩余时间">
               {formatCountdown(state.countdownRemainingSec)}
             </div>
-            <div className="clock-steppers" role="group" aria-label="调整倒计时时长">
-              <button
-                type="button"
-                disabled={state.countdownRunning}
-                onClick={() => clockStore.stepCountdown(-60)}
-              >
-                -1 分钟
-              </button>
-              <button
-                type="button"
-                disabled={state.countdownRunning}
-                onClick={() => clockStore.stepCountdown(60)}
-              >
-                +1 分钟
-              </button>
-              <button
-                type="button"
-                disabled={state.countdownRunning}
-                onClick={() => clockStore.stepCountdown(-10)}
-              >
-                -10 秒
-              </button>
-              <button
-                type="button"
-                disabled={state.countdownRunning}
-                onClick={() => clockStore.stepCountdown(10)}
-              >
-                +10 秒
-              </button>
-            </div>
+            {!state.countdownRunning && (
+              <ClockDurationPicker
+                seconds={state.countdownRemainingSec}
+                onChange={totalSeconds => clockStore.setCountdownDuration(totalSeconds)}
+              />
+            )}
             <p className="clock-substatus" role="status">
               {state.countdownRunning
                 ? '倒计时进行中 · 离开近景后仍会在后台继续计时'
-                : `总时长 ${formatCountdown(state.countdownDurationSec)} · 点击下方开始计时`}
+                : `总时长 ${formatCountdown(state.countdownDurationSec)} · 滚动选择时长后点击下方开始计时`}
             </p>
-          </div>
-
-          <div className="clock-presets">
-            <p className="clock-section-label">常用倒计时</p>
-            <div className="clock-preset-grid">
-              {COUNTDOWN_PRESETS.map(preset => (
-                <button
-                  key={preset.seconds}
-                  type="button"
-                  aria-pressed={state.countdownDurationSec === preset.seconds && !state.countdownRunning}
-                  onClick={() => clockStore.setCountdownPreset(preset.seconds)}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="clock-action-row">
