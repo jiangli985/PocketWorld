@@ -52,7 +52,7 @@ function LoadedResident({ assets, rig, onMounted, prefetchSeat, chairActive }: {
   useLayoutEffect(() => {
     const group = container.current!;
     const asset = clone(assets.scene);
-    const resident = createResidentRig(asset, assets.walk, assets.outfit === 'cardigan');
+    const resident = createResidentRig(asset, assets.walk, assets.outfit === 'cardigan', assets.handMotion);
     const chair = createChairAnimation(asset, assets.sit);
     chairAnimation.current = chair;
     resident.fitted = assets.fitted;

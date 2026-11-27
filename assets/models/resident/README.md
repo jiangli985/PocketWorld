@@ -224,3 +224,27 @@ blender --background --factory-startup --python-exit-code 1 --python scripts/bak
 可编辑 Blender 控制器后用 `--from-blend "$reviewDir/Luna-PageTurn.blend"` 重新导出曲线，再重新采样实际运行时姿态。`--runtime` 导入正反两套 101 帧的真实蒙皮骨骼、书本变换与纸页顶点，供多视角对照；查看动作时须同时选择对应的 `Luna_PageTurn_*`、`Book_PageTurn_*`、`Sheet_PageTurn_*`，相机为 `Front`、`Left`、`Right`、`Top`、`ThreeQuarter`。这些骨骼动作是运行时的审查快照；直接改快照骨骼不会自动修改网页动作，网页使用的源仍是控制曲线与 IK 实现。
 
 重建时先导出控制曲线，再采样网页，最后导入新采样；修改过控制器的场景在最后一步加 `--from-blend`，避免默认参数覆盖编辑值。截图、采样 JSON 与检查用 Blender 文件留在仓库外，不进入静态发布包。已有取书 GLB 不受翻页曲线导出影响。
+
+
+### 丁香开衫楼梯、盘腿与抱熊接触
+
+`Luna-Cardigan-Contact-Hands.blend` 保存 `Contact_up`、`Contact_down` 两个 65 帧循环和 `Contact_grip` 掌面/指形导引。掌轴由食指、无名指、小指指根平均得到，避开偏向掌内的中指根。`Bear_Contact_0/1` 的 Y/Z 位置是相对于小熊半高/半深的接触位置；`Right/Left_0/1_tangent/normal` 控制接近和抱稳时的掌面方向。`Bear_Cradle` 自定义属性控制抬升、前后间距、抬起弧线和肩部可达距离。手指姿态从 Blender 动作导出，运行时只为动态小熊位置求解腕部接触。兔子、企鹅和前两套服装继续使用原握法。
+
+导出 `luna-cardigan-hands.glb` 为 143,388 bytes，只含上肢旋转、骨架和导引，不含角色网格或贴图。楼梯按原双步时钟采样上肢，不改骨盆和腿脚。抱熊按导出的掌向、指形和真实蒙皮表面拟合玩偶，抱持中心同时受肩部可达距离约束。创建接触播放器前须像正式动作链一样先应用人物基础姿态。
+
+`Luna-Cardigan-Floor-Hands.blend` 保存完整角色及 30 FPS 的 `floorSit` / `floorStand` 动作。`bake-luna-floor-hands.py` 只替换这两条动作的肩、臂、腕、指旋转，入座末段渐入接触，起身初段释放。`luna-cabin-actions-cardigan.glb` 共 791,940 bytes、11 条动作；基包取自既有开衫动作适配资源，仅改两条动作的 76 条上肢通道，其余动作、骨盆腿脚、采样时间与原始数据保持一致。来源及原包校验值见 `assets/models.sources.json`。
+
+从可编辑源重导无需临时采样 JSON；在项目根目录执行，输出与报告放到仓库外：
+
+```powershell
+$reviewDir = $env:PI_SCRATCH_DIR
+Copy-Item assets/models/resident/Luna-Cardigan-Contact-Hands.blend "$reviewDir/contact-source.blend"
+blender --background --factory-startup --python-exit-code 1 --python scripts/bake-luna-contact-hands.py -- --root . --from-blend --blend "$reviewDir/contact-source.blend" --output "$reviewDir/luna-cardigan-hands.glb"
+Copy-Item assets/models/resident/Luna-Cardigan-Floor-Hands.blend "$reviewDir/floor-source.blend"
+blender --background --factory-startup --python-exit-code 1 --python scripts/bake-luna-floor-hands.py -- --root . --from-blend --base assets/public/models/resident/luna-cabin-actions-cardigan.glb --blend "$reviewDir/floor-source.blend" --output "$reviewDir/luna-cabin-actions-cardigan.glb" --report "$reviewDir/floor-report.json"
+node --test src/scene/orbital/contactHands.test.mjs src/scene/orbital/floorHands.test.mjs
+```
+
+重新制作楼梯时，`node scripts/sample-luna-contact-hands.mjs . <仓库外JSON>` 采样原步态，再通过 `bake-luna-contact-hands.py --input <JSON>` 烘焙。不要把显示层 1.43 倍缩放重复计入本地骨骼变换。
+
+回归检查真实掌侧皮肤：楼梯全周期掌轴/前臂夹角小于 8°，腿脚轨迹与原求解逐点一致；盘腿最近接触小于 4 mm、中位小于 15 mm；小熊接近阶段最近间隙小于 8 mm、抱稳小于 4.5 mm、中位小于 15 mm，同时检查皮肤穿入及 30/60/120 Hz 正反播放连续性。距离限于有限采样，不能替代网页多角度检查。角色网格未改动；通用 QA 的原有装饰孤岛、共面重叠和 UV 拆点提示保留，不宣称整个源素材的通用 QA 全绿。

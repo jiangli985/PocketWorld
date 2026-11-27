@@ -353,6 +353,28 @@
       "bytes": 1013604,
       "sha256": "2966d4f116d6e160ac5e2bfab39e55a9931fa3fae06cdd4eac6a5ea652983971",
       "processing": "scripts/bake-luna-cabin-actions.mjs maps Manny joints to the outfit, fits floor contact and dress panels, fits hand gestures to the face or waist, and exports masked idle rotations and action tracks without meshes or textures."
+    },
+    {
+      "file": "assets/public/models/resident/luna-cardigan-hands.glb",
+      "source": "PocketWorld Blender authoring on the existing Luna cardigan rig and MotionSmith stair profiles.",
+      "sourcePage": "https://cosindra.ai/motionsmith/motions/walk-upstairs",
+      "license": "Existing Luna model license and MotionSmith commercial game-use permission; original source records retained.",
+      "licensePage": "https://cosindra.ai/license",
+      "used": true,
+      "bytes": 143388,
+      "sha256": "f20a81c2732163dd9f7bebad82c94ef08a8c408cdde49c0f51f0e65394f26ec8",
+      "processing": "scripts/bake-luna-contact-hands.py exports two upper-limb stair cycles and calibrated bear palm/finger/cradle guides from assets/models/resident/Luna-Cardigan-Contact-Hands.blend. Animation-only; model, skin and lower-body motion are unchanged."
+    },
+    {
+      "file": "assets/public/models/resident/luna-cabin-actions-cardigan.glb",
+      "source": "Existing PocketWorld cardigan adaptation of the eleven Cosindra MotionSmith clips, with Blender-authored floor hand contact.",
+      "sourcePage": "https://cosindra.ai/motionsmith/motions/sit-floor",
+      "license": "Existing Luna model license and MotionSmith commercial game-use permission; original source records retained.",
+      "licensePage": "https://cosindra.ai/license",
+      "used": true,
+      "bytes": 791940,
+      "sha256": "a9daaa32bb12c70fa12ca1a8e7180fb16fb89ad6cff60b68a77c943d442be3fb",
+      "processing": "scripts/bake-luna-floor-hands.py replaces only 76 upper-limb rotation channels in floorSit/floorStand. Other nine clips, pelvis/legs, times and GLB schema are preserved. Editable source: assets/models/resident/Luna-Cardigan-Floor-Hands.blend. Base bundle SHA-256 d4b514a03bfc10ad237a012fc3cad55c57151d1e02db69a0b08fc73e99c7aa4a."
     }
   ]
 }
